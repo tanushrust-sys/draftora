@@ -92,8 +92,9 @@ function getWeekWords() {
   return weekWords.filter(w => { if (seen.has(w.word)) return false; seen.add(w.word); return true; });
 }
 
-function isFriday() {
-  return new Date().getDay() === 5;
+function isTestDay() {
+  const day = new Date().getDay(); // 5=Fri, 6=Sat, 0=Sun
+  return day === 5 || day === 6 || day === 0;
 }
 
 const CARD_THEMES = [
@@ -126,7 +127,7 @@ export default function VocabPage() {
 
   const dailyWords = getDailyWords();
 
-  // ─── FRIDAY TEST STATE ───
+  // ─── WEEKLY TEST STATE ───
   const [testOpen, setTestOpen] = useState(false);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
   const [testAnswers, setTestAnswers] = useState<(number | null)[]>([]);
@@ -134,6 +135,8 @@ export default function VocabPage() {
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes
   const [testSubmitted, setTestSubmitted] = useState(false);
   const [testXP, setTestXP] = useState(0);
+  const [testScore, setTestScore] = useState(0);
+  const testXPAwarded = useRef(false); // prevent double XP on redo
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadWords = useCallback(async () => {
@@ -220,7 +223,34 @@ export default function VocabPage() {
     setTimeLeft(180);
     setTestSubmitted(false);
     setTestXP(0);
+    setTestScore(0);
+    testXPAwarded.current = false;
     setTestOpen(true);
+  };
+
+  const redoTest = () => {
+    // Keep testXPAwarded.current = true so submitTest won't award XP again
+    const weekWords2 = getWeekWords();
+    if (weekWords2.length < 4) return;
+    const shuffled2 = [...weekWords2].sort(() => Math.random() - 0.5);
+    const selected2 = shuffled2.slice(0, Math.min(10, shuffled2.length));
+    const qs2: TestQuestion[] = selected2.map(w => {
+      const isWordToMeaning = Math.random() > 0.4;
+      const question = isWordToMeaning ? `What does "${w.word}" mean?` : `Which word means: "${w.meaning}"?`;
+      const correct = isWordToMeaning ? w.meaning : w.word;
+      const wrongPool = pool.filter(p => p.word !== w.word);
+      const wrongs = wrongPool.sort(() => Math.random() - 0.5).slice(0, 3).map(p => isWordToMeaning ? p.meaning : p.word);
+      const allOptions = [correct, ...wrongs].sort(() => Math.random() - 0.5);
+      return { wordItem: { word: w.word, meaning: w.meaning }, question, options: allOptions, correctIndex: allOptions.indexOf(correct) };
+    });
+    setTestQuestions(qs2);
+    setTestAnswers(new Array(qs2.length).fill(null));
+    setCurrentQ(0);
+    setTimeLeft(180);
+    setTestSubmitted(false);
+    setTestXP(0);
+    setTestScore(0);
+    // testXPAwarded.current stays true — no extra XP on redo
   };
 
   // Timer
@@ -258,13 +288,15 @@ export default function VocabPage() {
     if (timerRef.current) clearInterval(timerRef.current);
     setTestSubmitted(true);
     const score = testQuestions.reduce((s, q, i) => s + (testAnswers[i] === q.correctIndex ? 1 : 0), 0);
-    const xp = XP_REWARDS.VOCAB_TEST_BASE + Math.round((score / testQuestions.length) * 40);
-    if (profile) {
+    setTestScore(score);
+    if (!testXPAwarded.current && profile) {
+      const xp = XP_REWARDS.VOCAB_TEST_BASE + Math.round((score / testQuestions.length) * 40);
       await awardXP(profile.id, xp, `Weekly vocab test: ${score}/${testQuestions.length}`);
       await supabase.from('vocab_tests').insert({ user_id: profile.id, score, total_questions: testQuestions.length, xp_earned: xp });
       await refreshProfile();
+      setTestXP(xp);
+      testXPAwarded.current = true;
     }
-    setTestXP(xp);
   };
 
   const exitTest = () => {
@@ -291,7 +323,7 @@ export default function VocabPage() {
     const isFirst = currentQ === 0;
 
     if (testSubmitted) {
-      const score = testQuestions.reduce((s, tq, i) => s + (testAnswers[i] === tq.correctIndex ? 1 : 0), 0);
+      const score = testScore;
       const wrong = testQuestions.filter((tq, i) => testAnswers[i] !== tq.correctIndex);
       return (
         <div className="animate-fade-in" style={{ background: 'var(--t-bg)', color: 'var(--t-tx)', minHeight: '100vh', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -353,7 +385,7 @@ export default function VocabPage() {
             )}
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24 }}>
-              <button onClick={generateTest} style={{ background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 14, padding: '11px 24px', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer' }}>Try Again</button>
+              <button onClick={redoTest} style={{ background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 14, padding: '11px 24px', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer' }}>Redo</button>
               <button onClick={exitTest} style={{ background: 'var(--t-card)', color: 'var(--t-tx2)', borderRadius: 14, padding: '11px 24px', fontWeight: 600, fontSize: 13, border: '1px solid var(--t-brd)', cursor: 'pointer' }}>Close</button>
             </div>
           </div>
@@ -718,50 +750,50 @@ export default function VocabPage() {
           </div>
 
           <div style={{
-            background: isFriday()
+            background: isTestDay()
               ? 'linear-gradient(145deg, var(--t-acc-a), var(--t-card))'
               : 'var(--t-card)',
-            border: `1px solid ${isFriday() ? 'var(--t-brd-a)' : 'var(--t-brd)'}`,
+            border: `1px solid ${isTestDay() ? 'var(--t-brd-a)' : 'var(--t-brd)'}`,
             borderRadius: 24, padding: '2.5rem 2rem', textAlign: 'center',
             position: 'relative', overflow: 'hidden',
           }}>
             {/* Ambient glow for Friday */}
-            {isFriday() && (
+            {isTestDay() && (
               <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, var(--t-acc-a), transparent 70%)', pointerEvents: 'none' }} />
             )}
 
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: isFriday() ? 'linear-gradient(135deg, var(--t-acc-a), var(--t-acc-b))' : 'var(--t-card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', border: isFriday() ? '1px solid var(--t-acc-b)' : '1px solid var(--t-brd)', position: 'relative' }}>
-              {isFriday() ? <Trophy style={{ width: 24, height: 24, color: 'var(--t-acc)' }} /> : <Clock style={{ width: 24, height: 24, color: 'var(--t-tx3)' }} />}
+            <div style={{ width: 52, height: 52, borderRadius: 16, background: isTestDay() ? 'linear-gradient(135deg, var(--t-acc-a), var(--t-acc-b))' : 'var(--t-card2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', border: isTestDay() ? '1px solid var(--t-acc-b)' : '1px solid var(--t-brd)', position: 'relative' }}>
+              {isTestDay() ? <Trophy style={{ width: 24, height: 24, color: 'var(--t-acc)' }} /> : <Clock style={{ width: 24, height: 24, color: 'var(--t-tx3)' }} />}
             </div>
             <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--t-tx)', marginBottom: 6, position: 'relative' }}>
-              {isFriday() ? 'Test Your Vocabulary' : 'Test Available on Fridays'}
+              {isTestDay() ? 'Test Your Vocabulary' : 'Test Available Fri – Sun'}
             </h3>
             <p style={{ fontSize: 13, color: 'var(--t-tx2)', marginBottom: 6, position: 'relative' }}>
-              {isFriday()
+              {isTestDay()
                 ? '10 questions · 3 minute timer · Multiple choice A/B/C/D'
-                : 'Every Friday you can test yourself on this week\'s words (Mon\u2013Thu).'}
+                : 'Available every Friday, Saturday, and Sunday. Learn Mon\u2013Thu first!'}
             </p>
             <p style={{ fontSize: 12, color: 'var(--t-tx3)', marginBottom: 18, position: 'relative' }}>
-              {isFriday()
+              {isTestDay()
                 ? `Tests this week's ${getWeekWords().length} words from Monday to Thursday`
                 : 'Keep saving daily words \u2014 they\'ll appear in your Friday quiz!'}
             </p>
             <button
               onClick={generateTest}
-              disabled={!isFriday()}
+              disabled={!isTestDay()}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
-                background: isFriday() ? 'var(--t-btn)' : 'var(--t-card2)',
-                color: isFriday() ? 'var(--t-btn-color)' : 'var(--t-tx3)',
+                background: isTestDay() ? 'var(--t-btn)' : 'var(--t-card2)',
+                color: isTestDay() ? 'var(--t-btn-color)' : 'var(--t-tx3)',
                 borderRadius: 14, padding: '11px 24px', fontSize: 13, fontWeight: 700,
-                border: isFriday() ? 'none' : '1px solid var(--t-brd)',
-                cursor: isFriday() ? 'pointer' : 'not-allowed',
-                opacity: isFriday() ? 1 : 0.5,
+                border: isTestDay() ? 'none' : '1px solid var(--t-brd)',
+                cursor: isTestDay() ? 'pointer' : 'not-allowed',
+                opacity: isTestDay() ? 1 : 0.5,
                 position: 'relative',
               }}
             >
               <Zap style={{ width: 15, height: 15 }} />
-              {isFriday() ? 'Start Test' : 'Come Back Friday'}
+              {isTestDay() ? 'Start Test' : 'Available Fri – Sun'}
             </button>
           </div>
         </div>
