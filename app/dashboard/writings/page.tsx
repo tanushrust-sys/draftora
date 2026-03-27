@@ -238,7 +238,12 @@ function WritingsContent() {
     if (journalTab === 'favorites') q = q.eq('is_favorite', true);
     if (categoryFilter !== 'All') q = q.eq('category', categoryFilter);
     const { data } = await q;
-    setWritings(data || []);
+    const list = data || [];
+    setWritings(list);
+    // Auto-expand today's entry so user can see their piece + feedback
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayEntry = list.find(w => w.created_at.startsWith(todayStr) && ['submitted', 'reviewed'].includes(w.status));
+    if (todayEntry) { setExpanded(todayEntry.id); setShowFeedbackId(todayEntry.id); }
     setJournalLoading(false);
   }, [profile, journalTab, categoryFilter]);
 
@@ -821,12 +826,16 @@ function WritingsContent() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {writings.map(w => (
-                  <div key={w.id} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 22, overflow: 'hidden' }}>
+                {writings.map(w => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const isToday = w.created_at.startsWith(todayStr);
+                  return (
+                  <div key={w.id} style={{ background: 'var(--t-card)', border: isToday ? '1px solid var(--t-acc-c)' : '1px solid var(--t-brd)', borderRadius: 22, overflow: 'hidden' }}>
                     <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                           <h3 style={{ fontWeight: 700, color: 'var(--t-tx)', fontSize: 15, margin: 0 }}>{w.title}</h3>
+                          {isToday && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', padding: '2px 8px', borderRadius: 99, background: 'var(--t-acc-a)', color: 'var(--t-acc)', border: '1px solid var(--t-brd-a)' }}>Today</span>}
                           <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600, background: w.status === 'reviewed' ? 'rgba(52,211,153,0.1)' : w.status === 'submitted' ? 'rgba(96,165,250,0.1)' : 'rgba(250,204,21,0.1)', color: w.status === 'reviewed' ? '#34d399' : w.status === 'submitted' ? '#60a5fa' : '#facc15', border: `1px solid ${w.status === 'reviewed' ? 'rgba(52,211,153,0.2)' : w.status === 'submitted' ? 'rgba(96,165,250,0.2)' : 'rgba(250,204,21,0.2)'}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             {w.status === 'reviewed' ? <CheckCircle style={{ width: 11, height: 11 }} /> : w.status === 'submitted' ? <FileText style={{ width: 11, height: 11 }} /> : <Clock style={{ width: 11, height: 11 }} />}
                             {w.status.replace('_', ' ')}
@@ -891,7 +900,7 @@ function WritingsContent() {
                       </div>
                     )}
                   </div>
-                ))}
+                ); })}
               </div>
             )}
           </>
