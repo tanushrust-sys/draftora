@@ -52,8 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //    without waiting for the Supabase round-trip (no full-page spinner on
   //    every navigation).  The real profile arrives moments later and
   //    overwrites the cache.
-  const [profile, setProfile] = useState<Profile | null>(readCachedProfile);
-  const [loading, setLoading] = useState(true);
+  const cached = readCachedProfile();
+  const [profile, setProfile] = useState<Profile | null>(cached);
+  // If we already have a cached profile the user is almost certainly logged in —
+  // start with loading=false so the root page can redirect instantly.
+  const [loading, setLoading] = useState(!cached);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
@@ -73,8 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Safety net: if Supabase hangs (paused project, slow network) we still
-    // resolve after 6 s so the app doesn't block forever.
-    const timeout = setTimeout(() => setLoading(false), 6000);
+    // resolve after 2 s so the app doesn't block forever.
+    const timeout = setTimeout(() => setLoading(false), 2000);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout);

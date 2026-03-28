@@ -6,14 +6,15 @@ import { PenTool } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 
 export default function RootPage() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading) {
-      router.replace(user ? '/dashboard' : '/login');
+      // Treat a cached profile the same as a live user — both mean "go to dashboard"
+      router.replace((user || profile) ? '/dashboard' : '/login');
     }
-  }, [loading, router, user]);
+  }, [loading, router, user, profile]);
 
   return (
     <div className="auth-shell flex items-center justify-center">
