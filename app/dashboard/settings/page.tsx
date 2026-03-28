@@ -8,8 +8,17 @@ import { supabase } from '@/app/lib/supabase';
 import {
   Settings, Palette, Target, LogOut, Trash2, CheckCircle,
   Sparkles, Crown, Star, Shield, Flame, Trophy,
-  PenLine, BookOpen, Zap, Bot, ArrowRight,
+  PenLine, BookOpen, Zap, Bot, ArrowRight, Users,
 } from 'lucide-react';
+
+const AGE_GROUPS = [
+  { value: '5-7',   label: '5 – 7',   sub: 'Early Explorer',      emoji: '🌱' },
+  { value: '8-10',  label: '8 – 10',  sub: 'Growing Writer',      emoji: '✏️' },
+  { value: '11-13', label: '11 – 13', sub: 'Finding Your Voice',  emoji: '📚' },
+  { value: '14-17', label: '14 – 17', sub: 'Sharpening the Craft',emoji: '🎯' },
+  { value: '18-21', label: '18 – 21', sub: 'Rising Writer',       emoji: '🚀' },
+  { value: '22+',   label: '22 +',    sub: 'Lifelong Learner',    emoji: '⭐' },
+];
 
 /* ─── Theme swatch data ─── */
 type ThemePreviewPalette = (typeof THEMES)[ThemeName]['preview'];
@@ -186,6 +195,9 @@ export default function SettingsPage() {
   const [vocabGoal,   setVocabGoal]   = useState(profile?.daily_vocab_goal  ?? 3);
   const [customGoal,  setCustomGoal]  = useState(profile?.custom_daily_goal ?? '');
   const [goalsSaved,  setGoalsSaved]  = useState(false);
+  const [editingAge,  setEditingAge]  = useState(false);
+  const [selectedAge, setSelectedAge] = useState(profile?.age_group ?? '');
+  const [ageSaved,    setAgeSaved]    = useState(false);
   const [deleteStep,  setDeleteStep]  = useState(0);
   const [deleteInput, setDeleteInput] = useState('');
 
@@ -209,6 +221,15 @@ export default function SettingsPage() {
     setEditingGoals(false);
     setGoalsSaved(true);
     setTimeout(() => setGoalsSaved(false), 2500);
+  };
+
+  const saveAgeGroup = async () => {
+    if (!profile || !selectedAge) return;
+    await supabase.from('profiles').update({ age_group: selectedAge }).eq('id', profile.id);
+    await refreshProfile();
+    setEditingAge(false);
+    setAgeSaved(true);
+    setTimeout(() => setAgeSaved(false), 2500);
   };
 
   const handleLogout = async () => {
@@ -516,6 +537,104 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </Card>
+
+        {/* ══ AGE GROUP ══ */}
+        <Card>
+          <SectionHeader
+            icon={<Users style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />}
+            title="Age Group"
+            subtitle="Tailors prompts, vocab, and feedback to your level"
+            right={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {ageSaved && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-success)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <CheckCircle style={{ width: 13, height: 13 }} /> Saved!
+                  </span>
+                )}
+                {!editingAge ? (
+                  <button
+                    onClick={() => { setEditingAge(true); setSelectedAge(profile.age_group ?? ''); }}
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: '6px 16px', borderRadius: 10, cursor: 'pointer',
+                      background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx2)',
+                    }}>
+                    Change
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setEditingAge(false)}
+                      style={{ fontSize: 12, padding: '6px 14px', borderRadius: 10, cursor: 'pointer', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)', background: 'transparent' }}>
+                      Cancel
+                    </button>
+                    <button onClick={saveAgeGroup} disabled={!selectedAge}
+                      style={{ fontSize: 12, fontWeight: 700, padding: '6px 16px', borderRadius: 10, cursor: selectedAge ? 'pointer' : 'not-allowed', background: selectedAge ? 'var(--t-btn)' : 'var(--t-brd)', color: selectedAge ? 'var(--t-btn-color)' : 'var(--t-tx3)', border: 'none', opacity: selectedAge ? 1 : 0.6 }}>
+                      Save
+                    </button>
+                  </div>
+                )}
+              </div>
+            }
+          />
+
+          <div style={{ padding: '20px 24px' }}>
+            {editingAge ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {AGE_GROUPS.map(ag => {
+                  const selected = selectedAge === ag.value;
+                  return (
+                    <button
+                      key={ag.value}
+                      onClick={() => setSelectedAge(ag.value)}
+                      style={{
+                        borderRadius: 16, padding: '14px 12px', cursor: 'pointer',
+                        textAlign: 'center', border: 'none', transition: 'all 0.15s',
+                        background: selected
+                          ? 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))'
+                          : 'var(--t-card2)',
+                        outline: selected ? '2px solid var(--t-acc)' : '2px solid transparent',
+                        outlineOffset: 2,
+                        boxShadow: selected ? '0 4px 16px var(--t-acc-a)' : '0 1px 4px rgba(0,0,0,0.08)',
+                      }}
+                    >
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>{ag.emoji}</div>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: selected ? 'var(--t-acc)' : 'var(--t-tx)', margin: 0, lineHeight: 1 }}>{ag.label}</p>
+                      <p style={{ fontSize: 10, color: selected ? 'var(--t-acc)' : 'var(--t-tx3)', margin: '4px 0 0', fontWeight: 600, opacity: selected ? 0.8 : 1 }}>{ag.sub}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              (() => {
+                const current = AGE_GROUPS.find(ag => ag.value === profile.age_group);
+                return current ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{
+                      width: 54, height: 54, borderRadius: 16, flexShrink: 0,
+                      background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
+                      border: '1px solid var(--t-brd-a)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 26,
+                    }}>
+                      {current.emoji}
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--t-tx)', margin: 0, letterSpacing: '-0.02em' }}>
+                        Age {current.label}
+                      </p>
+                      <p style={{ fontSize: 13, color: 'var(--t-tx3)', margin: '3px 0 0', fontWeight: 500 }}>
+                        {current.sub} — prompts &amp; vocab are matched to this range
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--t-tx3)', margin: 0 }}>
+                    No age group set — click <strong>Change</strong> to configure it.
+                  </p>
+                );
+              })()
             )}
           </div>
         </Card>
