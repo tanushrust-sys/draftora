@@ -355,7 +355,8 @@ function WritingsContent() {
   };
 
   const startFresh = () => {
-    setTitle(''); setContent(''); setPrompt(''); setCategory('Creative Story');
+    setTitle(''); setContent(''); setCategory('Creative Story');
+    setPrompt(getDailyPrompt('Creative Story'));
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
     loadProgress();
   };
@@ -635,7 +636,7 @@ function WritingsContent() {
                     <Tag style={{ width: 13, height: 13, color: 'var(--t-tx3)' }} />
                     <select
                       value={category}
-                      onChange={e => setCategory(e.target.value)}
+                      onChange={e => { setCategory(e.target.value); setPrompt(getDailyPrompt(e.target.value)); }}
                       style={{ background: 'var(--t-bg)', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--t-brd)', color: 'var(--t-tx2)', fontSize: 12, outline: 'none', cursor: 'pointer' }}
                     >
                       {CATEGORIES.map(c => <option key={c}>{c}</option>)}
