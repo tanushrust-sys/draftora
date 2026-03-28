@@ -13,8 +13,8 @@ export async function POST(req: Request) {
     }
 
     const text = await chat({
-      tier: 'fast',
-      maxTokens: 300,
+      tier: 'nano',
+      maxTokens: 400,
       messages: [
         {
           role: 'user',
@@ -28,8 +28,10 @@ Evaluate their sentence and respond with ONLY a valid JSON object — no markdow
 Return exactly this JSON structure:
 {
   "correct": true or false (did they use the word correctly in context?),
-  "feedback": "1-2 sentences — if correct, praise them warmly and note what made it good. If incorrect, gently explain how to use it better with a quick tip.",
-  "suggestion": "If incorrect, give a short example sentence. If correct, leave this as an empty string."
+  "strengths": "1-2 sentences on what is good about their sentence — comment on correct usage, clarity, or creativity even if imperfect",
+  "improvements": "1-2 sentences on what could be better — if correct, suggest how to make it even more vivid or precise; if incorrect, explain the mistake kindly and how to fix it",
+  "summary": "1 short encouraging sentence wrapping up — motivate them to keep practising",
+  "suggestion": "If incorrect, give a better example sentence using the word. If correct, leave as empty string."
 }`,
         },
       ],

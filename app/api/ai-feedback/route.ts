@@ -14,22 +14,22 @@ export async function POST(req: Request) {
 
     const raw = await chat({
       tier: 'fast',
-      maxTokens: 600,
+      maxTokens: 1000,
       messages: [
         {
           role: 'user',
-          content: `You are a warm, encouraging writing coach for students. Analyse this piece of ${category} writing and respond with ONLY a valid JSON object — no markdown, no extra text.
+          content: `You are an expert writing coach giving thorough, detailed feedback to a student. Analyse this piece of ${category} writing deeply and respond with ONLY a valid JSON object — no markdown, no extra text.
 
 ${prompt ? `Writing prompt: "${prompt}"\n` : ''}Word count: ${wordCount}
 
 Writing:
 "${content}"
 
-Return exactly this JSON structure:
+Analyse the writing across these dimensions: structure, vocabulary, sentence variety, clarity, voice/tone, and how well it fits the ${category} format. Then return exactly this JSON structure:
 {
-  "strengths": "2-3 sentences on what the student did well — be specific and genuine",
-  "improvements": "1-2 sentences on the single most important area to improve — be kind and constructive",
-  "overall": "1-2 sentences of warm overall encouragement that motivates them to keep going"
+  "strengths": "3-5 sentences identifying specific strengths with examples quoted directly from their writing — be precise about what works and why",
+  "improvements": "3-5 sentences on the 2-3 most important areas to improve — give concrete, actionable techniques the student can apply immediately, with brief examples of how",
+  "overall": "2-3 sentences of honest, warm summary — acknowledge real effort, highlight their biggest win, and give one clear focus for next time"
 }`,
         },
       ],

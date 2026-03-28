@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     const raw = await chat({
-      tier: 'fast',
+      tier: 'nano',
       maxTokens: 400,
       messages: [
         {

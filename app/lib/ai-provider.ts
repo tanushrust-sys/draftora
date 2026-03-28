@@ -8,8 +8,8 @@
 export type AIMessage = { role: 'user' | 'assistant'; content: string };
 
 export interface ChatOptions {
-  /** 'fast' = cheap model, 'smart' = capable model */
-  tier: 'fast' | 'smart';
+  /** 'nano' = cheapest (vocab), 'fast' = standard (feedback), 'smart' = best (coach) */
+  tier: 'nano' | 'fast' | 'smart';
   /** Optional system / instruction prompt */
   system?: string;
   messages: AIMessage[];
@@ -18,12 +18,12 @@ export interface ChatOptions {
 
 // Default model names per provider — override via env vars if needed
 const DEFAULT_MODELS = {
-  openai:    { fast: 'gpt-4o-mini',            smart: 'gpt-4o' },
-  anthropic: { fast: 'claude-haiku-4-5-20251001', smart: 'claude-sonnet-4-6' },
+  openai:    { nano: 'gpt-4o-mini', fast: 'gpt-4o-mini', smart: 'gpt-4o-mini' },
+  anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-sonnet-4-6' },
 };
 
-function getModel(provider: string, tier: 'fast' | 'smart'): string {
-  const envKey = tier === 'fast' ? 'AI_FAST_MODEL' : 'AI_SMART_MODEL';
+function getModel(provider: string, tier: 'nano' | 'fast' | 'smart'): string {
+  const envKey = tier === 'nano' ? 'AI_NANO_MODEL' : tier === 'fast' ? 'AI_FAST_MODEL' : 'AI_SMART_MODEL';
   if (process.env[envKey]) return process.env[envKey]!;
   return DEFAULT_MODELS[provider as keyof typeof DEFAULT_MODELS]?.[tier]
     ?? DEFAULT_MODELS.openai[tier];

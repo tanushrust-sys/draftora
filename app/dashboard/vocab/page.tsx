@@ -58,7 +58,7 @@ export default function VocabPage() {
   // Sentence practice (always visible)
   const [sentences, setSentences] = useState<Record<number, string>>({});
   const [checking, setChecking] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<Record<number, { correct: boolean; feedback: string; suggestion: string }>>({});
+  const [feedback, setFeedback] = useState<Record<number, { correct: boolean; strengths: string; improvements: string; summary: string; suggestion: string }>>({});
 
   const dailyWords = getDailyWords();
 
@@ -121,7 +121,7 @@ export default function VocabPage() {
       const data = await res.json();
       setFeedback(prev => ({ ...prev, [i]: data }));
     } catch {
-      setFeedback(prev => ({ ...prev, [i]: { correct: false, feedback: 'Could not check — try again.', suggestion: '' } }));
+      setFeedback(prev => ({ ...prev, [i]: { correct: false, strengths: '', improvements: 'Could not check — try again.', summary: '', suggestion: '' } }));
     }
     setChecking(null);
     setSubmitting(null);
@@ -581,13 +581,25 @@ export default function VocabPage() {
                       style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 12, padding: '10px 12px', fontSize: 13, color: 'var(--t-tx)', resize: 'none', outline: 'none', lineHeight: 1.5, opacity: saved.has(i) ? 0.6 : 1 }}
                     />
                     {feedback[i] && (
-                      <div style={{ background: feedback[i].correct ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${feedback[i].correct ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`, borderRadius: 12, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-                          {feedback[i].correct ? <CheckCircle style={{ width: 13, height: 13, color: '#34d399' }} /> : <XCircle style={{ width: 13, height: 13, color: '#f87171' }} />}
-                          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedback[i].correct ? '#34d399' : '#f87171' }}>{feedback[i].correct ? 'Great usage!' : 'Not quite'}</span>
-                        </div>
-                        <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{feedback[i].feedback}</p>
-                        {feedback[i].suggestion && <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic', marginTop: 4 }}>Try: &ldquo;{feedback[i].suggestion}&rdquo;</p>}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {feedback[i].strengths && (
+                          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 12, padding: '10px 12px' }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#34d399', marginBottom: 4 }}>What&apos;s good</p>
+                            <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{feedback[i].strengths}</p>
+                          </div>
+                        )}
+                        {feedback[i].improvements && (
+                          <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 12, padding: '10px 12px' }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 4 }}>Improve</p>
+                            <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{feedback[i].improvements}</p>
+                          </div>
+                        )}
+                        {feedback[i].suggestion && (
+                          <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic', paddingLeft: 4 }}>Try: &ldquo;{feedback[i].suggestion}&rdquo;</p>
+                        )}
+                        {feedback[i].summary && (
+                          <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontWeight: 600, paddingLeft: 4 }}>{feedback[i].summary}</p>
+                        )}
                       </div>
                     )}
                     {/* Single Submit button — disabled until sentence written */}
