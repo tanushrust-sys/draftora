@@ -47,6 +47,8 @@ type TestQuestion = {
   correctIndex: number;
 };
 
+type SentenceFeedback = { correct: boolean; strengths: string; improvements: string; summary: string; suggestion: string };
+
 export default function VocabPage() {
   const { profile, refreshProfile } = useAuth();
   const [words, setWords] = useState<VocabWord[]>([]);
@@ -54,11 +56,13 @@ export default function VocabPage() {
   const [search, setSearch] = useState('');
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [submitting, setSubmitting] = useState<number | null>(null);
+  // Which word-bank row is expanded to show sentence + feedback
+  const [expandedWord, setExpandedWord] = useState<string | null>(null);
 
-  // Sentence practice (always visible)
+  // Sentence practice (always visible on daily cards)
   const [sentences, setSentences] = useState<Record<number, string>>({});
   const [checking, setChecking] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<Record<number, { correct: boolean; strengths: string; improvements: string; summary: string; suggestion: string }>>({});
+  const [feedback, setFeedback] = useState<Record<number, SentenceFeedback>>({});
 
   const ageGroup   = (profile as { age_group?: string })?.age_group;
   const vocabPool  = getVocabPool(ageGroup) || VOCAB_FALLBACK;
@@ -79,20 +83,37 @@ export default function VocabPage() {
   const loadWords = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
-    const { data } = await supabase.from('vocab_words').select('*').eq('user_id', profile.id).order('created_at', { ascending: false });
-    setWords(data || []);
+    const { data } = await supabase
+      .from('vocab_words')
+      .select('*')
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false });
+    const loaded = (data || []) as VocabWord[];
+    setWords(loaded);
     setLoading(false);
   }, [profile]);
 
   useEffect(() => { loadWords(); }, [loadWords]);
 
+  // After words load: mark daily cards as saved + pre-fill sentences + restore feedback
   useEffect(() => {
     if (!words.length) return;
     const alreadySaved = new Set<number>();
+    const restoredSentences: Record<number, string> = {};
+    const restoredFeedback: Record<number, SentenceFeedback> = {};
+
     dailyWords.forEach((dw, i) => {
-      if (words.some(w => w.word.toLowerCase() === dw.word.toLowerCase())) alreadySaved.add(i);
+      const match = words.find(w => w.word.toLowerCase() === dw.word.toLowerCase());
+      if (match) {
+        alreadySaved.add(i);
+        if (match.user_sentence) restoredSentences[i] = match.user_sentence;
+        if (match.sentence_feedback) restoredFeedback[i] = match.sentence_feedback as SentenceFeedback;
+      }
     });
+
     setSaved(alreadySaved);
+    setSentences(prev => ({ ...restoredSentences, ...prev })); // don't overwrite live typing
+    setFeedback(prev => ({ ...restoredFeedback, ...prev }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [words]);
 
@@ -102,29 +123,63 @@ export default function VocabPage() {
     if (!profile || !sentence) return;
     setSubmitting(i);
 
-    // Save to bank if not already saved
+    // ── 1. Save/update word in bank with the user's sentence ──
+    let wordId: string | null = null;
+
     if (!saved.has(i)) {
-      await supabase.from('vocab_words').insert({
-        user_id: profile.id, word: dw.word, meaning: dw.meaning,
-        example_sentence: dw.example, times_used: 0, times_to_master: 3, mastered: false,
-      });
+      // First submission: insert new row
+      const { data: inserted } = await supabase
+        .from('vocab_words')
+        .insert({
+          user_id: profile.id,
+          word: dw.word,
+          meaning: dw.meaning,
+          example_sentence: dw.example,
+          times_used: 0,
+          times_to_master: 3,
+          mastered: false,
+          user_sentence: sentence,
+        })
+        .select('id')
+        .single();
+      wordId = inserted?.id ?? null;
       setSaved(prev => new Set(prev).add(i));
       await awardXP(profile.id, XP_REWARDS.VOCAB_SENTENCE, `Vocab sentence: ${dw.word}`);
-      await loadWords();
+    } else {
+      // Already saved — find existing row and update sentence
+      const existing = words.find(w => w.word.toLowerCase() === dw.word.toLowerCase());
+      wordId = existing?.id ?? null;
+      if (wordId) {
+        await supabase
+          .from('vocab_words')
+          .update({ user_sentence: sentence })
+          .eq('id', wordId);
+      }
     }
 
-    // Check sentence in the background for feedback
+    // ── 2. Get AI feedback ──
     setChecking(i);
+    let feedbackData: SentenceFeedback = { correct: false, strengths: '', improvements: 'Could not check — try again.', summary: '', suggestion: '' };
     try {
       const res = await fetch('/api/check-vocab-sentence', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ word: dw.word, meaning: dw.meaning, sentence }),
       });
-      const data = await res.json();
-      setFeedback(prev => ({ ...prev, [i]: data }));
-    } catch {
-      setFeedback(prev => ({ ...prev, [i]: { correct: false, strengths: '', improvements: 'Could not check — try again.', summary: '', suggestion: '' } }));
+      feedbackData = await res.json() as SentenceFeedback;
+    } catch { /* keep error placeholder */ }
+
+    setFeedback(prev => ({ ...prev, [i]: feedbackData }));
+
+    // ── 3. Persist feedback to DB so it survives refresh ──
+    if (wordId) {
+      await supabase
+        .from('vocab_words')
+        .update({ user_sentence: sentence, sentence_feedback: feedbackData })
+        .eq('id', wordId);
     }
+
+    // Reload so word bank shows updated sentence + feedback
+    await loadWords();
     setChecking(null);
     setSubmitting(null);
   };
@@ -662,30 +717,116 @@ export default function VocabPage() {
                 <GraduationCap style={{ width: 24, height: 24, color: 'var(--t-tx3)' }} />
               </div>
               <p style={{ color: 'var(--t-tx)', fontWeight: 700, marginBottom: 4 }}>{search ? 'No words found' : 'Your word bank is empty'}</p>
-              <p style={{ color: 'var(--t-tx3)', fontSize: 13 }}>{search ? 'Try a different search' : 'Save today\'s words above to start building your bank'}</p>
+              <p style={{ color: 'var(--t-tx3)', fontSize: 13 }}>{search ? 'Try a different search' : "Save today's words above to start building your bank"}</p>
             </div>
           ) : (
-            <>
-              {/* Table header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 3fr 1fr', gap: 16, padding: '12px 24px', borderBottom: '1px solid var(--t-brd)' }}>
-                {['Word', 'Meaning', 'Example', 'Mastery'].map(h => (
-                  <span key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--t-tx3)', textAlign: h === 'Mastery' ? 'right' : 'left' }}>{h}</span>
-                ))}
-              </div>
-              {/* Table rows */}
-              {filtered.map(w => (
-                <div key={w.id} style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 3fr 1fr', gap: 16, padding: '14px 24px', borderBottom: '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 700, color: 'var(--t-tx)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {w.mastered && <Star style={{ width: 13, height: 13, color: 'var(--t-acc)' }} />}{w.word}
-                  </span>
-                  <span style={{ fontSize: 13, color: 'var(--t-tx2)' }}>{w.meaning}</span>
-                  <span style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic' }}>{w.example_sentence}</span>
-                  <span style={{ textAlign: 'right' }}>
-                    {w.mastered ? <CheckCircle style={{ width: 16, height: 16, color: 'var(--t-success)' }} /> : <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{w.times_used}/{w.times_to_master}</span>}
-                  </span>
-                </div>
-              ))}
-            </>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {filtered.map((w, rowIdx) => {
+                const isExpanded = expandedWord === w.id;
+                const fb = w.sentence_feedback as SentenceFeedback | null;
+                const hasSentence = !!w.user_sentence;
+                return (
+                  <div key={w.id} style={{ borderBottom: rowIdx < filtered.length - 1 ? '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)' : 'none' }}>
+                    {/* ── Summary row ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 3fr auto', gap: 16, padding: '14px 24px', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--t-tx)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {w.mastered && <Star style={{ width: 13, height: 13, color: 'var(--t-acc)' }} />}{w.word}
+                      </span>
+                      <span style={{ fontSize: 13, color: 'var(--t-tx2)' }}>{w.meaning}</span>
+                      <span style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic' }}>{w.example_sentence}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                        {w.mastered
+                          ? <CheckCircle style={{ width: 16, height: 16, color: 'var(--t-success)' }} />
+                          : <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{w.times_used}/{w.times_to_master}</span>
+                        }
+                        {/* Expand toggle — only show if there's a sentence or feedback */}
+                        {hasSentence && (
+                          <button
+                            onClick={() => setExpandedWord(isExpanded ? null : w.id)}
+                            title={isExpanded ? 'Collapse' : 'Show my sentence & feedback'}
+                            style={{
+                              width: 26, height: 26, borderRadius: 8, border: 'none', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: isExpanded ? 'var(--t-acc-a)' : 'var(--t-card2)',
+                              color: isExpanded ? 'var(--t-acc)' : 'var(--t-tx3)',
+                              transition: 'all 0.15s',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <PenLine style={{ width: 13, height: 13 }} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Expanded sentence + feedback panel ── */}
+                    {isExpanded && hasSentence && (
+                      <div style={{
+                        margin: '0 16px 14px',
+                        background: 'var(--t-bg)',
+                        border: '1px solid var(--t-brd)',
+                        borderRadius: 16,
+                        padding: '16px 18px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 12,
+                      }}>
+                        {/* User's sentence */}
+                        <div>
+                          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-tx3)', marginBottom: 5 }}>
+                            My Practice Sentence
+                          </p>
+                          <p style={{ fontSize: 14, color: 'var(--t-tx)', lineHeight: 1.6, fontStyle: 'italic' }}>
+                            &ldquo;{w.user_sentence}&rdquo;
+                          </p>
+                        </div>
+
+                        {/* AI feedback if present */}
+                        {fb && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{
+                                width: 20, height: 20, borderRadius: 6,
+                                background: fb.correct ? tone('var(--t-success)', 16) : tone('var(--t-warning)', 16),
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                                {fb.correct
+                                  ? <CheckCircle style={{ width: 12, height: 12, color: 'var(--t-success)' }} />
+                                  : <Sparkles style={{ width: 12, height: 12, color: 'var(--t-warning)' }} />
+                                }
+                              </div>
+                              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: fb.correct ? 'var(--t-success)' : 'var(--t-warning)' }}>
+                                AI Feedback
+                              </p>
+                            </div>
+                            {fb.strengths && (
+                              <div style={{ background: tone('var(--t-success)', 7), border: `1px solid ${tone('var(--t-success)', 18)}`, borderRadius: 10, padding: '9px 12px' }}>
+                                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-success)', marginBottom: 3 }}>What&apos;s good</p>
+                                <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{fb.strengths}</p>
+                              </div>
+                            )}
+                            {fb.improvements && (
+                              <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 10, padding: '9px 12px' }}>
+                                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 3 }}>To improve</p>
+                                <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{fb.improvements}</p>
+                              </div>
+                            )}
+                            {fb.suggestion && (
+                              <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic', paddingLeft: 4 }}>
+                                💡 Try: &ldquo;{fb.suggestion}&rdquo;
+                              </p>
+                            )}
+                            {fb.summary && (
+                              <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontWeight: 600, paddingLeft: 4 }}>{fb.summary}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 

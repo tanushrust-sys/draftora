@@ -86,8 +86,14 @@ create table if not exists public.vocab_words (
   times_to_master integer not null default 5,
   mastered boolean not null default false,
   source_writing_id uuid references public.writings(id) on delete set null,
+  user_sentence text,
+  sentence_feedback jsonb,
   created_at timestamptz not null default now()
 );
+
+-- Run these if adding columns to an existing vocab_words table:
+alter table public.vocab_words add column if not exists user_sentence text;
+alter table public.vocab_words add column if not exists sentence_feedback jsonb;
 
 alter table public.vocab_words enable row level security;
 drop policy if exists "Users can view own vocab" on public.vocab_words;

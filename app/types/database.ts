@@ -141,6 +141,16 @@ export type Database = {
           times_to_master: number;
           mastered: boolean;
           source_writing_id: string | null;
+          /** The sentence the user wrote when practising this word */
+          user_sentence: string | null;
+          /** AI feedback stored as JSON after sentence check */
+          sentence_feedback: {
+            correct: boolean;
+            strengths: string;
+            improvements: string;
+            summary: string;
+            suggestion: string;
+          } | null;
           created_at: string;
         };
         Insert: {
@@ -153,6 +163,8 @@ export type Database = {
           times_to_master?: number;
           mastered?: boolean;
           source_writing_id?: string | null;
+          user_sentence?: string | null;
+          sentence_feedback?: object | null;
           created_at?: string;
         };
         Update: {
@@ -165,6 +177,8 @@ export type Database = {
           times_to_master?: number;
           mastered?: boolean;
           source_writing_id?: string | null;
+          user_sentence?: string | null;
+          sentence_feedback?: object | null;
           created_at?: string;
         };
         Relationships: [];
