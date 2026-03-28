@@ -166,21 +166,77 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* ── Streak + XP strip ── */}
             {profile && (
             <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
-              <div style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 14, padding: '10px 14px' }}>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <Flame style={{ width: 14, height: 14, color: 'var(--t-warning)' }} />
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Streak</span>
+              {/* Streak card */}
+              <div style={{
+                borderRadius: 16,
+                padding: '12px 14px',
+                background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-warning) 18%, transparent) 0%, color-mix(in srgb, var(--t-warning) 7%, transparent) 100%)',
+                border: '1px solid color-mix(in srgb, var(--t-warning) 30%, transparent)',
+                boxShadow: '0 4px 16px color-mix(in srgb, var(--t-warning) 12%, transparent)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+                {/* Subtle glow blob */}
+                <div style={{
+                  position: 'absolute', bottom: -8, right: -8,
+                  width: 48, height: 48, borderRadius: '50%',
+                  background: 'color-mix(in srgb, var(--t-warning) 20%, transparent)',
+                  filter: 'blur(14px)',
+                  pointerEvents: 'none',
+                }} />
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                    background: 'color-mix(in srgb, var(--t-warning) 22%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--t-warning) 35%, transparent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Flame style={{ width: 12, height: 12, color: 'var(--t-warning)' }} />
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--t-warning)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.85 }}>Streak</span>
                 </div>
-                <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--t-warning)', lineHeight: 1 }}>{profile.streak}</p>
-                <p style={{ fontSize: 10, color: 'var(--t-tx3)', marginTop: 2 }}>day{profile.streak !== 1 ? 's' : ''}</p>
+                <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t-warning)', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                  {profile.streak}
+                </p>
+                <p style={{ fontSize: 10, color: 'var(--t-warning)', marginTop: 3, opacity: 0.6, fontWeight: 600 }}>
+                  day{profile.streak !== 1 ? 's' : ''} in a row
+                </p>
               </div>
-              <div style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 14, padding: '10px 14px' }}>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <Zap style={{ width: 14, height: 14, color: 'var(--t-mod-rewards)' }} />
-                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total XP</span>
+
+              {/* XP card */}
+              <div style={{
+                borderRadius: 16,
+                padding: '12px 14px',
+                background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-mod-rewards) 18%, transparent) 0%, color-mix(in srgb, var(--t-mod-rewards) 7%, transparent) 100%)',
+                border: '1px solid color-mix(in srgb, var(--t-mod-rewards) 30%, transparent)',
+                boxShadow: '0 4px 16px color-mix(in srgb, var(--t-mod-rewards) 12%, transparent)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  position: 'absolute', bottom: -8, right: -8,
+                  width: 48, height: 48, borderRadius: '50%',
+                  background: 'color-mix(in srgb, var(--t-mod-rewards) 20%, transparent)',
+                  filter: 'blur(14px)',
+                  pointerEvents: 'none',
+                }} />
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                    background: 'color-mix(in srgb, var(--t-mod-rewards) 22%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--t-mod-rewards) 35%, transparent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Zap style={{ width: 12, height: 12, color: 'var(--t-mod-rewards)' }} />
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--t-mod-rewards)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.85 }}>Total XP</span>
                 </div>
-                <p style={{ fontSize: 22, fontWeight: 900, color: 'var(--t-mod-rewards)', lineHeight: 1 }}>{profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp}</p>
-                <p style={{ fontSize: 10, color: 'var(--t-tx3)', marginTop: 2 }}>points</p>
+                <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t-mod-rewards)', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                  {profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp}
+                </p>
+                <p style={{ fontSize: 10, color: 'var(--t-mod-rewards)', marginTop: 3, opacity: 0.6, fontWeight: 600 }}>
+                  points earned
+                </p>
               </div>
             </div>
             )}
