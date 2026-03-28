@@ -8,6 +8,8 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/app/lib/supabase';
 import { awardXP, updateDailyStats, updateStreak, XP_REWARDS } from '@/app/lib/xp';
+import { getTrialStatus, TRIAL_LIMITS } from '@/app/lib/trial';
+import UpgradeModal, { FeatureBlockWall, LimitWarningBanner } from '@/app/components/UpgradeModal';
 import type { Writing } from '@/app/types/database';
 import { getDailyPrompt } from '@/app/data/prompts';
 import {
@@ -219,6 +221,7 @@ function WritingsContent() {
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [reviewedWritings, setReviewedWritings] = useState<Writing[]>([]);
   const progressLoaded = useRef(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // ── Read URL params; lock prompt to today's daily prompt ──
   useEffect(() => {
@@ -324,6 +327,13 @@ function WritingsContent() {
   // ── Write tab actions ──
   const saveDraft = useCallback(async () => {
     if (!profile || !content.trim()) return;
+
+    // ── Trial gate: check before first creation ──
+    if (!writingId) {
+      const ts = getTrialStatus(profile);
+      if (ts.writingsBlocked) { setShowUpgradeModal(true); return; }
+    }
+
     setStatus('saving');
     const data = {
       user_id: profile.id,
@@ -338,10 +348,19 @@ function WritingsContent() {
       await supabase.from('writings').update(data).eq('id', writingId);
     } else {
       const { data: created } = await supabase.from('writings').insert(data).select().single();
-      if (created) setWritingId(created.id);
+      if (created) {
+        setWritingId(created.id);
+        // Increment writings_created counter
+        if (profile.plan !== 'plus') {
+          await supabase.from('profiles')
+            .update({ writings_created: (profile.writings_created ?? 0) + 1 })
+            .eq('id', profile.id);
+          await refreshProfile();
+        }
+      }
     }
     setStatus('idle');
-  }, [profile, content, title, prompt, category, wordCount, writingId]);
+  }, [profile, content, title, prompt, category, wordCount, writingId, refreshProfile]);
 
   const submitForFeedback = async () => {
     if (!profile || wordCount < 20) { setError('Write at least 20 words before submitting.'); return; }
@@ -349,6 +368,13 @@ function WritingsContent() {
       setError('Your writing looks like repeated text — write real sentences to earn progress!');
       return;
     }
+
+    // ── Trial gate ──
+    if (!writingId) {
+      const ts = getTrialStatus(profile);
+      if (ts.writingsBlocked) { setShowUpgradeModal(true); return; }
+    }
+
     setStatus('submitting');
     setError('');
     let id = writingId;
@@ -356,7 +382,16 @@ function WritingsContent() {
       const { data } = await supabase.from('writings')
         .insert({ user_id: profile.id, title: title || 'Untitled', content, prompt: prompt || null, category, status: 'submitted', word_count: wordCount })
         .select().single();
-      if (data) { id = data.id; setWritingId(data.id); }
+      if (data) {
+        id = data.id;
+        setWritingId(data.id);
+        // Increment writings_created counter (if not already counted by saveDraft)
+        if (profile.plan !== 'plus') {
+          await supabase.from('profiles')
+            .update({ writings_created: (profile.writings_created ?? 0) + 1 })
+            .eq('id', profile.id);
+        }
+      }
     } else {
       await supabase.from('writings').update({ status: 'submitted', word_count: wordCount }).eq('id', id);
     }
@@ -453,6 +488,8 @@ function WritingsContent() {
     </div>
   );
 
+  const trialStatus = getTrialStatus(profile);
+
   return (
     <div style={{ padding: '2rem 2rem 4rem', background: 'var(--t-bg)', minHeight: '100vh' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -526,6 +563,33 @@ function WritingsContent() {
         ══════════════════════════════════════ */}
         {activeTab === 'write' && (
           <>
+            {/* Upgrade modal (shown when limit hit) */}
+            {showUpgradeModal && (
+              <UpgradeModal reason="writings" status={trialStatus} onClose={() => setShowUpgradeModal(false)} />
+            )}
+
+            {/* ── Writings limit reached: block new writing ── */}
+            {trialStatus.writingsBlocked && !writingId && (
+              <FeatureBlockWall
+                reason="writings"
+                status={trialStatus}
+                onUpgradeClick={() => setShowUpgradeModal(true)}
+              />
+            )}
+
+            {/* ── Normal write tab content (not blocked or editing existing) ── */}
+            {(!trialStatus.writingsBlocked || !!writingId) && (<>
+
+            {/* Approaching-limit warning */}
+            {!trialStatus.isPlus && (
+              <LimitWarningBanner
+                left={trialStatus.writingsLeft}
+                total={TRIAL_LIMITS.WRITINGS}
+                label="Writings"
+                color="var(--t-mod-write)"
+              />
+            )}
+
             {/* ── ALREADY SUBMITTED TODAY ── */}
             {todayWriting && status !== 'done' && (() => {
               const tw = todayWriting;
@@ -808,6 +872,7 @@ function WritingsContent() {
 
               </div>
             ))}
+            </>)} {/* end normal content conditional */}
           </>
         )}
 

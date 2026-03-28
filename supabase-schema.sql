@@ -26,6 +26,9 @@ create table if not exists public.profiles (
   student_id text,
   age_group text not null default '',
   writing_goal text not null default '',
+  coach_messages_used integer not null default 0,
+  writings_created integer not null default 0,
+  vocab_words_saved integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -33,6 +36,9 @@ create table if not exists public.profiles (
 -- Run these if adding columns to an existing table:
 -- alter table public.profiles add column if not exists age_group text not null default '';
 -- alter table public.profiles add column if not exists writing_goal text not null default '';
+alter table public.profiles add column if not exists coach_messages_used integer not null default 0;
+alter table public.profiles add column if not exists writings_created integer not null default 0;
+alter table public.profiles add column if not exists vocab_words_saved integer not null default 0;
 
 alter table public.profiles enable row level security;
 drop policy if exists "Users can view own profile" on public.profiles;

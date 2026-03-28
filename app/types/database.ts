@@ -27,6 +27,12 @@ export type Database = {
           student_id: string | null;
           age_group: string;
           writing_goal: string;
+          /** Running count of coach messages sent (free trial gate) */
+          coach_messages_used: number;
+          /** Running count of new writings created (free trial gate) */
+          writings_created: number;
+          /** Running count of vocab words added to the word bank (free trial gate) */
+          vocab_words_saved: number;
           created_at: string;
           updated_at: string;
         };
@@ -49,6 +55,9 @@ export type Database = {
           student_id?: string | null;
           age_group?: string;
           writing_goal?: string;
+          coach_messages_used?: number;
+          writings_created?: number;
+          vocab_words_saved?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -71,6 +80,9 @@ export type Database = {
           student_id?: string | null;
           age_group?: string;
           writing_goal?: string;
+          coach_messages_used?: number;
+          writings_created?: number;
+          vocab_words_saved?: number;
           created_at?: string;
           updated_at?: string;
         };

@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { chat } from '@/app/lib/ai-provider';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/app/types/database';
+import { TRIAL_LIMITS } from '@/app/lib/trial';
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,10 +73,31 @@ If there are no notable words, return an empty array: []`,
       }));
 
     if (toInsert.length > 0) {
-      await supabase.from('vocab_words').insert(toInsert as any);
+      // ── Free-trial vocab cap ──
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('plan, vocab_words_saved')
+        .eq('id', userId)
+        .single();
+
+      const plan       = (profileRow as { plan: string; vocab_words_saved: number } | null)?.plan ?? 'free';
+      const vocabUsed  = (profileRow as { plan: string; vocab_words_saved: number } | null)?.vocab_words_saved ?? 0;
+      const slotsLeft  = plan === 'plus' ? Infinity : Math.max(0, TRIAL_LIMITS.VOCAB_WORDS - vocabUsed);
+
+      const allowed = toInsert.slice(0, slotsLeft);
+      if (allowed.length > 0) {
+        await supabase.from('vocab_words').insert(allowed as any);
+        // Increment vocab_words_saved counter
+        if (plan !== 'plus') {
+          await supabase.from('profiles')
+            .update({ vocab_words_saved: vocabUsed + allowed.length })
+            .eq('id', userId);
+        }
+      }
+      return NextResponse.json({ added: allowed.length, blocked: toInsert.length - allowed.length });
     }
 
-    return NextResponse.json({ added: toInsert.length });
+    return NextResponse.json({ added: 0 });
   } catch (err) {
     console.error('extract-vocab error:', err);
     return NextResponse.json({ error: 'Failed to extract vocab' }, { status: 500 });

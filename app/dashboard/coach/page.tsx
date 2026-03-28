@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/app/lib/supabase';
+import { getTrialStatus, TRIAL_LIMITS } from '@/app/lib/trial';
+import UpgradeModal, { FeatureBlockWall, LimitWarningBanner } from '@/app/components/UpgradeModal';
 import {
   Bot, Send, Brain, Sparkles, RotateCcw,
   Plus, MessageSquare, Clock, Target, PenLine, BookOpen,
@@ -174,7 +176,8 @@ function GoalDashboard({
    MAIN COMPONENT
    ────────────────────────────────────────────────────────────────────────── */
 export default function CoachPage() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const [messages, setMessages]           = useState<Message[]>([]);
   const [input, setInput]                 = useState('');
@@ -230,7 +233,12 @@ export default function CoachPage() {
 
   const send = async (text?: string) => {
     const msg = text || input.trim();
-    if (!msg || loading) return;
+    if (!msg || loading || !profile) return;
+
+    // ── Trial gate ──
+    const ts = getTrialStatus(profile);
+    if (ts.coachBlocked) { setShowUpgradeModal(true); return; }
+
     const updated: Message[] = [...messages, { role: 'user', content: msg }];
     setMessages(updated);
     setInput('');
@@ -239,8 +247,8 @@ export default function CoachPage() {
       const res = await fetch('/api/ai-coach', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: updated, mode, trainerType, userId: profile?.id,
-          userContext: { username: profile?.username, level: profile?.level, xp: profile?.xp, streak: profile?.streak, customGoal: profile?.custom_daily_goal, ageGroup: (profile as { age_group?: string })?.age_group },
+          messages: updated, mode, trainerType, userId: profile.id,
+          userContext: { username: profile.username, level: profile.level, xp: profile.xp, streak: profile.streak, customGoal: profile.custom_daily_goal, ageGroup: (profile as { age_group?: string })?.age_group },
         }),
       });
       const data = await res.json();
@@ -248,6 +256,14 @@ export default function CoachPage() {
       setMessages(withReply);
       const newId = await saveConversation(withReply, activeId);
       if (newId && !activeId) setActiveId(newId as string);
+
+      // Increment coach_messages_used counter
+      if (profile.plan !== 'plus') {
+        await supabase.from('profiles')
+          .update({ coach_messages_used: (profile.coach_messages_used ?? 0) + 1 })
+          .eq('id', profile.id);
+        await refreshProfile();
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: "I'm having a moment — please try again!" }]);
     }
@@ -275,11 +291,32 @@ export default function CoachPage() {
 
   if (!profile) return null;
 
-  const starters = STARTER_QUESTIONS[trainerType] ?? STARTER_QUESTIONS.general;
+  const trialStatus = getTrialStatus(profile);
+  const starters    = STARTER_QUESTIONS[trainerType] ?? STARTER_QUESTIONS.general;
   const TrainerIcon = trainer.icon as LucideIcon;
+
+  /* ── Coach fully blocked ── */
+  if (trialStatus.coachBlocked) {
+    return (
+      <>
+        {showUpgradeModal && (
+          <UpgradeModal reason="coach" status={trialStatus} onClose={() => setShowUpgradeModal(false)} />
+        )}
+        <FeatureBlockWall
+          reason="coach"
+          status={trialStatus}
+          onUpgradeClick={() => setShowUpgradeModal(true)}
+        />
+      </>
+    );
+  }
 
   /* ────────────────────────────────────── RENDER ────────────────────────── */
   return (
+    <>
+    {showUpgradeModal && (
+      <UpgradeModal reason="coach" status={trialStatus} onClose={() => setShowUpgradeModal(false)} />
+    )}
     <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'var(--t-bg)', overflow: 'hidden', borderRadius: 20 }}>
 
       {/* ══════════════════════════════════════════
@@ -636,6 +673,15 @@ export default function CoachPage() {
           padding: '14px 20px 16px',
         }}>
           <div style={{ maxWidth: 780, margin: '0 auto' }}>
+            {/* Approaching-limit warning */}
+            {!trialStatus.isPlus && (
+              <LimitWarningBanner
+                left={trialStatus.coachLeft}
+                total={TRIAL_LIMITS.COACH_MESSAGES}
+                label="Coach messages"
+                color={trainer.color}
+              />
+            )}
             <div style={{
               display: 'flex', alignItems: 'flex-end', gap: 10,
               background: 'var(--t-bg)', border: `1.5px solid var(--t-brd)`,
@@ -697,5 +743,6 @@ export default function CoachPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

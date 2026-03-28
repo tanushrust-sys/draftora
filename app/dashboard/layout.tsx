@@ -22,6 +22,8 @@ import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/app/lib/supabase';
 import { getXPProgress } from '@/app/types/database';
 import OnboardingModal from '@/app/components/OnboardingModal';
+import UpgradeModal from '@/app/components/UpgradeModal';
+import { getTrialStatus } from '@/app/lib/trial';
 
 const NAV_LINKS = [
   { href: '/dashboard',          icon: Home,          label: 'Dashboard', color: 'var(--t-acc)',  iconBg: 'var(--t-acc-a)'         },
@@ -55,9 +57,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login');
   };
 
-  const xp        = profile ? getXPProgress(profile.xp) : null;
-  const initial   = profile?.username?.[0]?.toUpperCase() ?? '?';
-  const pageTitle = useMemo(() => getPageMeta(pathname), [pathname]);
+  const xp          = profile ? getXPProgress(profile.xp) : null;
+  const initial     = profile?.username?.[0]?.toUpperCase() ?? '?';
+  const pageTitle   = useMemo(() => getPageMeta(pathname), [pathname]);
+  const trialStatus = profile ? getTrialStatus(profile) : null;
 
   if (loading || !user) {
     return (
@@ -364,6 +367,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </div>
+      {/* ── Full-app block when trial expired or all limits hit ── */}
+      {trialStatus?.fullBlocked && (
+        <UpgradeModal
+          reason={trialStatus.expired ? 'expired' : 'all'}
+          status={trialStatus}
+          /* no onClose → non-dismissible */
+        />
+      )}
     </div>
   );
 }
