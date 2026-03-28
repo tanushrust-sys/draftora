@@ -18,6 +18,14 @@ import {
   Zap, BookOpen, Trophy,
 } from 'lucide-react';
 
+/** Returns the ratio of unique words to total words (0–1).
+ *  Low ratio = spam/repeated filler. Threshold for blocking: < 0.12 */
+function uniqueWordRatio(text: string): number {
+  const words = text.toLowerCase().match(/\b\w+\b/g) ?? [];
+  if (words.length === 0) return 1;
+  return new Set(words).size / words.length;
+}
+
 const CATEGORIES = [
   'Persuasive Essay', 'Creative Story', 'Blog Entry',
   'Email', 'Feature Article', 'Personal', 'Poetry', 'Other',
@@ -25,6 +33,36 @@ const CATEGORIES = [
 const JOURNAL_CATEGORIES = ['All', ...CATEGORIES];
 type ActiveTab = 'write' | 'journal' | 'progress';
 type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
+
+const tone = (color: string, amount: number) => `color-mix(in srgb, ${color} ${amount}%, transparent)`;
+
+const reviewedBadgeStyle = {
+  color: 'var(--t-success)',
+  background: tone('var(--t-success)', 8),
+  border: `1px solid ${tone('var(--t-success)', 18)}`,
+};
+
+function writingStatusTheme(status: Writing['status']) {
+  if (status === 'reviewed') {
+    return {
+      color: 'var(--t-success)',
+      background: tone('var(--t-success)', 10),
+      border: `1px solid ${tone('var(--t-success)', 20)}`,
+    };
+  }
+  if (status === 'submitted') {
+    return {
+      color: 'var(--t-mod-write)',
+      background: tone('var(--t-mod-write)', 10),
+      border: `1px solid ${tone('var(--t-mod-write)', 20)}`,
+    };
+  }
+  return {
+    color: 'var(--t-warning)',
+    background: tone('var(--t-warning)', 10),
+    border: `1px solid ${tone('var(--t-warning)', 20)}`,
+  };
+}
 
 /* ─── SVG Progress Chart ─────────────────────────────────────── */
 function ProgressChart({ data }: { data: { date: string; score: number; title: string; id: string }[] }) {
@@ -190,10 +228,10 @@ function WritingsContent() {
     const resolvedCategory = c ? decodeURIComponent(c) : 'Creative Story';
     if (c) setCategory(resolvedCategory);
     // Always use today's daily prompt (from URL or auto-derived from category)
-    setPrompt(p ? decodeURIComponent(p) : getDailyPrompt(resolvedCategory));
+    setPrompt(p ? decodeURIComponent(p) : getDailyPrompt(resolvedCategory, (profile as { age_group?: string })?.age_group));
     if (t === 'journal') setActiveTab('journal');
     if (t === 'progress') setActiveTab('progress');
-  }, [searchParams]);
+  }, [searchParams, profile]);
 
   // ── Live word count ──
   useEffect(() => {
@@ -307,6 +345,10 @@ function WritingsContent() {
 
   const submitForFeedback = async () => {
     if (!profile || wordCount < 20) { setError('Write at least 20 words before submitting.'); return; }
+    if (wordCount >= 30 && uniqueWordRatio(content) < 0.12) {
+      setError('Your writing looks like repeated text — write real sentences to earn progress!');
+      return;
+    }
     setStatus('submitting');
     setError('');
     let id = writingId;
@@ -336,7 +378,9 @@ function WritingsContent() {
         }).eq('id', id);
         await awardXP(profile.id, XP_REWARDS.WRITING_SUBMIT,  'Completed writing session');
         await awardXP(profile.id, XP_REWARDS.AI_FEEDBACK,     'Received AI feedback');
-        await updateDailyStats(profile.id, { words_written: wordCount, writings_completed: 1, xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK });
+        const ratio = uniqueWordRatio(content);
+        const effectiveWords = ratio >= 0.35 ? wordCount : Math.round(wordCount * (ratio / 0.35));
+        await updateDailyStats(profile.id, { words_written: effectiveWords, writings_completed: 1, xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK });
         await updateStreak(profile.id);
         await refreshProfile();
         setFeedback(data.feedback);
@@ -511,7 +555,7 @@ function WritingsContent() {
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <span style={{ background: 'var(--t-acc-a)', color: 'var(--t-acc)', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600, border: '1px solid var(--t-brd-a)' }}>{tw.category}</span>
                         <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{tw.word_count} words</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#34d399', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.18)', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: reviewedBadgeStyle.color, background: reviewedBadgeStyle.background, border: reviewedBadgeStyle.border, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>
                           <CheckCircle style={{ width: 11, height: 11 }} /> Reviewed
                         </span>
                       </div>
@@ -529,7 +573,7 @@ function WritingsContent() {
                         <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--t-tx)' }}>AI Feedback</h2>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {twFeedback.strengths && <div style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 16, padding: 16 }}>
+                        {twFeedback.strengths && <div style={{ background: tone('var(--t-success)', 6), border: `1px solid ${tone('var(--t-success)', 16)}`, borderRadius: 16, padding: 16 }}>
                           <p style={{ color: '#34d399', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Well done on…</p>
                           <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--t-tx2)' }}>{twFeedback.strengths}</p>
                         </div>}
@@ -557,12 +601,12 @@ function WritingsContent() {
                   borderRadius: 20, padding: '1.25rem',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(96,165,250,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <TrendingUp style={{ width: 17, height: 17, color: '#60a5fa' }} />
+                    <div style={{ width: 36, height: 36, borderRadius: 12, background: tone('var(--t-mod-write)', 12), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <TrendingUp style={{ width: 17, height: 17, color: 'var(--t-mod-write)' }} />
                     </div>
-                    <p style={{ color: '#60a5fa', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Daily Goal</p>
+                    <p style={{ color: 'var(--t-mod-write)', fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Daily Goal</p>
                   </div>
-                  <p style={{ fontSize: 28, fontWeight: 900, color: '#60a5fa', lineHeight: 1, marginBottom: 4 }}>
+                  <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t-mod-write)', lineHeight: 1, marginBottom: 4 }}>
                     {totalToday} <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-tx3)' }}>/ {wordGoal}</span>
                   </p>
                   <p style={{ fontSize: 12, color: 'var(--t-tx3)', marginBottom: 12 }}>
@@ -673,7 +717,7 @@ function WritingsContent() {
                 {/* Bottom bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--t-brd)', padding: '14px 20px', gap: 16 }}>
                   {error ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f87171', fontSize: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--t-danger)', fontSize: 12 }}>
                       <AlertCircle style={{ width: 14, height: 14 }} /> {error}
                     </div>
                   ) : (
@@ -726,7 +770,7 @@ function WritingsContent() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span style={{ background: 'var(--t-acc-a)', color: 'var(--t-acc)', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600, border: '1px solid var(--t-brd-a)' }}>{category}</span>
                       <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{wordCount} words</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#34d399', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.18)', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: reviewedBadgeStyle.color, background: reviewedBadgeStyle.background, border: reviewedBadgeStyle.border, borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>
                         <CheckCircle style={{ width: 11, height: 11 }} /> Reviewed
                       </span>
                     </div>
@@ -746,7 +790,7 @@ function WritingsContent() {
                       <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--t-tx)' }}>AI Feedback</h2>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <div style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 16, padding: 16 }}>
+                      <div style={{ background: tone('var(--t-success)', 6), border: `1px solid ${tone('var(--t-success)', 16)}`, borderRadius: 16, padding: 16 }}>
                         <p style={{ color: '#34d399', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Well done on…</p>
                         <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--t-tx2)' }}>{feedback.strengths}</p>
                       </div>
@@ -775,9 +819,9 @@ function WritingsContent() {
             {/* Journal stat cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
               {[
-                { label: 'Total Entries', value: writings.length, color: '#60a5fa', icon: FileText },
+                { label: 'Total Entries', value: writings.length, color: 'var(--t-mod-write)', icon: FileText },
                 { label: 'Words Written', value: totalWords.toLocaleString(), color: 'var(--t-acc)', icon: BookOpen },
-                { label: 'Favorites', value: writings.filter(w => w.is_favorite).length, color: '#34d399', icon: Heart },
+                { label: 'Favorites', value: writings.filter(w => w.is_favorite).length, color: 'var(--t-success)', icon: Heart },
               ].map(s => (
                 <div key={s.label} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '1.25rem' }}>
                   <s.icon style={{ width: 18, height: 18, color: s.color, marginBottom: 10 }} />
@@ -837,7 +881,7 @@ function WritingsContent() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                           <h3 style={{ fontWeight: 700, color: 'var(--t-tx)', fontSize: 15, margin: 0 }}>{w.title}</h3>
                           {isToday && <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', padding: '2px 8px', borderRadius: 99, background: 'var(--t-acc-a)', color: 'var(--t-acc)', border: '1px solid var(--t-brd-a)' }}>Today</span>}
-                          <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600, background: w.status === 'reviewed' ? 'rgba(52,211,153,0.1)' : w.status === 'submitted' ? 'rgba(96,165,250,0.1)' : 'rgba(250,204,21,0.1)', color: w.status === 'reviewed' ? '#34d399' : w.status === 'submitted' ? '#60a5fa' : '#facc15', border: `1px solid ${w.status === 'reviewed' ? 'rgba(52,211,153,0.2)' : w.status === 'submitted' ? 'rgba(96,165,250,0.2)' : 'rgba(250,204,21,0.2)'}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ ...writingStatusTheme(w.status), fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             {w.status === 'reviewed' ? <CheckCircle style={{ width: 11, height: 11 }} /> : w.status === 'submitted' ? <FileText style={{ width: 11, height: 11 }} /> : <Clock style={{ width: 11, height: 11 }} />}
                             {w.status.replace('_', ' ')}
                           </span>
@@ -850,7 +894,7 @@ function WritingsContent() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        <button onClick={() => toggleFavorite(w)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8, borderRadius: 10, color: w.is_favorite ? '#f87171' : 'var(--t-tx3)' }}>
+                        <button onClick={() => toggleFavorite(w)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8, borderRadius: 10, color: w.is_favorite ? 'var(--t-danger)' : 'var(--t-tx3)' }}>
                           <Heart style={{ width: 16, height: 16, fill: w.is_favorite ? 'currentColor' : 'none' }} />
                         </button>
                         <button onClick={() => setExpanded(expanded === w.id ? null : w.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 600, color: 'var(--t-acc)', cursor: 'pointer' }}>
@@ -882,7 +926,7 @@ function WritingsContent() {
                             </button>
                             {showFeedbackId === w.id && (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                {w.strengths && <div style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 14, padding: 14 }}>
+                                {w.strengths && <div style={{ background: tone('var(--t-success)', 6), border: `1px solid ${tone('var(--t-success)', 16)}`, borderRadius: 14, padding: 14 }}>
                                   <p style={{ color: '#34d399', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 6 }}>Strengths</p>
                                   <p style={{ fontSize: 13, color: 'var(--t-tx2)', lineHeight: 1.6 }}>{w.strengths}</p>
                                 </div>}
@@ -937,8 +981,8 @@ function WritingsContent() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                   {[
                     { label: 'Avg Score', value: avgScore, suffix: '/100', color: 'var(--t-acc)', icon: Star },
-                    { label: 'Best Score', value: bestScore, suffix: '/100', color: '#34d399', icon: Trophy },
-                    { label: 'Overall Trend', value: trend >= 0 ? `+${trend}` : `${trend}`, suffix: ' pts', color: trend >= 0 ? '#34d399' : '#f87171', icon: TrendingUp },
+                    { label: 'Best Score', value: bestScore, suffix: '/100', color: 'var(--t-success)', icon: Trophy },
+                    { label: 'Overall Trend', value: trend >= 0 ? `+${trend}` : `${trend}`, suffix: ' pts', color: trend >= 0 ? 'var(--t-success)' : 'var(--t-danger)', icon: TrendingUp },
                   ].map(s => (
                     <div key={s.label} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '1.25rem' }}>
                       <s.icon style={{ width: 18, height: 18, color: s.color, marginBottom: 10 }} />

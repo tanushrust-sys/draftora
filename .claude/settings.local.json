@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(json|md|js|env|cursorrules\\)$\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npm:*)",
+      "Bash(where npx:*)",
+      "Bash(where node:*)",
+      "Bash(ls \"C:\\\\Users\\\\tanul\\\\OneDrive\\\\Desktop\\\\Draftly\\\\node_modules\\\\.bin\\\\next\"*)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(npx tsc:*)",
+      "Bash(grep -E \"^/c/Users.*\\\\.tsx?$\")",
+      "Bash(node -e \":*)",
+      "Bash(npm install:*)",
+      "Bash(powershell -Command \"\\(Get-Content .env.local\\) -replace ''AI_PROVIDER=openai'',''AI_PROVIDER=anthropic'' | Set-Content .env.local\")",
+      "Bash(node node_modules/next/dist/bin/next build)"
+    ]
+  }
+}

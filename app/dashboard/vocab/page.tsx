@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/app/lib/supabase';
 import { awardXP, XP_REWARDS } from '@/app/lib/xp';
-import { getWeekWords, VOCAB_POOL as SHARED_POOL, VOCAB_FALLBACK } from '@/app/lib/vocab-utils';
+import { getWeekWords, getVocabPool, VOCAB_FALLBACK } from '@/app/lib/vocab-utils';
 import type { VocabWord } from '@/app/types/database';
 import {
   GraduationCap, BookOpen, Trophy, Star, Search, PenLine,
@@ -12,10 +12,8 @@ import {
   X, ChevronLeft, ChevronRight, Clock,
 } from 'lucide-react';
 
-const pool = SHARED_POOL.length > 0 ? SHARED_POOL : VOCAB_FALLBACK;
-
-// ─── Daily word selection (3 per day, deterministic) ───
-function getDailyWords() {
+// ─── Daily word selection (3 per day, deterministic, age-aware) ───
+function getDailyWords(pool: { word: string; meaning: string; example: string }[]) {
   const today = new Date();
   const dayNum = Math.floor(today.getTime() / 86400000);
   const len = pool.length;
@@ -32,10 +30,12 @@ function isTestDay() {
   return day === 5 || day === 6 || day === 0;
 }
 
+const tone = (color: string, amount: number) => `color-mix(in srgb, ${color} ${amount}%, transparent)`;
+
 const CARD_THEMES = [
-  { topBorder: 'rgba(96,165,250,0.4)', glow: 'rgba(96,165,250,0.06)' },
-  { topBorder: 'rgba(168,85,247,0.4)', glow: 'rgba(168,85,247,0.06)' },
-  { topBorder: 'rgba(52,211,153,0.4)', glow: 'rgba(52,211,153,0.06)' },
+  { topBorder: 'var(--t-mod-write)', glow: tone('var(--t-mod-write)', 8) },
+  { topBorder: 'var(--t-mod-coach)', glow: tone('var(--t-mod-coach)', 8) },
+  { topBorder: 'var(--t-mod-vocab)', glow: tone('var(--t-mod-vocab)', 8) },
 ];
 
 const LABELS = ['A', 'B', 'C', 'D'];
@@ -60,7 +60,9 @@ export default function VocabPage() {
   const [checking, setChecking] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<Record<number, { correct: boolean; strengths: string; improvements: string; summary: string; suggestion: string }>>({});
 
-  const dailyWords = getDailyWords();
+  const ageGroup   = (profile as { age_group?: string })?.age_group;
+  const vocabPool  = getVocabPool(ageGroup) || VOCAB_FALLBACK;
+  const dailyWords = getDailyWords(vocabPool);
 
   // ─── WEEKLY TEST STATE ───
   const [testOpen, setTestOpen] = useState(false);
@@ -129,7 +131,7 @@ export default function VocabPage() {
 
   // ─── FRIDAY TEST LOGIC ───
   const generateTest = () => {
-    const weekWords = getWeekWords();
+    const weekWords = getWeekWords(ageGroup);
     if (weekWords.length < 4) return;
     const shuffled = [...weekWords].sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, Math.min(10, shuffled.length));
@@ -142,7 +144,7 @@ export default function VocabPage() {
       const correct = isWordToMeaning ? w.meaning : w.word;
 
       // Get 3 wrong options from the rest of the pool
-      const wrongPool = pool.filter(p => p.word !== w.word);
+      const wrongPool = vocabPool.filter(p => p.word !== w.word);
       const wrongs = wrongPool.sort(() => Math.random() - 0.5).slice(0, 3)
         .map(p => isWordToMeaning ? p.meaning : p.word);
 
@@ -165,7 +167,7 @@ export default function VocabPage() {
 
   const redoTest = () => {
     // Keep testXPAwarded.current = true so submitTest won't award XP again
-    const weekWords2 = getWeekWords();
+    const weekWords2 = getWeekWords(ageGroup);
     if (weekWords2.length < 4) return;
     const shuffled2 = [...weekWords2].sort(() => Math.random() - 0.5);
     const selected2 = shuffled2.slice(0, Math.min(10, shuffled2.length));
@@ -173,7 +175,7 @@ export default function VocabPage() {
       const isWordToMeaning = Math.random() > 0.4;
       const question = isWordToMeaning ? `What does "${w.word}" mean?` : `Which word means: "${w.meaning}"?`;
       const correct = isWordToMeaning ? w.meaning : w.word;
-      const wrongPool = pool.filter(p => p.word !== w.word);
+      const wrongPool = vocabPool.filter(p => p.word !== w.word);
       const wrongs = wrongPool.sort(() => Math.random() - 0.5).slice(0, 3).map(p => isWordToMeaning ? p.meaning : p.word);
       const allOptions = [correct, ...wrongs].sort(() => Math.random() - 0.5);
       return { wordItem: { word: w.word, meaning: w.meaning }, question, options: allOptions, correctIndex: allOptions.indexOf(correct) };
@@ -245,7 +247,7 @@ export default function VocabPage() {
   const secs = timeLeft % 60;
 
   // Weekly goal: how many of this week's words are already in the user's bank
-  const thisWeekWords = getWeekWords();
+  const thisWeekWords = getWeekWords(ageGroup);
   const weekSavedCount = thisWeekWords.filter(ww =>
     words.some(uw => uw.word.toLowerCase() === ww.word.toLowerCase())
   ).length;
@@ -285,19 +287,19 @@ export default function VocabPage() {
                 const correct = testAnswers[i] === tq.correctIndex;
                 return (
                   <div key={i} style={{
-                    background: correct ? 'rgba(52,211,153,0.06)' : 'rgba(248,113,113,0.06)',
-                    border: `1px solid ${correct ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`,
+                    background: correct ? tone('var(--t-success)', 6) : tone('var(--t-danger)', 6),
+                    border: `1px solid ${correct ? tone('var(--t-success)', 20) : tone('var(--t-danger)', 20)}`,
                     borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 10,
                   }}>
-                    {correct ? <CheckCircle style={{ width: 16, height: 16, color: '#34d399', flexShrink: 0, marginTop: 2 }} /> : <XCircle style={{ width: 16, height: 16, color: '#f87171', flexShrink: 0, marginTop: 2 }} />}
+                    {correct ? <CheckCircle style={{ width: 16, height: 16, color: 'var(--t-success)', flexShrink: 0, marginTop: 2 }} /> : <XCircle style={{ width: 16, height: 16, color: 'var(--t-danger)', flexShrink: 0, marginTop: 2 }} />}
                     <div>
                       <p style={{ fontWeight: 700, color: 'var(--t-tx)', fontSize: 14 }}>{tq.wordItem.word}</p>
                       <p style={{ color: 'var(--t-tx3)', fontSize: 12 }}>{tq.wordItem.meaning}</p>
                       {!correct && testAnswers[i] !== null && (
-                        <p style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>You answered: {tq.options[testAnswers[i]!]}</p>
+                        <p style={{ color: 'var(--t-danger)', fontSize: 12, marginTop: 4 }}>You answered: {tq.options[testAnswers[i]!]}</p>
                       )}
                       {!correct && testAnswers[i] === null && (
-                        <p style={{ color: '#fbbf24', fontSize: 12, marginTop: 4 }}>Not answered</p>
+                        <p style={{ color: 'var(--t-warning)', fontSize: 12, marginTop: 4 }}>Not answered</p>
                       )}
                     </div>
                   </div>
@@ -335,10 +337,10 @@ export default function VocabPage() {
           {/* Header: timer + progress + exit */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 12, background: timeLeft <= 30 ? 'rgba(248,113,113,0.1)' : 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Clock style={{ width: 16, height: 16, color: timeLeft <= 30 ? '#f87171' : 'var(--t-acc)' }} />
+              <div style={{ width: 36, height: 36, borderRadius: 12, background: timeLeft <= 30 ? tone('var(--t-danger)', 10) : 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Clock style={{ width: 16, height: 16, color: timeLeft <= 30 ? 'var(--t-danger)' : 'var(--t-acc)' }} />
               </div>
-              <span style={{ fontSize: 18, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: timeLeft <= 30 ? '#f87171' : 'var(--t-tx)' }}>
+              <span style={{ fontSize: 18, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: timeLeft <= 30 ? 'var(--t-danger)' : 'var(--t-tx)' }}>
                 {mins}:{secs.toString().padStart(2, '0')}
               </span>
             </div>
@@ -488,10 +490,10 @@ export default function VocabPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {/* Words in Bank */}
           <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(96,165,250,0.1), transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `radial-gradient(circle, ${tone('var(--t-mod-write)', 10)}, transparent 70%)`, pointerEvents: 'none' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <BookOpen style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: tone('var(--t-mod-write)', 12), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <BookOpen style={{ width: 16, height: 16, color: 'var(--t-mod-write)' }} />
               </div>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Words in Bank</span>
             </div>
@@ -500,10 +502,10 @@ export default function VocabPage() {
 
           {/* Mastered */}
           <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(52,211,153,0.1), transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `radial-gradient(circle, ${tone('var(--t-success)', 10)}, transparent 70%)`, pointerEvents: 'none' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(52,211,153,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Star style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: tone('var(--t-success)', 12), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Star style={{ width: 16, height: 16, color: 'var(--t-success)' }} />
               </div>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Mastered</span>
             </div>
@@ -512,17 +514,17 @@ export default function VocabPage() {
 
           {/* Weekly Goal */}
           <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,0.1), transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `radial-gradient(circle, ${tone('var(--t-mod-coach)', 10)}, transparent 70%)`, pointerEvents: 'none' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(168,85,247,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Zap style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: tone('var(--t-mod-coach)', 12), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Zap style={{ width: 16, height: 16, color: 'var(--t-mod-coach)' }} />
               </div>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Weekly Goal</span>
             </div>
-            <p style={{ fontSize: 28, fontWeight: 900, color: weekSavedCount >= weekGoalTotal ? '#34d399' : 'var(--t-tx)', lineHeight: 1 }}>
+            <p style={{ fontSize: 28, fontWeight: 900, color: weekSavedCount >= weekGoalTotal ? 'var(--t-success)' : 'var(--t-tx)', lineHeight: 1 }}>
               {weekSavedCount}<span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-tx3)' }}>/{weekGoalTotal}</span>
             </p>
-            <p style={{ fontSize: 11, color: weekSavedCount >= weekGoalTotal ? '#34d399' : 'var(--t-tx3)', marginTop: 4 }}>
+            <p style={{ fontSize: 11, color: weekSavedCount >= weekGoalTotal ? 'var(--t-success)' : 'var(--t-tx3)', marginTop: 4 }}>
               {weekSavedCount >= weekGoalTotal ? 'All weekly words done!' : 'words this week'}
             </p>
           </div>
@@ -583,8 +585,8 @@ export default function VocabPage() {
                     {feedback[i] && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {feedback[i].strengths && (
-                          <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 12, padding: '10px 12px' }}>
-                            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#34d399', marginBottom: 4 }}>What&apos;s good</p>
+                          <div style={{ background: tone('var(--t-success)', 8), border: `1px solid ${tone('var(--t-success)', 20)}`, borderRadius: 12, padding: '10px 12px' }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-success)', marginBottom: 4 }}>What&apos;s good</p>
                             <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{feedback[i].strengths}</p>
                           </div>
                         )}
@@ -610,8 +612,8 @@ export default function VocabPage() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                         borderRadius: 12, padding: '10px', fontSize: 12, fontWeight: 700, border: 'none',
                         cursor: (saved.has(i) || !sentences[i]?.trim()) ? 'default' : 'pointer',
-                        background: saved.has(i) ? 'rgba(52,211,153,0.12)' : 'var(--t-btn)',
-                        color: saved.has(i) ? '#34d399' : 'var(--t-btn-color)',
+                        background: saved.has(i) ? tone('var(--t-success)', 12) : 'var(--t-btn)',
+                        color: saved.has(i) ? 'var(--t-success)' : 'var(--t-btn-color)',
                         opacity: (!saved.has(i) && !sentences[i]?.trim()) ? 0.4 : 1,
                         transition: 'all 0.2s',
                       }}
@@ -679,7 +681,7 @@ export default function VocabPage() {
                   <span style={{ fontSize: 13, color: 'var(--t-tx2)' }}>{w.meaning}</span>
                   <span style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic' }}>{w.example_sentence}</span>
                   <span style={{ textAlign: 'right' }}>
-                    {w.mastered ? <CheckCircle style={{ width: 16, height: 16, color: '#34d399' }} /> : <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{w.times_used}/{w.times_to_master}</span>}
+                    {w.mastered ? <CheckCircle style={{ width: 16, height: 16, color: 'var(--t-success)' }} /> : <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{w.times_used}/{w.times_to_master}</span>}
                   </span>
                 </div>
               ))}
@@ -722,7 +724,7 @@ export default function VocabPage() {
             </p>
             <p style={{ fontSize: 12, color: 'var(--t-tx3)', marginBottom: 18, position: 'relative' }}>
               {isTestDay()
-                ? `Tests this week's ${getWeekWords().length} words from Monday to Thursday`
+                ? `Tests this week's ${getWeekWords(ageGroup).length} words from Monday to Thursday`
                 : 'Keep saving daily words \u2014 they\'ll appear in your Friday quiz!'}
             </p>
             <button

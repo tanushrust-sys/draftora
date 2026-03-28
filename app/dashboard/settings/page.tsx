@@ -12,50 +12,119 @@ import {
 } from 'lucide-react';
 
 /* ─── Theme swatch data ─── */
-const THEME_SWATCHES: Record<ThemeName, {
-  bg: string; card: string; accent: string; text: string;
-  muted: string; xpBar: string; sbBg: string;
-}> = {
-  default:  { bg: '#09090b', card: '#121009', accent: '#f5c842', text: '#f4f4f5', muted: '#52525b', xpBar: '#f5c842',  sbBg: '#0b0904' },
-  lavender: { bg: '#faf5ff', card: '#f3effe', accent: '#7c3aed', text: '#2e1065', muted: '#8b5cf6', xpBar: '#a78bfa',  sbBg: '#1a0533' },
-  sunrise:  { bg: '#fff7ed', card: '#fff1e0', accent: '#ea580c', text: '#431407', muted: '#c2410c', xpBar: '#fb923c',  sbBg: '#2c0d03' },
-  bubbles:  { bg: '#f0f9ff', card: '#e7f5fe', accent: '#0284c7', text: '#082f49', muted: '#0284c7', xpBar: '#38bdf8',  sbBg: '#061c2c' },
-  golden:   { bg: '#fffbeb', card: '#fef6d8', accent: '#d97706', text: '#451a03', muted: '#b45309', xpBar: '#fbbf24',  sbBg: '#1c1002' },
-};
+type ThemePreviewPalette = (typeof THEMES)[ThemeName]['preview'];
 
-/* ─── Mini theme preview ─── */
-function ThemePreview({ s }: { s: typeof THEME_SWATCHES[ThemeName] }) {
+/* ─── Rich theme preview — full-size mock UI ─── */
+function ThemePreview({ s, label }: { s: ThemePreviewPalette; label: string }) {
   return (
     <div style={{
-      width: 96, height: 64, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
-      background: s.bg, border: `1.5px solid ${s.accent}30`,
-      display: 'flex', gap: 3, padding: 4,
+      width: '100%', aspectRatio: '16/9', borderRadius: 18, overflow: 'hidden',
+      background: s.bg,
+      border: `1.5px solid ${s.accent}30`,
+      boxShadow: `0 12px 40px ${s.accent}18, 0 2px 8px rgba(0,0,0,0.22)`,
+      display: 'flex', position: 'relative',
     }}>
-      {/* Sidebar strip */}
+      {/* ── Sidebar ── */}
       <div style={{
-        width: 16, borderRadius: 4, background: s.sbBg,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '5px 0', gap: 3,
+        width: '22%', background: s.sidebar, flexShrink: 0,
+        display: 'flex', flexDirection: 'column', padding: '10px 0 8px', gap: 6,
+        borderRight: `1px solid ${s.accent}18`,
       }}>
-        <div style={{ width: 7, height: 7, borderRadius: 2, background: s.accent }} />
-        <div style={{ width: 7, height: 2, borderRadius: 1, background: `${s.accent}50` }} />
-        <div style={{ width: 7, height: 2, borderRadius: 1, background: `${s.accent}35` }} />
-        <div style={{ width: 7, height: 2, borderRadius: 1, background: `${s.accent}25` }} />
+        {/* Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 8px', marginBottom: 4 }}>
+          <div style={{ width: 14, height: 14, borderRadius: 5, background: s.accent, flexShrink: 0 }} />
+          <div style={{ flex: 1, height: 4, borderRadius: 99, background: `${s.text}50` }} />
+        </div>
+        {/* User chip */}
+        <div style={{ margin: '0 6px', borderRadius: 8, background: `${s.accent}14`, border: `1px solid ${s.accent}22`, padding: '5px 6px' }}>
+          <div style={{ width: 14, height: 14, borderRadius: 5, background: `${s.accent}55`, margin: '0 auto 3px' }} />
+          <div style={{ height: 2, borderRadius: 99, background: `${s.text}55`, margin: '0 4px 2px' }} />
+          <div style={{ height: 3, borderRadius: 99, background: `${s.xpBar}bb`, overflow: 'hidden' }}>
+            <div style={{ width: '55%', height: '100%', background: s.xpBar }} />
+          </div>
+        </div>
+        {/* Nav items */}
+        {[s.write, s.vocab, s.coach, s.rewards].map((c, i) => (
+          <div key={i} style={{
+            margin: '0 5px', borderRadius: 6, padding: '3px 5px',
+            background: i === 0 ? `${s.accent}22` : 'transparent',
+            border: i === 0 ? `1px solid ${s.accent}28` : '1px solid transparent',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: 3, background: `${c}cc`, flexShrink: 0 }} />
+            <div style={{ flex: 1, height: 2, borderRadius: 99, background: `${s.text}45` }} />
+          </div>
+        ))}
       </div>
-      {/* Main area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3, padding: '2px 0' }}>
-        <div style={{ height: 3, width: '60%', borderRadius: 2, background: `${s.text}40` }} />
-        <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-          <div style={{ flex: 1, borderRadius: 3, background: s.card, border: `0.5px solid ${s.accent}20` }}>
-            <div style={{ width: '55%', height: 2, borderRadius: 1, background: s.accent, margin: '3px auto 0' }} />
+
+      {/* ── Main content ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Topbar */}
+        <div style={{
+          height: 20, background: s.topbar, borderBottom: `1px solid ${s.accent}18`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ width: 40, height: 3, borderRadius: 99, background: `${s.text}70` }} />
+            <div style={{ width: 26, height: 2, borderRadius: 99, background: `${s.muted}90` }} />
           </div>
-          <div style={{ flex: 1, borderRadius: 3, background: s.card, border: `0.5px solid ${s.accent}20` }}>
-            <div style={{ width: '35%', height: 2, borderRadius: 1, background: `${s.accent}70`, margin: '3px auto 0' }} />
+          <div style={{ width: 16, height: 7, borderRadius: 5, background: `${s.accent}40`, border: `1px solid ${s.accent}50` }} />
+        </div>
+
+        {/* Content area */}
+        <div style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Hero card */}
+          <div style={{
+            borderRadius: 10, padding: '7px 9px',
+            background: `linear-gradient(135deg, ${s.accent}1a, ${s.card}ee)`,
+            border: `1px solid ${s.accent}28`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <div style={{ width: 16, height: 16, borderRadius: 6, background: `${s.accent}40` }} />
+              <div style={{ flex: 1, height: 4, borderRadius: 99, background: `${s.text}75` }} />
+              <div style={{ width: 20, height: 4, borderRadius: 99, background: `${s.accent}80` }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+              {[s.write, s.vocab, s.rewards].map((c, i) => (
+                <div key={i} style={{ borderRadius: 7, padding: '4px 5px', background: `${c}18`, border: `1px solid ${c}30` }}>
+                  <div style={{ height: 3, borderRadius: 99, background: `${c}aa`, marginBottom: 3 }} />
+                  <div style={{ height: 5, borderRadius: 99, background: `${s.text}55` }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+            <div style={{ borderRadius: 9, padding: 6, background: s.card, border: `1px solid ${s.accent}18` }}>
+              <div style={{ height: 2, borderRadius: 99, background: `${s.coach}aa`, marginBottom: 3, width: '60%' }} />
+              <div style={{ height: 2, borderRadius: 99, background: `${s.text}40`, marginBottom: 5, width: '80%' }} />
+              <div style={{ height: 4, borderRadius: 99, background: `${s.text}12`, overflow: 'hidden' }}>
+                <div style={{ width: '62%', height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${s.xpBar}, ${s.accent})` }} />
+              </div>
+            </div>
+            <div style={{
+              borderRadius: 9, padding: 6,
+              background: `linear-gradient(135deg, ${s.rewards}22, ${s.card}cc)`,
+              border: `1px solid ${s.rewards}30`,
+              display: 'flex', flexDirection: 'column', gap: 3,
+            }}>
+              <div style={{ height: 2, borderRadius: 99, background: `${s.rewards}aa`, width: '50%' }} />
+              <div style={{ height: 8, borderRadius: 4, background: `${s.rewards}18`, border: `1px solid ${s.rewards}25` }} />
+            </div>
           </div>
         </div>
-        {/* XP bar */}
-        <div style={{ height: 3, borderRadius: 2, background: `${s.muted}25`, overflow: 'hidden' }}>
-          <div style={{ width: '62%', height: '100%', borderRadius: 2, background: s.xpBar }} />
-        </div>
+      </div>
+
+      {/* Theme label badge */}
+      <div style={{
+        position: 'absolute', bottom: 8, right: 8,
+        padding: '3px 9px', borderRadius: 99, fontSize: 10, fontWeight: 700,
+        background: `${s.accent}30`, border: `1px solid ${s.accent}50`,
+        color: s.accent, backdropFilter: 'blur(6px)',
+        letterSpacing: '0.04em',
+      }}>
+        {label}
       </div>
     </div>
   );
@@ -225,8 +294,8 @@ export default function SettingsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
             {[
               { icon: Star,      label: 'Total XP',    value: profile.xp.toLocaleString(), color: 'var(--t-acc)' },
-              { icon: Flame,     label: 'Day Streak',  value: profile.streak,               color: '#fb923c' },
-              { icon: Trophy,    label: 'Best Streak', value: profile.longest_streak,        color: '#4ade80' },
+              { icon: Flame,     label: 'Day Streak',  value: profile.streak,               color: 'var(--t-warning)' },
+              { icon: Trophy,    label: 'Best Streak', value: profile.longest_streak,        color: 'var(--t-success)' },
             ].map((s, i) => (
               <div key={s.label} style={{
                 padding: '20px 24px', textAlign: 'center',
@@ -272,15 +341,17 @@ export default function SettingsPage() {
               <span style={{
                 fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
                 padding: '4px 12px', borderRadius: 99,
-                background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', color: '#22c55e',
+                background: 'color-mix(in srgb, var(--t-success) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--t-success) 26%, transparent)',
+                color: 'var(--t-success)',
               }}>All free</span>
             }
           />
 
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {(Object.keys(THEMES) as ThemeName[]).map(themeName => {
               const t        = THEMES[themeName];
-              const s        = THEME_SWATCHES[themeName];
+              const s        = t.preview;
               const isActive = activeTheme === themeName;
 
               return (
@@ -288,41 +359,56 @@ export default function SettingsPage() {
                   key={themeName}
                   onClick={() => applyTheme(themeName)}
                   style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 16,
-                    padding: '12px 14px', borderRadius: 18, textAlign: 'left',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                    background: isActive ? `${s.accent}0e` : 'var(--t-card2)',
-                    border: isActive ? `2px solid ${s.accent}55` : '2px solid var(--t-brd)',
-                    boxShadow: isActive ? `0 0 0 3px ${s.accent}10` : 'none',
+                    display: 'flex', flexDirection: 'column', gap: 0,
+                    padding: 0, borderRadius: 22, textAlign: 'left',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    background: 'var(--t-card2)',
+                    border: isActive ? `2px solid ${s.accent}70` : '2px solid var(--t-brd)',
+                    boxShadow: isActive ? `0 0 0 4px ${s.accent}14, 0 8px 32px ${s.accent}20` : '0 2px 8px rgba(0,0,0,0.12)',
+                    overflow: 'hidden',
+                    transform: isActive ? 'scale(1.01)' : 'scale(1)',
                   }}
                 >
-                  <ThemePreview s={s} />
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Color dots */}
-                    <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.accent }} />
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.bg, border: `1.5px solid ${s.accent}40` }} />
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.card, border: `1.5px solid ${s.accent}30` }} />
-                    </div>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-tx)', margin: 0 }}>{t.label}</p>
-                    <p style={{ fontSize: 12, color: 'var(--t-tx3)', margin: '2px 0 0' }}>{t.description}</p>
+                  {/* ── Big preview ── */}
+                  <div style={{ padding: '10px 10px 0' }}>
+                    <ThemePreview s={s} label={t.label} />
                   </div>
 
-                  {isActive ? (
-                    <span style={{
-                      flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-                      fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 12,
-                      background: `${s.accent}18`, border: `1px solid ${s.accent}35`, color: s.accent,
-                    }}>
-                      <CheckCircle style={{ width: 13, height: 13 }} /> Active
-                    </span>
-                  ) : (
-                    <span style={{
-                      flexShrink: 0, fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 12,
-                      background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)',
-                    }}>Apply</span>
-                  )}
+                  {/* ── Info row ── */}
+                  <div style={{ padding: '12px 14px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {/* Palette swatches */}
+                    <div style={{ display: 'flex', gap: 0, flexShrink: 0 }}>
+                      {[s.accent, s.write, s.vocab, s.coach, s.rewards].map((c, i) => (
+                        <div key={i} style={{
+                          width: 14, height: 14, borderRadius: '50%', background: c,
+                          marginLeft: i > 0 ? -4 : 0,
+                          border: '1.5px solid var(--t-card2)',
+                          boxShadow: `0 1px 4px ${c}50`,
+                        }} />
+                      ))}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--t-tx)', margin: 0, lineHeight: 1.2 }}>{t.label}</p>
+                      <p style={{ fontSize: 10, color: 'var(--t-tx3)', margin: '2px 0 0', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</p>
+                    </div>
+
+                    {isActive ? (
+                      <span style={{
+                        flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
+                        fontSize: 11, fontWeight: 800, padding: '5px 12px', borderRadius: 10,
+                        background: `${s.accent}22`, border: `1.5px solid ${s.accent}50`, color: s.accent,
+                        letterSpacing: '0.02em',
+                      }}>
+                        <CheckCircle style={{ width: 11, height: 11 }} /> On
+                      </span>
+                    ) : (
+                      <span style={{
+                        flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 10,
+                        background: 'var(--t-bg)', border: '1.5px solid var(--t-brd)', color: 'var(--t-tx3)',
+                      }}>Apply</span>
+                    )}
+                  </div>
                 </button>
               );
             })}
@@ -337,7 +423,7 @@ export default function SettingsPage() {
             right={
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {goalsSaved && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-success)', display: 'flex', alignItems: 'center', gap: 5 }}>
                     <CheckCircle style={{ width: 13, height: 13 }} /> Saved!
                   </span>
                 )}
@@ -369,7 +455,7 @@ export default function SettingsPage() {
           <div style={{ padding: '20px 24px' }}>
             {editingGoals ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {[
+                {[ 
                   { label: 'Daily Word Count Goal', value: wordGoal, onChange: (v: number) => setWordGoal(v), min: 50, max: 5000 },
                   { label: 'Daily Vocab Goal',       value: vocabGoal, onChange: (v: number) => setVocabGoal(v), min: 1, max: 10 },
                 ].map(f => (
@@ -391,26 +477,31 @@ export default function SettingsPage() {
                 ))}
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--t-tx3)', display: 'block', marginBottom: 8 }}>
-                    Custom Goal
+                    My Writing Goal
                   </label>
-                  <input
-                    type="text" value={customGoal} onChange={e => setCustomGoal(e.target.value)}
-                    placeholder="e.g. Write for 10 minutes every day"
+                  <textarea
+                    value={customGoal} onChange={e => setCustomGoal(e.target.value)}
+                    placeholder="e.g. Improve my essay writing, write more creatively…"
+                    rows={3}
                     style={{
                       width: '100%', boxSizing: 'border-box',
                       background: 'var(--t-bg)', border: '1px solid var(--t-brd)',
                       borderRadius: 12, padding: '10px 16px',
                       fontSize: 14, color: 'var(--t-tx)', outline: 'none',
+                      resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5,
                     }}
                   />
+                  <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 6 }}>
+                    This goal powers your Coach&apos;s "My Goal" mode — update it any time.
+                  </p>
                 </div>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                 {[
-                  { icon: PenLine,  label: 'Words / Day',  value: `${profile.daily_word_goal}`,    color: '#60a5fa' },
-                  { icon: BookOpen, label: 'Vocab / Day',  value: `${profile.daily_vocab_goal}`,   color: '#a78bfa' },
-                  { icon: Target,   label: 'Custom Goal',  value: profile.custom_daily_goal || '—', color: 'var(--t-acc)' },
+                  { icon: PenLine,  label: 'Words / Day',  value: `${profile.daily_word_goal}`,    color: 'var(--t-mod-write)' },
+                  { icon: BookOpen, label: 'Vocab / Day',  value: `${profile.daily_vocab_goal}`,   color: 'var(--t-mod-vocab)' },
+                  { icon: Target,   label: 'Writing Goal', value: profile.custom_daily_goal || '—', color: 'var(--t-acc)' },
                 ].map(g => (
                   <div key={g.label} style={{
                     background: 'var(--t-card2)', border: '1px solid var(--t-brd)',
@@ -468,7 +559,7 @@ export default function SettingsPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
                   {['All 5 writing styles', 'Basic AI feedback', 'Daily vocab & coach'].map(feat => (
                     <span key={feat} style={{ fontSize: 12, color: 'var(--t-tx3)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <CheckCircle style={{ width: 11, height: 11, color: '#22c55e' }} />
+                      <CheckCircle style={{ width: 11, height: 11, color: 'var(--t-success)' }} />
                       {feat}
                     </span>
                   ))}
@@ -517,7 +608,9 @@ export default function SettingsPage() {
                           <span style={{
                             fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
                             padding: '2px 9px', borderRadius: 99,
-                            background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)',
+                            background: 'color-mix(in srgb, var(--t-mod-rewards) 14%, transparent)',
+                            color: 'var(--t-mod-rewards)',
+                            border: '1px solid color-mix(in srgb, var(--t-mod-rewards) 28%, transparent)',
                           }}>⭐ Upgrade</span>
                         )}
                       </div>
@@ -530,15 +623,15 @@ export default function SettingsPage() {
                   {/* Features in 2-column grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
                     {[
-                      { icon: Bot,      text: '2 AI writing sessions/month', color: '#22d3ee' },
-                      { icon: Crown,    text: 'Premium coach modes',          color: '#a78bfa' },
-                      { icon: Zap,      text: 'Priority AI feedback',         color: '#fbbf24' },
-                      { icon: Sparkles, text: 'Advanced analytics',           color: '#4ade80' },
+                      { icon: Bot,      text: '2 AI writing sessions/month', color: 'var(--t-mod-write)' },
+                      { icon: Crown,    text: 'Premium coach modes',          color: 'var(--t-mod-coach)' },
+                      { icon: Zap,      text: 'Priority AI feedback',         color: 'var(--t-mod-rewards)' },
+                      { icon: Sparkles, text: 'Advanced analytics',           color: 'var(--t-success)' },
                     ].map(f => (
                       <div key={f.text} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{
                           width: 30, height: 30, borderRadius: 9, flexShrink: 0,
-                          background: `${f.color}18`, border: `1px solid ${f.color}30`,
+                          background: `color-mix(in srgb, ${f.color} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${f.color} 26%, transparent)`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
                           <f.icon style={{ width: 13, height: 13, color: f.color }} />
@@ -587,17 +680,17 @@ export default function SettingsPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: 10,
-                background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+                background: 'color-mix(in srgb, var(--t-danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--t-danger) 24%, transparent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <LogOut style={{ width: 14, height: 14, color: '#f87171' }} />
+                <LogOut style={{ width: 14, height: 14, color: 'var(--t-danger)' }} />
               </div>
               <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-tx)', margin: 0 }}>Sign Out</p>
             </div>
             <button onClick={handleLogout} style={{
               display: 'flex', alignItems: 'center', gap: 8,
               fontSize: 13, fontWeight: 600, padding: '9px 18px', borderRadius: 12, cursor: 'pointer',
-              background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171',
+              background: 'color-mix(in srgb, var(--t-danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--t-danger) 24%, transparent)', color: 'var(--t-danger)',
             }}>
               <LogOut style={{ width: 13, height: 13 }} /> Sign out
             </button>
@@ -605,23 +698,23 @@ export default function SettingsPage() {
 
           {/* Danger Zone */}
           <div style={{
-            background: 'var(--t-card)', border: '1px solid rgba(239,68,68,0.18)',
+            background: 'var(--t-card)', border: '1px solid color-mix(in srgb, var(--t-danger) 24%, transparent)',
             borderRadius: 20, padding: '20px 24px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: 10,
-                background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+                background: 'color-mix(in srgb, var(--t-danger) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--t-danger) 20%, transparent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Trash2 style={{ width: 14, height: 14, color: '#f87171' }} />
+                <Trash2 style={{ width: 14, height: 14, color: 'var(--t-danger)' }} />
               </div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#f87171', margin: 0 }}>Danger Zone</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--t-danger)', margin: 0 }}>Danger Zone</p>
             </div>
 
             {deleteStep === 0 && (
               <button onClick={() => setDeleteStep(1)} style={{
-                fontSize: 12, fontWeight: 600, color: '#f87171', opacity: 0.7,
+                fontSize: 12, fontWeight: 600, color: 'var(--t-danger)', opacity: 0.7,
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
               }}>
                 Delete my account…
@@ -629,12 +722,12 @@ export default function SettingsPage() {
             )}
             {deleteStep === 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#f87171', margin: 0 }}>This erases everything permanently.</p>
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-danger)', margin: 0 }}>This erases everything permanently.</p>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setDeleteStep(0)} style={{ fontSize: 12, padding: '7px 14px', borderRadius: 10, cursor: 'pointer', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)', background: 'transparent' }}>
                     Cancel
                   </button>
-                  <button onClick={() => setDeleteStep(2)} style={{ fontSize: 12, fontWeight: 700, padding: '7px 14px', borderRadius: 10, cursor: 'pointer', background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                  <button onClick={() => setDeleteStep(2)} style={{ fontSize: 12, fontWeight: 700, padding: '7px 14px', borderRadius: 10, cursor: 'pointer', background: 'color-mix(in srgb, var(--t-danger) 12%, transparent)', color: 'var(--t-danger)', border: '1px solid color-mix(in srgb, var(--t-danger) 24%, transparent)' }}>
                     Continue
                   </button>
                 </div>
@@ -642,16 +735,16 @@ export default function SettingsPage() {
             )}
             {deleteStep === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p style={{ fontSize: 12, color: '#f87171', margin: 0 }}>
+                <p style={{ fontSize: 12, color: 'var(--t-danger)', margin: 0 }}>
                   Type <code style={{ background: 'rgba(239,68,68,0.1)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>DELETE</code> to confirm:
                 </p>
                 <input
                   type="text" value={deleteInput} onChange={e => setDeleteInput(e.target.value)}
                   placeholder="DELETE"
                   style={{
-                    background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)',
+                    background: 'color-mix(in srgb, var(--t-danger) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--t-danger) 20%, transparent)',
                     borderRadius: 10, padding: '8px 12px',
-                    fontSize: 12, fontFamily: 'monospace', color: '#f87171', outline: 'none',
+                    fontSize: 12, fontFamily: 'monospace', color: 'var(--t-danger)', outline: 'none',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -660,7 +753,7 @@ export default function SettingsPage() {
                   </button>
                   <button onClick={handleDelete} disabled={deleteInput !== 'DELETE' || deleting} style={{
                     fontSize: 12, fontWeight: 700, padding: '7px 14px', borderRadius: 10, cursor: 'pointer',
-                    background: '#dc2626', color: '#fff', border: 'none', opacity: (deleteInput !== 'DELETE' || deleting) ? 0.3 : 1,
+                    background: 'var(--t-danger)', color: '#fff', border: 'none', opacity: (deleteInput !== 'DELETE' || deleting) ? 0.3 : 1,
                   }}>
                     {deleting ? 'Deleting…' : 'Delete Account'}
                   </button>

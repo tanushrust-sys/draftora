@@ -20,37 +20,52 @@ import { getTitleForLevel, getXPProgress } from '@/app/types/database';
 import type { DailyStats } from '@/app/types/database';
 import { CATEGORIES, getDailyPrompt, getPromptDifficulty } from '@/app/data/prompts';
 import { getWeekWords } from '@/app/lib/vocab-utils';
+import { pageCache } from '@/app/lib/page-cache';
 
 export default function DashboardPage() {
   const { profile } = useAuth();
   const router = useRouter();
-  const [todayStats, setTodayStats] = useState<DailyStats | null>(null);
+  const ageGroup = (profile as { age_group?: string } | null)?.age_group;
+
+  // Initialise from cache so the page renders immediately on re-visit
+  const cacheKey = profile ? `dash-stats-${profile.id}` : '';
+  const cached = cacheKey ? pageCache.get<{ stats: DailyStats | null; vocabSaved: number }>(cacheKey) : null;
+
+  const [todayStats, setTodayStats] = useState<DailyStats | null>(cached?.stats ?? null);
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
   const [showCategories, setShowCategories] = useState(false);
-  const [weekVocabSaved, setWeekVocabSaved] = useState(0);
+  const [weekVocabSaved, setWeekVocabSaved] = useState(cached?.vocabSaved ?? 0);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
     const date = new Date().toISOString().split('T')[0];
-    const { data: stats } = await supabase
-      .from('daily_stats').select('*').eq('user_id', profile.id).eq('date', date).single();
+
+    // Run both queries in parallel for speed
+    const [statsRes, vocabRes] = await Promise.all([
+      supabase.from('daily_stats').select('*').eq('user_id', profile.id).eq('date', date).single(),
+      supabase.from('vocab_words').select('word').eq('user_id', profile.id),
+    ]);
+
+    const stats = statsRes.data as DailyStats | null;
     setTodayStats(stats);
 
-    // Weekly vocab goal: how many of this week's words are in user's bank
-    const ww = getWeekWords();
+    const ww = getWeekWords(ageGroup);
+    let vocabSaved = 0;
     if (ww.length > 0) {
       const wordList = ww.map(w => w.word.toLowerCase());
-      const { data: savedWords } = await supabase
-        .from('vocab_words').select('word').eq('user_id', profile.id);
-      const savedSet = new Set((savedWords || []).map((sw: { word: string }) => sw.word.toLowerCase()));
-      setWeekVocabSaved(wordList.filter(w => savedSet.has(w)).length);
+      const savedSet = new Set((vocabRes.data || []).map((sw: { word: string }) => sw.word.toLowerCase()));
+      vocabSaved = wordList.filter(w => savedSet.has(w)).length;
     }
-  }, [profile]);
+    setWeekVocabSaved(vocabSaved);
+
+    // Cache for instant re-visit
+    if (cacheKey) pageCache.set(cacheKey, { stats, vocabSaved }, 90_000);
+  }, [ageGroup, cacheKey, profile]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const promptText = getDailyPrompt(selectedCategory);
-  const difficulty = getPromptDifficulty(selectedCategory);
+  const promptText = getDailyPrompt(selectedCategory, ageGroup);
+  const difficulty = getPromptDifficulty();
 
   const startWriting = () => {
     router.push(
@@ -58,21 +73,25 @@ export default function DashboardPage() {
     );
   };
 
-  const title = profile ? getTitleForLevel(profile.level) : '';
-  const xp = profile ? getXPProgress(profile.xp) : null;
+  // Profile comes from localStorage cache on revisits → renders instantly.
+  // On first-ever visit it may be null for ~1 s while Supabase responds.
+  if (!profile) return null;
+
+  const title = getTitleForLevel(profile.level);
+  const xp = getXPProgress(profile.xp);
   const words = todayStats?.words_written ?? 0;
   const wordGoal = 300;
-  const weekGoalTotal = getWeekWords().length;
+  const weekGoalTotal = getWeekWords(ageGroup).length;
   const wordPct = Math.min((words / wordGoal) * 100, 100);
   const vocabPct = weekGoalTotal > 0 ? Math.min((weekVocabSaved / weekGoalTotal) * 100, 100) : 0;
-
-  if (!profile) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 40, height: 40, borderRadius: 16, background: 'var(--t-btn)', animation: 'pulse 1.5s infinite' }} />
-      </div>
-    );
-  }
+  const streakTone = 'var(--t-warning)';
+  const xpTone = 'var(--t-mod-rewards)';
+  const wordsTone = 'var(--t-mod-write)';
+  const difficultyTheme = difficulty === 'beginner'
+    ? { background: 'color-mix(in srgb, var(--t-success) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-success) 22%, transparent)', color: 'var(--t-success)' }
+    : difficulty === 'intermediate'
+      ? { background: 'color-mix(in srgb, var(--t-warning) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-warning) 22%, transparent)', color: 'var(--t-warning)' }
+      : { background: 'color-mix(in srgb, var(--t-danger) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-danger) 22%, transparent)', color: 'var(--t-danger)' };
 
   return (
     <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: '2rem 2rem 4rem' }}>
@@ -89,7 +108,7 @@ export default function DashboardPage() {
         }}>
           {/* glow orbs */}
           <div style={{ position: 'absolute', top: -80, right: -80, width: 340, height: 340, borderRadius: '50%', background: 'radial-gradient(circle, var(--t-acc-b) 0%, transparent 70%)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -60, left: -60, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -60, left: -60, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, color-mix(in srgb, var(--t-mod-write) 16%, transparent) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
           <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '2rem', flexWrap: 'wrap' }}>
             <div>
@@ -141,46 +160,46 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
           {/* Streak */}
           <div style={{
-            background: 'linear-gradient(145deg, rgba(251,146,60,0.14) 0%, rgba(234,88,12,0.06) 100%)',
-            border: '1px solid rgba(251,146,60,0.22)',
+            background: `linear-gradient(145deg, color-mix(in srgb, ${streakTone} 16%, transparent) 0%, color-mix(in srgb, ${streakTone} 7%, transparent) 100%)`,
+            border: `1px solid color-mix(in srgb, ${streakTone} 24%, transparent)`,
             borderRadius: 28, padding: '1.75rem 2rem',
-            boxShadow: '0 8px 40px rgba(251,146,60,0.1)',
+            boxShadow: `0 8px 40px color-mix(in srgb, ${streakTone} 10%, transparent)`,
           }}>
-            <div style={{ width: 50, height: 50, borderRadius: 18, background: 'rgba(251,146,60,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
-              <Flame style={{ color: '#fb923c', width: 24, height: 24 }} />
+            <div style={{ width: 50, height: 50, borderRadius: 18, background: `color-mix(in srgb, ${streakTone} 14%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+              <Flame style={{ color: streakTone, width: 24, height: 24 }} />
             </div>
-            <p style={{ color: 'rgba(251,146,60,0.75)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6 }}>Current streak</p>
-            <p style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-0.05em', color: '#fb923c', lineHeight: 1, marginBottom: 6 }}>{profile.streak ?? 0}</p>
+            <p style={{ color: streakTone, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6, opacity: 0.8 }}>Current streak</p>
+            <p style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-0.05em', color: streakTone, lineHeight: 1, marginBottom: 6 }}>{profile.streak ?? 0}</p>
             <p style={{ color: 'var(--t-tx3)', fontSize: 13 }}>days in a row</p>
           </div>
 
           {/* XP */}
           <div style={{
-            background: 'var(--t-acc-a)',
-            border: '1px solid var(--t-brd-a)',
+            background: `color-mix(in srgb, ${xpTone} 13%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${xpTone} 24%, transparent)`,
             borderRadius: 28, padding: '1.75rem 2rem',
-            boxShadow: '0 8px 40px var(--t-acc-a)',
+            boxShadow: `0 8px 40px color-mix(in srgb, ${xpTone} 10%, transparent)`,
           }}>
-            <div style={{ width: 50, height: 50, borderRadius: 18, background: 'var(--t-acc-b)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
-              <Star style={{ color: 'var(--t-acc)', width: 24, height: 24 }} />
+            <div style={{ width: 50, height: 50, borderRadius: 18, background: `color-mix(in srgb, ${xpTone} 18%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+              <Star style={{ color: xpTone, width: 24, height: 24 }} />
             </div>
-            <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6, opacity: 0.8 }}>Total XP</p>
-            <p style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-0.05em', color: 'var(--t-acc)', lineHeight: 1, marginBottom: 6 }}>{profile.xp ?? 0}</p>
+            <p style={{ color: xpTone, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6, opacity: 0.8 }}>Total XP</p>
+            <p style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-0.05em', color: xpTone, lineHeight: 1, marginBottom: 6 }}>{profile.xp ?? 0}</p>
             <p style={{ color: 'var(--t-tx3)', fontSize: 13 }}>experience points</p>
           </div>
 
           {/* Words */}
           <div style={{
-            background: 'linear-gradient(145deg, rgba(96,165,250,0.12) 0%, rgba(59,130,246,0.05) 100%)',
-            border: '1px solid rgba(96,165,250,0.18)',
+            background: `linear-gradient(145deg, color-mix(in srgb, ${wordsTone} 14%, transparent) 0%, color-mix(in srgb, ${wordsTone} 6%, transparent) 100%)`,
+            border: `1px solid color-mix(in srgb, ${wordsTone} 22%, transparent)`,
             borderRadius: 28, padding: '1.75rem 2rem',
-            boxShadow: '0 8px 40px rgba(59,130,246,0.07)',
+            boxShadow: `0 8px 40px color-mix(in srgb, ${wordsTone} 8%, transparent)`,
           }}>
-            <div style={{ width: 50, height: 50, borderRadius: 18, background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
-              <FileText style={{ color: '#60a5fa', width: 24, height: 24 }} />
+            <div style={{ width: 50, height: 50, borderRadius: 18, background: `color-mix(in srgb, ${wordsTone} 14%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+              <FileText style={{ color: wordsTone, width: 24, height: 24 }} />
             </div>
-            <p style={{ color: 'rgba(96,165,250,0.75)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6 }}>Words today</p>
-            <p style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-0.05em', color: '#60a5fa', lineHeight: 1, marginBottom: 6 }}>{words}</p>
+            <p style={{ color: wordsTone, fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6, opacity: 0.8 }}>Words today</p>
+            <p style={{ fontSize: 52, fontWeight: 900, letterSpacing: '-0.05em', color: wordsTone, lineHeight: 1, marginBottom: 6 }}>{words}</p>
             <p style={{ color: 'var(--t-tx3)', fontSize: 13 }}>of 300 word goal</p>
           </div>
         </div>
@@ -225,8 +244,9 @@ export default function DashboardPage() {
                   {selectedCategory}
                 </span>
                 <span style={{
-                  background: difficulty === 'beginner' ? 'rgba(34,197,94,0.12)' : difficulty === 'intermediate' ? 'rgba(250,204,21,0.12)' : 'rgba(248,113,113,0.12)',
-                  color: difficulty === 'beginner' ? '#4ade80' : difficulty === 'intermediate' ? '#facc15' : '#f87171',
+                  background: difficultyTheme.background,
+                  border: difficultyTheme.border,
+                  color: difficultyTheme.color,
                   borderRadius: 99, padding: '4px 14px', fontSize: 12, fontWeight: 700, textTransform: 'capitalize',
                 }}>
                   {difficulty}
@@ -274,7 +294,7 @@ export default function DashboardPage() {
                     <span style={{ color: 'var(--t-tx)', fontSize: 13, fontWeight: 700 }}>{words}/{wordGoal}</span>
                   </div>
                   <div style={{ height: 8, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${wordPct}%`, background: 'linear-gradient(90deg, #3b82f6, #60a5fa)', borderRadius: 99 }} />
+                    <div style={{ height: '100%', width: `${wordPct}%`, background: `linear-gradient(90deg, ${wordsTone}, var(--t-info))`, borderRadius: 99 }} />
                   </div>
                 </div>
 
@@ -297,7 +317,7 @@ export default function DashboardPage() {
                     {profile.custom_daily_goal || 'Set a custom goal in Settings.'}
                   </p>
                   {todayStats?.custom_goal_completed && (
-                    <p style={{ color: '#4ade80', fontSize: 12, fontWeight: 600, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <p style={{ color: 'var(--t-success)', fontSize: 12, fontWeight: 600, marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                       <CheckCircle2 style={{ width: 13, height: 13 }} /> Completed today
                     </p>
                   )}
@@ -309,8 +329,8 @@ export default function DashboardPage() {
             <Link
               href="/dashboard/rewards"
               style={{
-                background: 'linear-gradient(135deg, var(--t-acc-a) 0%, var(--t-card) 100%)',
-                border: '1px solid var(--t-brd-a)',
+                background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-mod-rewards) 14%, transparent) 0%, var(--t-card) 100%)',
+                border: '1px solid color-mix(in srgb, var(--t-mod-rewards) 24%, transparent)',
                 borderRadius: 28,
                 padding: '1.5rem 1.75rem',
                 textDecoration: 'none',
@@ -320,14 +340,14 @@ export default function DashboardPage() {
                 transition: 'opacity 0.15s',
               }}
             >
-              <div style={{ width: 46, height: 46, borderRadius: 16, background: 'var(--t-acc-b)', color: 'var(--t-acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 16, background: 'color-mix(in srgb, var(--t-mod-rewards) 16%, transparent)', color: 'var(--t-mod-rewards)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Trophy style={{ width: 21, height: 21 }} />
               </div>
               <div style={{ flex: 1 }}>
                 <h2 style={{ color: 'var(--t-tx)', fontSize: 16, fontWeight: 700, marginBottom: 3 }}>Review rewards</h2>
                 <p style={{ color: 'var(--t-tx2)', fontSize: 13 }}>Level milestones & streak bonuses</p>
               </div>
-              <ArrowRight style={{ color: 'var(--t-acc)', width: 18, height: 18, flexShrink: 0 }} />
+              <ArrowRight style={{ color: 'var(--t-mod-rewards)', width: 18, height: 18, flexShrink: 0 }} />
             </Link>
           </div>
         </div>
@@ -336,7 +356,7 @@ export default function DashboardPage() {
       {/* Category modal */}
       {showCategories && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', padding: 16 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-overlay)', backdropFilter: 'blur(10px)', padding: 16 }}
           onClick={() => setShowCategories(false)}
         >
           <div

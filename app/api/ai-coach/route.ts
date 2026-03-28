@@ -73,7 +73,7 @@ type VocabWord = {
 function buildSystemPrompt(
   mode: string,
   trainerType: string,
-  userContext: { username?: string; level?: number; xp?: number; streak?: number; customGoal?: string },
+  userContext: { username?: string; level?: number; xp?: number; streak?: number; customGoal?: string; ageGroup?: string },
   todayWriting: Writing | null,
   reviewed: Writing[],
   vocab: VocabWord[],
@@ -86,11 +86,18 @@ function buildSystemPrompt(
     : `You are a thoughtful, analytical writing coach. You give deep, structured, step-by-step guidance. You explain the "why" behind writing techniques and help build strong foundations. You are warm but precise.`;
 
   const focus = trainerType === 'general'             ? 'all types of writing'
+    : trainerType === 'creative'                      ? 'creative writing, storytelling, and imaginative expression'
     : trainerType === 'Persuasive / Essay'            ? 'persuasive writing and essay structure'
     : trainerType === 'Blog'                          ? 'blog writing and personal voice'
-    : trainerType === 'Email Entry'                   ? 'professional and formal email writing'
+    : trainerType === 'Email'                         ? 'professional and formal email writing'
     : trainerType === 'Feature Article'               ? 'feature articles and journalism'
+    : trainerType === 'Diary'                         ? 'personal diary writing, reflection, and emotional expression'
+    : trainerType === 'goal'                          ? `helping ${name} achieve their personal writing goal`
     : 'all types of writing';
+
+  const ageContext = userContext.ageGroup && userContext.ageGroup !== 'skipped' && userContext.ageGroup !== 'unspecified'
+    ? `The student is ${userContext.ageGroup} years old.`
+    : '';
 
   let context = '';
 
@@ -138,10 +145,19 @@ function buildSystemPrompt(
       context += '\nMastered: ' + mastered.map(v => v.word).join(', ');
   }
 
+  const goalPrompt = trainerType === 'goal'
+    ? `GOAL MODE: Your entire focus is helping ${name} achieve their goal: "${userContext.customGoal || 'improve their writing'}".
+- Analyse their writing history and vocab to assess progress toward this goal
+- Give specific, actionable advice tied directly to the goal
+- Celebrate progress and identify gaps honestly
+- Suggest concrete next steps they can take this week`
+    : (userContext.customGoal ? `Their personal writing goal: "${userContext.customGoal}"` : '');
+
   return `${persona}
 
 You are coaching ${name}, a student at Level ${level}. Your specialty today is ${focus}.
-${userContext.customGoal ? `Their personal writing goal: "${userContext.customGoal}"` : ''}
+${ageContext}
+${goalPrompt}
 ${context}
 
 Key rules:

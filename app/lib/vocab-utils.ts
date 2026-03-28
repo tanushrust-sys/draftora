@@ -1,5 +1,7 @@
 // Shared vocab utilities — used by vocab page and dashboard
 
+import { VOCAB_BY_AGE } from '@/app/data/vocab-by-age';
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 let VOCAB_POOL_EXT: { word: string; meaning: string; example: string }[] = [];
 try {
@@ -56,8 +58,17 @@ export const VOCAB_FALLBACK: { word: string; meaning: string; example: string }[
 
 export const VOCAB_POOL = VOCAB_POOL_EXT.length > 0 ? VOCAB_POOL_EXT : VOCAB_FALLBACK;
 
-/** Get this week's vocab words (Mon–Thu, 3 per day) */
-export function getWeekWords(): { word: string; meaning: string; example: string }[] {
+/** Get the vocab pool for a given age group, falling back to the general pool. */
+export function getVocabPool(ageGroup?: string): { word: string; meaning: string; example: string }[] {
+  if (ageGroup && ageGroup !== '' && VOCAB_BY_AGE[ageGroup]?.length > 0) {
+    return VOCAB_BY_AGE[ageGroup];
+  }
+  return VOCAB_POOL;
+}
+
+/** Get this week's vocab words (Mon–Thu, 3 per day) for a given age group. */
+export function getWeekWords(ageGroup?: string): { word: string; meaning: string; example: string }[] {
+  const pool = getVocabPool(ageGroup);
   const today = new Date();
   const dow = today.getDay(); // 0=Sun … 6=Sat
   const mondayOffset = dow === 0 ? 6 : dow - 1;
@@ -65,15 +76,15 @@ export function getWeekWords(): { word: string; meaning: string; example: string
   monday.setDate(today.getDate() - mondayOffset);
   monday.setHours(0, 0, 0, 0);
 
-  const len = VOCAB_POOL.length;
+  const len = pool.length;
   const weekWords: { word: string; meaning: string; example: string }[] = [];
   for (let d = 0; d < 4; d++) {
     const date = new Date(monday);
     date.setDate(monday.getDate() + d);
     const dayNum = Math.floor(date.getTime() / 86400000);
-    weekWords.push(VOCAB_POOL[dayNum % len]);
-    weekWords.push(VOCAB_POOL[(dayNum + Math.floor(len / 3)) % len]);
-    weekWords.push(VOCAB_POOL[(dayNum + Math.floor(2 * len / 3)) % len]);
+    weekWords.push(pool[dayNum % len]);
+    weekWords.push(pool[(dayNum + Math.floor(len / 3)) % len]);
+    weekWords.push(pool[(dayNum + Math.floor(2 * len / 3)) % len]);
   }
   const seen = new Set<string>();
   return weekWords.filter(w => { if (seen.has(w.word)) return false; seen.add(w.word); return true; });
