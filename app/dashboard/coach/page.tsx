@@ -4,67 +4,70 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/app/lib/supabase';
 import {
-  Bot, Send, Brain, Sparkles, RotateCcw, ChevronDown,
+  Bot, Send, Brain, Sparkles, RotateCcw,
   Plus, MessageSquare, Clock, Target, PenLine, BookOpen,
-  Flame, Zap, Trophy, ChevronRight, Star, type LucideIcon,
+  Flame, Zap, Trophy, Star, type LucideIcon,
+  Hash, Mail, FileText, Feather, ChevronRight,
 } from 'lucide-react';
 
 type Message      = { role: 'user' | 'assistant'; content: string };
 type Conversation = { id: string; mode: string; trainer_type: string; messages: Message[]; updated_at: string };
-
 type GoalData = {
   writings:      { id: string; title: string; word_count: number; status: string; created_at: string; category: string }[];
   vocabTotal:    number;
   vocabMastered: number;
 };
 
-const TRAINER_TYPES = [
-  { value: 'general',            label: 'Most Active',         icon: '⚡' },
-  { value: 'creative',           label: 'Creative Writing',    icon: '✨' },
-  { value: 'Persuasive / Essay', label: 'Persuasive Writing',  icon: '📢' },
-  { value: 'Blog',               label: 'Blog Entry',          icon: '📝' },
-  { value: 'Feature Article',    label: 'Feature Article',     icon: '📰' },
-  { value: 'Diary',              label: 'Diary Entry',         icon: '📖' },
-  { value: 'Email',              label: 'Email Writing',       icon: '✉️' },
-  { value: 'goal',               label: 'My Goal',             icon: '🎯' },
-];
+/* ─── Trainer config with individual accent colours ─── */
+const TRAINERS = [
+  { value: 'general',            label: 'Most Active',        icon: Zap,          color: '#f0c846', bg: 'rgba(240,200,70,0.14)',  emoji: '⚡' },
+  { value: 'creative',           label: 'Creative Writing',   icon: Sparkles,     color: '#b090ff', bg: 'rgba(176,144,255,0.14)', emoji: '✨' },
+  { value: 'Persuasive / Essay', label: 'Persuasive',         icon: Target,       color: '#ff8844', bg: 'rgba(255,136,68,0.14)',  emoji: '📢' },
+  { value: 'Blog',               label: 'Blog Entry',         icon: Hash,         color: '#4dd4a8', bg: 'rgba(77,212,168,0.14)',  emoji: '📝' },
+  { value: 'Feature Article',    label: 'Feature Article',    icon: FileText,     color: '#6a9fff', bg: 'rgba(106,159,255,0.14)', emoji: '📰' },
+  { value: 'Diary',              label: 'Diary Entry',        icon: Feather,      color: '#ff80a8', bg: 'rgba(255,128,168,0.14)', emoji: '📖' },
+  { value: 'Email',              label: 'Email Writing',      icon: Mail,         color: '#4dd4a8', bg: 'rgba(77,212,168,0.14)',  emoji: '✉️' },
+  { value: 'goal',               label: 'My Goal',            icon: Trophy,       color: '#f0c846', bg: 'rgba(240,200,70,0.14)',  emoji: '🎯' },
+] as const;
 
-const TRAINER_ICONS: Record<string, LucideIcon> = {
-  general: Zap,
-  creative: Sparkles,
-  'Persuasive / Essay': Target,
-  Blog: PenLine,
-  'Feature Article': BookOpen,
-  Diary: BookOpen,
-  Email: Send,
-  goal: Trophy,
+const STARTER_QUESTIONS: Record<string, string[]> = {
+  general:              ['Help me write a strong thesis statement', 'How do I make my writing more descriptive?', 'Give me ideas for a creative story', 'What makes a great opening line?', 'How can I improve my vocabulary usage?', 'Help me structure my ideas better'],
+  creative:             ['Give me a vivid story idea', 'How do I write better characters?', 'What makes a great plot twist?', 'Help me write a powerful opening scene', 'How do I show emotion in writing?', 'Give me a creative writing prompt'],
+  'Persuasive / Essay': ['Help me write a strong thesis', 'How do I structure a persuasive essay?', 'Give me counterargument techniques', 'How do I write a compelling conclusion?', 'What rhetorical devices should I use?', 'Review my argument structure'],
+  Blog:                 ['Give me blog post ideas', 'How do I write a catchy headline?', 'What makes blog writing engaging?', 'Help me find my blog voice', 'How do I hook readers in?', 'How long should my blog posts be?'],
+  'Feature Article':    ['What makes a great article lead?', 'How do I structure a feature article?', 'Help me write a compelling headline', 'What is the inverted pyramid structure?', 'How do I interview sources effectively?', 'How do I maintain objectivity?'],
+  Diary:                ['Help me start a diary entry', 'How do I write more honestly in my diary?', 'What should I write about today?', 'How do I capture my emotions in writing?', 'Give me diary writing prompts', 'How do I make diary entries meaningful?'],
+  Email:                ['Help me write a professional email', 'How do I write a clear subject line?', 'How do I politely decline something?', 'Help me write a follow-up email', 'How do I sound confident but not arrogant?', 'Help me apologise professionally'],
+  goal:                 [],
 };
-
-function getTrainerIcon(trainerType?: string): LucideIcon {
-  return TRAINER_ICONS[trainerType ?? ''] ?? MessageSquare;
-}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1)  return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  if (hrs < 24)  return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
+function getTrainer(value: string) {
+  return TRAINERS.find(t => t.value === value) ?? TRAINERS[0];
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   GOAL DASHBOARD
+   ────────────────────────────────────────────────────────────────────────── */
 function GoalDashboard({
   profile, goalData, onAsk,
 }: {
-  profile: { custom_daily_goal?: string; age_group?: string; streak: number; xp: number; level: number };
+  profile: { custom_daily_goal?: string; streak: number; xp: number; level: number };
   goalData: GoalData | null;
   onAsk: (q: string) => void;
 }) {
   const goal = profile.custom_daily_goal || 'No goal set yet';
-
-  const GOAL_STARTERS = [
-    `How close am I to achieving: "${goal.slice(0, 40)}${goal.length > 40 ? '...' : ''}"?`,
+  const STARTERS = [
+    `How close am I to achieving: "${goal.slice(0, 40)}${goal.length > 40 ? '…' : ''}"?`,
     'Give me a personalised roadmap to reach my goal',
     'What should I work on most this week?',
     'Analyse my recent writings and tell me what to improve',
@@ -73,71 +76,67 @@ function GoalDashboard({
   ];
 
   return (
-    <div style={{ padding: '24px', maxWidth: 800, margin: '0 auto' }}>
-      {/* Goal banner */}
+    <div style={{ padding: '28px 28px 40px', maxWidth: 820, margin: '0 auto' }}>
+      {/* ── Goal hero ── */}
       <div style={{
-        borderRadius: 22,
-        background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 20%, var(--t-card)), var(--t-card))',
+        borderRadius: 28,
+        background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 18%, var(--t-card)), var(--t-card) 70%)',
         border: '1px solid var(--t-brd-a)',
-        padding: '22px 24px',
-        marginBottom: 16,
+        padding: '28px 28px',
+        marginBottom: 20,
         position: 'relative',
         overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 80, opacity: 0.08, pointerEvents: 'none' }}>🎯</div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Target style={{ width: 22, height: 22, color: 'var(--t-acc)' }} />
+        <div style={{ position: 'absolute', top: -30, right: -30, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, color-mix(in srgb, var(--t-acc) 22%, transparent), transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 18, background: 'var(--t-acc-b)', border: '1px solid var(--t-brd-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 24 }}>
+            🎯
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-acc)', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>My Writing Goal</p>
-            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--t-tx)', lineHeight: 1.3 }}>{goal}</p>
-            {profile.age_group && profile.age_group !== 'skipped' && (
-              <p style={{ fontSize: 12, color: 'var(--t-tx3)', marginTop: 4 }}>Age group: {profile.age_group} years</p>
-            )}
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-acc)', letterSpacing: '0.22em', textTransform: 'uppercase', marginBottom: 6 }}>My Writing Goal</p>
+            <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', lineHeight: 1.35 }}>{goal}</p>
           </div>
         </div>
       </div>
 
-      {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+      {/* ── Stats ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { icon: <PenLine style={{ width: 16, height: 16 }} />, label: 'Writings', value: goalData?.writings.length ?? '...', color: 'var(--t-mod-write)' },
-          { icon: <BookOpen style={{ width: 16, height: 16 }} />, label: 'Vocab mastered', value: goalData?.vocabMastered ?? '...', color: 'var(--t-mod-vocab)' },
-          { icon: <Flame style={{ width: 16, height: 16 }} />, label: 'Day streak', value: profile.streak, color: 'var(--t-warning)' },
-          { icon: <Zap style={{ width: 16, height: 16 }} />, label: 'Total XP', value: profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp, color: 'var(--t-mod-rewards)' },
-        ].map(({ icon, label, value, color }) => (
-          <div key={label} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 16, padding: '14px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color }}>
-              {icon}
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
-            </div>
-            <p style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{value}</p>
+          { emoji: '✍️', label: 'Writings',    value: goalData?.writings.length ?? '—', color: 'var(--t-mod-write)' },
+          { emoji: '📚', label: 'Words mastered', value: goalData?.vocabMastered ?? '—',  color: 'var(--t-mod-vocab)' },
+          { emoji: '🔥', label: 'Day streak',  value: profile.streak,                   color: 'var(--t-warning)' },
+          { emoji: '⚡', label: 'Total XP',    value: profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp, color: 'var(--t-mod-rewards)' },
+        ].map(({ emoji, label, value, color }) => (
+          <div key={label} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 18, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: -12, right: -12, fontSize: 40, opacity: 0.08, pointerEvents: 'none' }}>{emoji}</div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>{label}</p>
+            <p style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1 }}>{value}</p>
           </div>
         ))}
       </div>
 
-      {/* Recent writings */}
+      {/* ── Recent writings ── */}
       {goalData && goalData.writings.length > 0 && (
-        <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 18, padding: '16px 20px', marginBottom: 16 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 12 }}>Recent Writings</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '18px 20px', marginBottom: 20 }}>
+          <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.18em', marginBottom: 14 }}>Recent Writings</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {goalData.writings.slice(0, 5).map(w => (
-              <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <PenLine style={{ width: 14, height: 14, color: 'var(--t-acc)' }} />
+              <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 14, background: 'var(--t-bg)', border: '1px solid var(--t-brd)' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 11, background: 'color-mix(in srgb, var(--t-mod-write) 14%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <PenLine style={{ width: 15, height: 15, color: 'var(--t-mod-write)' }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.title}</p>
-                  <p style={{ fontSize: 11, color: 'var(--t-tx3)' }}>{w.category} · {w.word_count} words</p>
+                  <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 1 }}>{w.category} · {w.word_count} words</p>
                 </div>
                 <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 99,
+                  fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 99,
                   background: w.status === 'reviewed' ? 'color-mix(in srgb, var(--t-success) 12%, transparent)' : 'var(--t-acc-a)',
                   color: w.status === 'reviewed' ? 'var(--t-success)' : 'var(--t-acc)',
                   border: `1px solid ${w.status === 'reviewed' ? 'color-mix(in srgb, var(--t-success) 22%, transparent)' : 'var(--t-brd-a)'}`,
+                  flexShrink: 0,
                 }}>
-                  {w.status === 'reviewed' ? 'Reviewed ✓' : 'Submitted'}
+                  {w.status === 'reviewed' ? '✓ Reviewed' : 'Submitted'}
                 </span>
               </div>
             ))}
@@ -145,24 +144,24 @@ function GoalDashboard({
         </div>
       )}
 
-      {/* Ask buttons */}
-      <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-tx3)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Ask your goal coach</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {GOAL_STARTERS.map(q => (
+      {/* ── Ask starters ── */}
+      <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.18em', marginBottom: 12 }}>Ask your goal coach</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {STARTERS.map(q => (
           <button
             key={q}
             onClick={() => onAsk(q)}
             style={{
-              textAlign: 'left', padding: '14px 16px', borderRadius: 16, fontSize: 14,
+              textAlign: 'left', padding: '14px 16px', borderRadius: 18, fontSize: 14,
               background: 'var(--t-card)', border: '1px solid var(--t-brd)', color: 'var(--t-tx2)',
-              cursor: 'pointer', lineHeight: 1.4,
-              display: 'flex', alignItems: 'center', gap: 10,
+              cursor: 'pointer', lineHeight: 1.5,
+              display: 'flex', alignItems: 'flex-start', gap: 10,
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--t-brd-a)'; e.currentTarget.style.color = 'var(--t-tx)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--t-brd)'; e.currentTarget.style.color = 'var(--t-tx2)'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--t-brd-a)'; e.currentTarget.style.background = 'var(--t-acc-a)'; e.currentTarget.style.color = 'var(--t-tx)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--t-brd)'; e.currentTarget.style.background = 'var(--t-card)'; e.currentTarget.style.color = 'var(--t-tx2)'; }}
           >
-            <ChevronRight style={{ width: 14, height: 14, color: 'var(--t-acc)', flexShrink: 0 }} />
+            <ChevronRight style={{ width: 15, height: 15, color: 'var(--t-acc)', flexShrink: 0, marginTop: 1 }} />
             {q}
           </button>
         ))}
@@ -171,17 +170,9 @@ function GoalDashboard({
   );
 }
 
-const STARTER_QUESTIONS: Record<string, string[]> = {
-  general:              ['Help me write a strong thesis statement', 'How do I make my writing more descriptive?', 'Give me ideas for a creative story', 'What makes a great opening line?', 'How can I improve my vocabulary usage?', 'Help me structure my ideas better'],
-  creative:             ['Give me a vivid story idea', 'How do I write better characters?', 'What makes a great plot twist?', 'Help me write a powerful opening scene', 'How do I show emotion in writing?', 'Give me a creative writing prompt'],
-  'Persuasive / Essay': ['Help me write a strong thesis', 'How do I structure a persuasive essay?', 'Give me counterargument techniques', 'How do I write a compelling conclusion?', 'What rhetorical devices should I use?', 'Review my argument structure'],
-  Blog:                 ['Give me blog post ideas', 'How do I write a catchy headline?', 'What makes blog writing engaging?', 'Help me find my blog voice', 'How do I hook readers in?', 'How long should my blog posts be?'],
-  'Feature Article':    ['What makes a great article lead?', 'How do I research and structure an article?', 'Help me write a compelling headline', 'How do I interview sources effectively?', 'What is the inverted pyramid structure?', 'How do I maintain objectivity?'],
-  Diary:                ['Help me start a diary entry', 'How do I write more honestly in my diary?', 'What should I write about today?', 'How do I capture my emotions in writing?', 'Give me diary writing prompts', 'How do I make my diary entries meaningful?'],
-  Email:                ['Help me write a professional email', 'How do I write a clear subject line?', 'How do I politely decline something?', 'Help me write a follow-up email', 'How do I sound confident but not arrogant?', 'Help me apologise professionally'],
-  goal:                 [],
-};
-
+/* ──────────────────────────────────────────────────────────────────────────
+   MAIN COMPONENT
+   ────────────────────────────────────────────────────────────────────────── */
 export default function CoachPage() {
   const { profile } = useAuth();
 
@@ -197,21 +188,16 @@ export default function CoachPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
+  const trainer = getTrainer(trainerType);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Load goal data when goal trainer is selected
   useEffect(() => {
     if (trainerType !== 'goal' || !profile) return;
     (async () => {
       const [wRes, vRes] = await Promise.all([
-        supabase.from('writings')
-          .select('id, title, word_count, status, created_at, category')
-          .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
-          .limit(10),
-        supabase.from('vocab_words')
-          .select('id, mastered')
-          .eq('user_id', profile.id),
+        supabase.from('writings').select('id, title, word_count, status, created_at, category').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(10),
+        supabase.from('vocab_words').select('id, mastered').eq('user_id', profile.id),
       ]);
       setGoalData({
         writings:      (wRes.data ?? []) as GoalData['writings'],
@@ -223,12 +209,7 @@ export default function CoachPage() {
 
   const loadConversations = useCallback(async () => {
     if (!profile) return;
-    const { data } = await supabase
-      .from('coach_conversations')
-      .select('id, mode, trainer_type, messages, updated_at')
-      .eq('user_id', profile.id)
-      .order('updated_at', { ascending: false })
-      .limit(30);
+    const { data } = await supabase.from('coach_conversations').select('id, mode, trainer_type, messages, updated_at').eq('user_id', profile.id).order('updated_at', { ascending: false }).limit(30);
     setConversations((data ?? []) as Conversation[]);
   }, [profile]);
 
@@ -237,15 +218,11 @@ export default function CoachPage() {
   const saveConversation = useCallback(async (msgs: Message[], convId: string | null) => {
     if (!profile || msgs.length < 2) return convId;
     if (convId) {
-      await supabase.from('coach_conversations')
-        .update({ messages: msgs, updated_at: new Date().toISOString() })
-        .eq('id', convId);
+      await supabase.from('coach_conversations').update({ messages: msgs, updated_at: new Date().toISOString() }).eq('id', convId);
       await loadConversations();
       return convId;
     } else {
-      const { data } = await supabase.from('coach_conversations')
-        .insert({ user_id: profile.id, mode, trainer_type: trainerType, messages: msgs })
-        .select('id').single();
+      const { data } = await supabase.from('coach_conversations').insert({ user_id: profile.id, mode, trainer_type: trainerType, messages: msgs }).select('id').single();
       await loadConversations();
       return data?.id ?? null;
     }
@@ -260,19 +237,10 @@ export default function CoachPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/ai-coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: updated, mode, trainerType,
-          userId: profile?.id,
-          userContext: {
-            username:   profile?.username,
-            level:      profile?.level,
-            xp:         profile?.xp,
-            streak:     profile?.streak,
-            customGoal: profile?.custom_daily_goal,
-            ageGroup:   (profile as { age_group?: string })?.age_group,
-          },
+          messages: updated, mode, trainerType, userId: profile?.id,
+          userContext: { username: profile?.username, level: profile?.level, xp: profile?.xp, streak: profile?.streak, customGoal: profile?.custom_daily_goal, ageGroup: (profile as { age_group?: string })?.age_group },
         }),
       });
       const data = await res.json();
@@ -281,7 +249,7 @@ export default function CoachPage() {
       const newId = await saveConversation(withReply, activeId);
       if (newId && !activeId) setActiveId(newId as string);
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: "I'm having a moment - please try again!" }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: "I'm having a moment — please try again!" }]);
     }
     setLoading(false);
   };
@@ -305,81 +273,89 @@ export default function CoachPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
-  const getSessionPreview = (conv: Conversation) => {
-    const firstUser = conv.messages.find(m => m.role === 'user');
-    return firstUser?.content.slice(0, 45) || 'New conversation';
-  };
+  if (!profile) return null;
 
-  if (!profile) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-bg)' }}>
-        <div style={{ width: 40, height: 40, borderRadius: 16, background: 'var(--t-btn)', animation: 'pulse 1.5s infinite' }} />
-      </div>
-    );
-  }
-
-  const currentTrainer = TRAINER_TYPES.find(t => t.value === trainerType);
-  const CurrentTrainerIcon = getTrainerIcon(currentTrainer?.value);
   const starters = STARTER_QUESTIONS[trainerType] ?? STARTER_QUESTIONS.general;
+  const TrainerIcon = trainer.icon as LucideIcon;
 
+  /* ────────────────────────────────────── RENDER ────────────────────────── */
   return (
-    <div className="flex" style={{ height: 'calc(100vh - 120px)', background: 'var(--t-bg)', overflow: 'hidden', borderRadius: 16 }}>
+    <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'var(--t-bg)', overflow: 'hidden', borderRadius: 20 }}>
 
-      {/* ══ LEFT — Previous Chats ══ */}
-      <div className="flex-shrink-0 flex flex-col" style={{ width: 240, background: 'var(--t-card)', borderRight: '1px solid var(--t-brd)' }}>
-        <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--t-brd)' }}>
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              <MessageSquare style={{ width: 14, height: 14, color: 'var(--t-acc)' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-tx)' }}>Chats</span>
-              {conversations.length > 0 && (
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', background: 'var(--t-bg)', borderRadius: 99, padding: '1px 6px', border: '1px solid var(--t-brd)' }}>
-                  {conversations.length}
-                </span>
-              )}
+      {/* ══════════════════════════════════════════
+          LEFT SIDEBAR — conversations
+          ══════════════════════════════════════════ */}
+      <div style={{
+        width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        background: 'var(--t-card)',
+        borderRight: '1px solid var(--t-brd)',
+        borderRadius: '20px 0 0 20px',
+      }}>
+        {/* Sidebar header */}
+        <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--t-brd)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bot style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />
+            </div>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--t-tx)', lineHeight: 1 }}>AI Coach</p>
+              <p style={{ fontSize: 10, color: 'var(--t-tx3)', marginTop: 1 }}>{conversations.length} session{conversations.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
+
           <button
             onClick={startNewChat}
-            className="w-full flex items-center justify-center gap-2"
-            style={{ background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 12px', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer' }}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              background: 'var(--t-btn)', color: 'var(--t-btn-color)',
+              borderRadius: 14, padding: '10px 14px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
+              boxShadow: '0 4px 14px color-mix(in srgb, var(--t-acc) 22%, transparent)',
+            }}
           >
-            <Plus style={{ width: 12, height: 12 }} /> New Chat
+            <Plus style={{ width: 14, height: 14 }} /> New Chat
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto" style={{ padding: '6px' }}>
+        {/* Conversation list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
           {conversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-              <Clock style={{ width: 24, height: 24, color: 'var(--t-tx3)', marginBottom: 8, opacity: 0.4 }} />
-              <p style={{ fontSize: 11, color: 'var(--t-tx3)', lineHeight: 1.5 }}>Past conversations appear here</p>
+            <div style={{ padding: '40px 12px', textAlign: 'center' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--t-bg)', border: '1px solid var(--t-brd)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                <MessageSquare style={{ width: 20, height: 20, color: 'var(--t-tx3)', opacity: 0.5 }} />
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--t-tx3)', lineHeight: 1.6 }}>Start your first coaching session above</p>
             </div>
           ) : (
             conversations.map(conv => {
               const isActive = conv.id === activeId;
-              const trainer  = TRAINER_TYPES.find(t => t.value === conv.trainer_type);
-              const TrainerIcon = getTrainerIcon(trainer?.value ?? conv.trainer_type);
+              const t = getTrainer(conv.trainer_type);
+              const TIcon = t.icon as LucideIcon;
+              const preview = conv.messages.find(m => m.role === 'user')?.content.slice(0, 42) || 'New conversation';
               return (
                 <button
                   key={conv.id}
                   onClick={() => loadSession(conv)}
-                  className="w-full text-left"
                   style={{
-                    display: 'block', padding: '9px 10px', borderRadius: 12, marginBottom: 2,
-                    background: isActive ? 'var(--t-acc-a)' : 'transparent',
-                    border: isActive ? '1px solid var(--t-brd-a)' : '1px solid transparent',
-                    cursor: 'pointer',
+                    width: '100%', textAlign: 'left', display: 'block',
+                    padding: '10px 11px', borderRadius: 14, marginBottom: 3,
+                    background: isActive ? t.bg : 'transparent',
+                    border: isActive ? `1px solid ${t.color}28` : '1px solid transparent',
+                    cursor: 'pointer', transition: 'all 0.12s',
                   }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--t-bg)'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <TrainerIcon style={{ width: 12, height: 12, color: isActive ? 'var(--t-acc)' : 'var(--t-tx3)' }} />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? 'var(--t-acc)' : 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      {trainer?.label ?? conv.trainer_type}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 7, background: `${t.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <TIcon style={{ width: 11, height: 11, color: t.color }} />
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? t.color : 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.label}
                     </span>
-                    <span style={{ fontSize: 10, color: 'var(--t-tx3)', marginLeft: 'auto' }}>{timeAgo(conv.updated_at)}</span>
+                    <span style={{ fontSize: 10, color: 'var(--t-tx3)', flexShrink: 0 }}>{timeAgo(conv.updated_at)}</span>
                   </div>
-                  <p style={{ fontSize: 12, color: isActive ? 'var(--t-tx)' : 'var(--t-tx2)', fontWeight: isActive ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {getSessionPreview(conv)}
+                  <p style={{ fontSize: 12, color: isActive ? 'var(--t-tx)' : 'var(--t-tx2)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {preview}
                   </p>
                 </button>
               );
@@ -388,58 +364,107 @@ export default function CoachPage() {
         </div>
       </div>
 
-      {/* ══ RIGHT — Chat ══ */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* ══════════════════════════════════════════
+          RIGHT PANEL — chat area
+          ══════════════════════════════════════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderRadius: '0 20px 20px 0', overflow: 'hidden' }}>
 
-        {/* Header */}
-        <div className="flex-shrink-0" style={{ background: 'var(--t-card)', borderBottom: '1px solid var(--t-brd)', padding: '12px 18px' }}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Bot style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
-              </div>
-              <div>
-                <h1 style={{ fontSize: 15, fontWeight: 800, color: 'var(--t-tx)', lineHeight: 1 }}>My Coach</h1>
-                <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 2 }}>Your personal AI writing mentor</p>
-              </div>
+        {/* ── Top header bar ── */}
+        <div style={{
+          flexShrink: 0,
+          background: 'var(--t-card)',
+          borderBottom: '1px solid var(--t-brd)',
+          padding: '12px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          {/* Left: trainer identity */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 14, flexShrink: 0,
+              background: trainer.bg, border: `1px solid ${trainer.color}30`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18,
+            }}>
+              {trainer.emoji}
+            </div>
+            <div>
+              <h1 style={{ fontSize: 15, fontWeight: 800, color: 'var(--t-tx)', lineHeight: 1.1 }}>{trainer.label} Coach</h1>
+              <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 1 }}>
+                {mode === 'thinking' ? '🧠 Deep thinking mode' : '✨ Creative mode'} · Your personal AI mentor
+              </p>
+            </div>
+          </div>
+
+          {/* Right: controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 14, padding: 3, gap: 2 }}>
+              <button
+                onClick={() => setMode('thinking')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: 11, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer',
+                  background: mode === 'thinking' ? 'var(--t-acc)' : 'transparent',
+                  color: mode === 'thinking' ? 'var(--t-btn-color)' : 'var(--t-tx3)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Brain style={{ width: 12, height: 12 }} /> Thinking
+              </button>
+              <button
+                onClick={() => setMode('creative')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: 11, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer',
+                  background: mode === 'creative' ? 'var(--t-mod-coach)' : 'transparent',
+                  color: mode === 'creative' ? '#fff' : 'var(--t-tx3)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Sparkles style={{ width: 12, height: 12 }} /> Creative
+              </button>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Mode toggle */}
-              <div className="flex p-1" style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 14 }}>
-                <button onClick={() => setMode('thinking')} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-all duration-200" style={{ borderRadius: 10, background: mode === 'thinking' ? 'var(--t-btn)' : 'transparent', color: mode === 'thinking' ? 'var(--t-btn-color)' : 'var(--t-tx3)' }}>
-                  <Brain style={{ width: 12, height: 12 }} /> Thinking
-                </button>
-                <button onClick={() => setMode('creative')} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-all duration-200" style={{ borderRadius: 10, background: mode === 'creative' ? 'linear-gradient(135deg, color-mix(in srgb, var(--t-mod-coach) 78%, white 22%), var(--t-mod-coach))' : 'transparent', color: mode === 'creative' ? '#fff' : 'var(--t-tx3)' }}>
-                  <Sparkles style={{ width: 12, height: 12 }} /> Creative
-                </button>
-              </div>
-
-              {/* Trainer selector */}
-              <div className="relative flex items-center" style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 12, padding: '6px 10px' }}>
-                <CurrentTrainerIcon style={{ width: 14, height: 14, color: 'var(--t-acc)', marginRight: 6 }} />
-                <select
-                  value={trainerType}
-                  onChange={e => setTrainerType(e.target.value)}
-                  className="text-xs bg-transparent outline-none cursor-pointer appearance-none pr-4"
-                  style={{ color: 'var(--t-tx2)', fontWeight: 600 }}
-                >
-                  {TRAINER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                <ChevronDown className="absolute right-2 pointer-events-none" style={{ width: 10, height: 10, color: 'var(--t-tx3)' }} />
-              </div>
-
-              {messages.length > 0 && (
-                <button onClick={startNewChat} title="New chat" className="flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)', cursor: 'pointer' }}>
-                  <RotateCcw style={{ width: 13, height: 13 }} />
-                </button>
-              )}
+            {/* Trainer pill selector */}
+            <div style={{ display: 'flex', gap: 4, overflowX: 'auto', maxWidth: 420 }}>
+              {TRAINERS.map(t => {
+                const isActive = t.value === trainerType;
+                const TI = t.icon as LucideIcon;
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => { setTrainerType(t.value); setMessages([]); setActiveId(null); }}
+                    title={t.label}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                      padding: '6px 11px', borderRadius: 10, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+                      background: isActive ? t.bg : 'transparent',
+                      color: isActive ? t.color : 'var(--t-tx3)',
+                      outline: isActive ? `1.5px solid ${t.color}50` : '1.5px solid transparent',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <TI style={{ width: 13, height: 13 }} />
+                    <span style={{ display: window?.innerWidth > 1100 ? undefined : 'none' }}>{t.label}</span>
+                  </button>
+                );
+              })}
             </div>
+
+            {messages.length > 0 && (
+              <button
+                onClick={startNewChat}
+                title="New chat"
+                style={{ width: 34, height: 34, borderRadius: 11, background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+              >
+                <RotateCcw style={{ width: 13, height: 13 }} />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Messages / Goal dashboard */}
-        <div className="flex-1 overflow-y-auto">
+        {/* ── Messages / welcome / goal dashboard ── */}
+        <div style={{ flex: 1, overflowY: 'auto', background: 'var(--t-bg)' }}>
           {messages.length === 0 ? (
             trainerType === 'goal' ? (
               <GoalDashboard
@@ -448,29 +473,72 @@ export default function CoachPage() {
                 onAsk={send}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 text-center px-6">
-                <div style={{ width: 64, height: 64, borderRadius: 20, background: 'var(--t-acc-a)', border: '1px solid var(--t-acc-b)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <CurrentTrainerIcon style={{ width: 28, height: 28, color: 'var(--t-acc)' }} />
+              /* Welcome screen */
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100%', padding: '40px 32px', textAlign: 'center' }}>
+                {/* Animated trainer orb */}
+                <div style={{ position: 'relative', marginBottom: 28 }}>
+                  <div style={{
+                    width: 88, height: 88, borderRadius: 28,
+                    background: `radial-gradient(135deg, ${trainer.bg}, color-mix(in srgb, ${trainer.color} 8%, var(--t-card)))`,
+                    border: `2px solid ${trainer.color}35`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 0 40px ${trainer.color}20, 0 8px 32px rgba(0,0,0,0.18)`,
+                    fontSize: 36,
+                  }}>
+                    {trainer.emoji}
+                  </div>
+                  {/* Pulse ring */}
+                  <div style={{
+                    position: 'absolute', inset: -8, borderRadius: 36,
+                    border: `1.5px solid ${trainer.color}22`,
+                    animation: 'pulse 2.4s ease-in-out infinite',
+                    pointerEvents: 'none',
+                  }} />
                 </div>
-                <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--t-tx)', marginBottom: 6 }}>
-                  {currentTrainer?.label} Coach
+
+                <h2 style={{ fontSize: 26, fontWeight: 900, color: 'var(--t-tx)', marginBottom: 8, letterSpacing: '-0.02em' }}>
+                  {trainer.label} Coach
                 </h2>
-                <p style={{ fontSize: 15, color: 'var(--t-tx3)', maxWidth: 400, marginBottom: 4 }}>
-                  {mode === 'thinking' ? 'Thinking Mode - deep, detailed, step-by-step guidance.' : 'Creative Mode - imaginative, free-flowing ideas and suggestions.'}
+                <p style={{ fontSize: 15, color: 'var(--t-tx3)', maxWidth: 420, lineHeight: 1.6, marginBottom: 6 }}>
+                  {mode === 'thinking'
+                    ? 'Deep thinking mode — structured, detailed, step-by-step guidance.'
+                    : 'Creative mode — imaginative, free-flowing ideas and inspiration.'}
                 </p>
-                <p style={{ fontSize: 13, color: 'var(--t-tx3)', marginBottom: 28 }}>
-                  Hi <span style={{ color: 'var(--t-acc)', fontWeight: 700 }}>{profile?.username}</span> — what would you like to work on?
+                <p style={{ fontSize: 14, color: 'var(--t-tx3)', marginBottom: 36 }}>
+                  Hi <span style={{ color: trainer.color, fontWeight: 800 }}>{profile.username}</span> — what would you like to work on?
                 </p>
-                <div className="grid grid-cols-2 gap-3 w-full" style={{ maxWidth: 640 }}>
-                  {starters.map(q => (
+
+                {/* Starter cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, width: '100%', maxWidth: 640 }}>
+                  {starters.map((q, qi) => (
                     <button
                       key={q}
                       onClick={() => send(q)}
-                      className="text-left transition-all duration-200"
-                      style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 16, padding: '14px 18px', fontSize: 15, color: 'var(--t-tx2)', cursor: 'pointer', lineHeight: 1.4 }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--t-brd-a)'; e.currentTarget.style.color = 'var(--t-tx)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--t-brd)'; e.currentTarget.style.color = 'var(--t-tx2)'; }}
+                      style={{
+                        textAlign: 'left', padding: '16px 18px',
+                        borderRadius: 18, fontSize: 14, fontWeight: 500,
+                        background: 'var(--t-card)',
+                        border: '1px solid var(--t-brd)',
+                        color: 'var(--t-tx2)',
+                        cursor: 'pointer', lineHeight: 1.5,
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        transition: 'all 0.15s',
+                        animationDelay: `${qi * 60}ms`,
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = `${trainer.color}50`;
+                        e.currentTarget.style.background = trainer.bg;
+                        e.currentTarget.style.color = 'var(--t-tx)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = 'var(--t-brd)';
+                        e.currentTarget.style.background = 'var(--t-card)';
+                        e.currentTarget.style.color = 'var(--t-tx2)';
+                      }}
                     >
+                      <div style={{ width: 22, height: 22, borderRadius: 8, background: `${trainer.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                        <TrainerIcon style={{ width: 12, height: 12, color: trainer.color }} />
+                      </div>
                       {q}
                     </button>
                   ))}
@@ -478,47 +546,78 @@ export default function CoachPage() {
               </div>
             )
           ) : (
-            <div style={{ padding: '20px 24px' }}>
-              {/* Goal reminder strip when in goal mode */}
+            /* Chat messages */
+            <div style={{ padding: '24px 28px', maxWidth: 820, margin: '0 auto' }}>
+              {/* Goal reminder strip */}
               {trainerType === 'goal' && profile?.custom_daily_goal && (
-                <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 14, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Target style={{ width: 14, height: 14, color: 'var(--t-acc)', flexShrink: 0 }} />
-                  <p style={{ fontSize: 13, color: 'var(--t-acc)', fontWeight: 600 }}>Goal: {profile.custom_daily_goal}</p>
+                <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 14, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>🎯</span>
+                  <p style={{ fontSize: 13, color: 'var(--t-acc)', fontWeight: 700 }}>Goal: {profile.custom_daily_goal}</p>
                 </div>
               )}
 
-              <div className="max-w-3xl mx-auto space-y-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 10, alignItems: 'flex-end' }}>
+                    {/* Coach avatar */}
                     {msg.role === 'assistant' && (
-                      <div style={{ width: 32, height: 32, borderRadius: 11, background: 'var(--t-acc-a)', border: '1px solid var(--t-acc-b)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 10, flexShrink: 0, marginTop: 2 }}>
-                        <Bot style={{ width: 15, height: 15, color: 'var(--t-acc)' }} />
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 12, flexShrink: 0,
+                        background: trainer.bg, border: `1px solid ${trainer.color}30`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 16,
+                      }}>
+                        {trainer.emoji}
                       </div>
                     )}
+
+                    {/* Bubble */}
                     <div
-                      className="max-w-[78%] leading-relaxed whitespace-pre-wrap"
                       style={{
-                        fontSize: 16,
+                        maxWidth: '76%', fontSize: 15, lineHeight: 1.75, whiteSpace: 'pre-wrap',
                         padding: '14px 18px',
-                        ...(msg.role === 'user'
-                          ? { background: 'var(--t-btn)', color: 'var(--t-btn-color)', fontWeight: 500, borderRadius: '22px 22px 6px 22px' }
-                          : { background: 'var(--t-card)', border: '1px solid var(--t-brd)', color: 'var(--t-tx2)', borderRadius: '22px 22px 22px 6px' }
-                        ),
+                        ...(msg.role === 'user' ? {
+                          background: 'var(--t-btn)',
+                          color: 'var(--t-btn-color)',
+                          borderRadius: '20px 20px 5px 20px',
+                          fontWeight: 500,
+                          boxShadow: '0 4px 14px color-mix(in srgb, var(--t-acc) 18%, transparent)',
+                        } : {
+                          background: 'var(--t-card)',
+                          border: '1px solid var(--t-brd)',
+                          borderLeft: `3px solid ${trainer.color}`,
+                          color: 'var(--t-tx)',
+                          borderRadius: '5px 20px 20px 20px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        }),
                       }}
                     >
                       {msg.content}
                     </div>
+
+                    {/* User avatar initial */}
+                    {msg.role === 'user' && (
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 12, flexShrink: 0,
+                        background: 'var(--t-btn)', border: '1px solid var(--t-brd-a)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 13, fontWeight: 900, color: 'var(--t-btn-color)',
+                      } as React.CSSProperties}>
+                        {profile.username[0]?.toUpperCase()}
+                      </div>
+                    )}
                   </div>
                 ))}
 
+                {/* Typing indicator */}
                 {loading && (
-                  <div className="flex justify-start">
-                    <div style={{ width: 32, height: 32, borderRadius: 11, background: 'var(--t-acc-a)', border: '1px solid var(--t-acc-b)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 10, flexShrink: 0 }}>
-                      <Bot style={{ width: 15, height: 15, color: 'var(--t-acc)' }} />
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 12, background: trainer.bg, border: `1px solid ${trainer.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                      {trainer.emoji}
                     </div>
-                    <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: '22px 22px 22px 6px', padding: '14px 20px', display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderLeft: `3px solid ${trainer.color}`, borderRadius: '5px 20px 20px 20px', padding: '16px 20px', display: 'flex', gap: 5, alignItems: 'center' }}>
                       {[0, 150, 300].map(d => (
-                        <div key={d} className="rounded-full animate-bounce" style={{ width: 7, height: 7, background: 'var(--t-acc)', animationDelay: `${d}ms` }} />
+                        <div key={d} style={{ width: 7, height: 7, borderRadius: '50%', background: trainer.color, animation: 'bounce 1.2s infinite', animationDelay: `${d}ms` }} />
                       ))}
                     </div>
                   </div>
@@ -529,37 +628,71 @@ export default function CoachPage() {
           )}
         </div>
 
-        {/* Input */}
-        <div className="flex-shrink-0" style={{ background: 'var(--t-card)', borderTop: '1px solid var(--t-brd)', padding: '12px 18px' }}>
-          <div style={{ maxWidth: 760, margin: '0 auto' }}>
-            <div className="flex items-end gap-3" style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 18, padding: '10px 14px' }}>
+        {/* ── Input bar ── */}
+        <div style={{
+          flexShrink: 0,
+          background: 'var(--t-card)',
+          borderTop: '1px solid var(--t-brd)',
+          padding: '14px 20px 16px',
+        }}>
+          <div style={{ maxWidth: 780, margin: '0 auto' }}>
+            <div style={{
+              display: 'flex', alignItems: 'flex-end', gap: 10,
+              background: 'var(--t-bg)', border: `1.5px solid var(--t-brd)`,
+              borderRadius: 20, padding: '12px 14px',
+              transition: 'border-color 0.15s',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+            }}
+              onFocusCapture={e => (e.currentTarget.style.borderColor = `${trainer.color}50`)}
+              onBlurCapture={e => (e.currentTarget.style.borderColor = 'var(--t-brd)')}
+            >
+              {/* Trainer mini badge */}
+              <div style={{ width: 30, height: 30, borderRadius: 10, background: trainer.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14 }}>
+                {trainer.emoji}
+              </div>
+
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder={trainerType === 'goal' ? 'Ask about your goal progress...' : 'Ask your coach anything...'}
+                placeholder={trainerType === 'goal' ? 'Ask about your goal progress…' : `Ask your ${trainer.label.toLowerCase()} coach…`}
                 rows={1}
-                className="flex-1 bg-transparent resize-none outline-none leading-relaxed max-h-32"
-                style={{ fontSize: 16, color: 'var(--t-tx)' }}
+                style={{
+                  flex: 1, background: 'transparent', resize: 'none', outline: 'none',
+                  fontSize: 15, color: 'var(--t-tx)', lineHeight: 1.6,
+                  border: 'none', maxHeight: 140, overflowY: 'auto',
+                  fontFamily: 'inherit',
+                }}
                 onInput={e => {
                   const el = e.target as HTMLTextAreaElement;
                   el.style.height = 'auto';
-                  el.style.height = el.scrollHeight + 'px';
+                  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
                 }}
               />
+
               <button
                 onClick={() => send()}
                 disabled={!input.trim() || loading}
-                className="flex-shrink-0 flex items-center justify-center transition-all disabled:opacity-40"
-                style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--t-btn)', border: 'none', cursor: 'pointer' }}
+                style={{
+                  width: 38, height: 38, borderRadius: 13, flexShrink: 0,
+                  background: input.trim() ? 'var(--t-btn)' : 'var(--t-card2)',
+                  border: 'none', cursor: input.trim() ? 'pointer' : 'default',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                  boxShadow: input.trim() ? '0 4px 14px color-mix(in srgb, var(--t-acc) 22%, transparent)' : 'none',
+                }}
               >
-                <Send style={{ width: 14, height: 14, color: 'var(--t-btn-color)' }} />
+                <Send style={{ width: 15, height: 15, color: input.trim() ? 'var(--t-btn-color)' : 'var(--t-tx3)' }} />
               </button>
             </div>
-            <p className="text-xs mt-1.5 text-center" style={{ color: 'var(--t-tx3)' }}>
-              {currentTrainer?.label} | {mode === 'thinking' ? 'Thinking' : 'Creative'} Mode | Enter to send
-            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: trainer.color }} />
+              <p style={{ fontSize: 11, color: 'var(--t-tx3)' }}>
+                {trainer.label} · {mode === 'thinking' ? 'Thinking' : 'Creative'} Mode · Enter to send, Shift+Enter for new line
+              </p>
+            </div>
           </div>
         </div>
       </div>
