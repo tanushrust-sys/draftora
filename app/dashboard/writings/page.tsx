@@ -142,13 +142,14 @@ function isExpectedUserFacingError(error: unknown): error is Error {
 }
 
 function logSafeError(label: string, error: unknown) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
   if (isAbortLikeError(error)) return;
   if (isExpectedUserFacingError(error)) {
-    console.warn(label, error.message);
+    console.warn(label, errorMessage);
     return;
   }
   if (error instanceof Error) {
-    console.error(label, error.message);
+    console.error(label, errorMessage);
     return;
   }
   console.error(label, error);
