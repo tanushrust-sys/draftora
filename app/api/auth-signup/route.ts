@@ -7,33 +7,44 @@ const adminSupabase = createClient(
 );
 
 export async function POST(req: NextRequest) {
-  const { username, password } = await req.json();
+  const { username, email, password, account_type: rawAccountType } = await req.json();
+  const accountType = rawAccountType === 'teacher' || rawAccountType === 'parent' ? rawAccountType : 'student';
 
-  if (!username || !password) {
+  if (!username || !email || !password) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
 
   const trimmed = username.trim();
-  const emailSlug = trimmed.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const syntheticEmail = `${emailSlug}@draftly.app`;
+  const trimmedEmail = String(email).trim().toLowerCase();
 
-  // Check username taken (case-insensitive)
-  const { data: existing } = await adminSupabase
-    .from('profiles')
-    .select('id')
-    .ilike('username', trimmed)
-    .single();
+  const [usernameMatches, emailMatches] = await Promise.all([
+    adminSupabase.from('profiles').select('id, deleted_at').ilike('username', trimmed),
+    adminSupabase.from('profiles').select('id, deleted_at').ilike('email', trimmedEmail),
+  ]);
 
-  if (existing) {
+  const usernameTaken = (usernameMatches.data ?? []).some((row) => !row.deleted_at);
+  const emailTaken = (emailMatches.data ?? []).some((row) => !row.deleted_at);
+
+  if (usernameTaken) {
     return NextResponse.json({ error: 'That username is already taken.' }, { status: 400 });
   }
 
+  if (emailTaken) {
+    return NextResponse.json({ error: 'That email is already in use.' }, { status: 400 });
+  }
+
+  // Remove any deleted_accounts entries for this email/username so the DB trigger allows re-registration
+  await adminSupabase
+    .from('deleted_accounts')
+    .delete()
+    .or(`email.ilike.${trimmedEmail},username.ilike.${trimmed}`);
+
   // Create user via admin API — no confirmation email sent
   const { data, error } = await adminSupabase.auth.admin.createUser({
-    email: syntheticEmail,
+    email: trimmedEmail,
     password,
     email_confirm: true,
-    user_metadata: { username: trimmed },
+    user_metadata: { username: trimmed, account_type: accountType },
   });
 
   if (error) {
@@ -43,7 +54,8 @@ export async function POST(req: NextRequest) {
   const { error: profileError } = await adminSupabase.from('profiles').upsert({
     id: data.user.id,
     username: trimmed,
-    email: syntheticEmail,
+    email: trimmedEmail,
+    account_type: accountType,
   });
 
   if (profileError) {

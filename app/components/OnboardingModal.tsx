@@ -1,277 +1,583 @@
 'use client';
 
-import { useState } from 'react';
-import { supabase } from '@/app/lib/supabase';
+import { useEffect, useState, type ReactNode } from 'react';
+import {
+  ArrowLeft,
+  PenLine,
+  Users,
+  BookOpen,
+  School,
+} from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
-import { PenLine, ChevronRight, Sparkles, Check } from 'lucide-react';
+import { supabase } from '@/app/lib/supabase';
+import { PromiseTimeoutError, withPromiseTimeout } from '@/app/lib/promise-with-timeout';
+import { generateStudentCode } from '@/app/lib/student-code';
+import {
+  getAccountHomePath,
+  writeAccountTypeOverride,
+} from '@/app/lib/account-type';
+import {
+  isMissingAgeGroupColumnError,
+  writeAgeGroupOverride,
+} from '@/app/lib/age-group-storage';
+import {
+  normalizeWritingExperienceScore,
+  writeWritingExperienceOverride,
+  WRITING_EXPERIENCE_CHOICES,
+} from '@/app/lib/writing-experience';
+import {
+  isMissingAccountTypeColumnError,
+  isMissingWritingExperienceColumnError,
+} from '@/app/lib/supabase-schema-errors';
 
-const AGE_GROUPS = [
-  { value: '5-7',   label: '5 – 7',   sub: 'Early Explorer',     emoji: '🌱' },
-  { value: '8-10',  label: '8 – 10',  sub: 'Growing Writer',     emoji: '✏️' },
-  { value: '11-13', label: '11 – 13', sub: 'Finding Your Voice',  emoji: '📚' },
-  { value: '14-17', label: '14 – 17', sub: 'Sharpening the Craft',emoji: '🎯' },
-  { value: '18-21', label: '18 – 21', sub: 'Rising Writer',       emoji: '🚀' },
-  { value: '22+',   label: '22 +',    sub: 'Lifelong Learner',    emoji: '⭐' },
-];
+type AccountTypeChoice = 'teacher' | 'student' | 'parent';
+type OnboardingStep = 1 | 2 | 3 | 4;
 
-const GOAL_CHIPS = [
-  'Improve my essay writing',
-  'Write more creatively',
-  'Build a stronger vocabulary',
-  'Get better at storytelling',
-  'Prepare for school exams',
-  'Write for fun and expression',
-  'Improve my blog writing',
-  'Write professional emails',
-];
+const AGE_GROUP_OPTIONS = [
+  { value: '5-7', label: '5 - 7', sub: 'Early Explorer' },
+  { value: '8-10', label: '8 - 10', sub: 'Growing Writer' },
+  { value: '11-13', label: '11 - 13', sub: 'Finding Your Voice' },
+  { value: '14-17', label: '14 - 17', sub: 'Sharpening the Craft' },
+  { value: '18-21', label: '18 - 21', sub: 'Rising Writer' },
+  { value: '22+', label: '22+', sub: 'Experienced Writer' },
+] as const;
+
+const DAILY_GOAL_OPTIONS = [
+  { value: 100, label: '100 words', sub: 'A quick daily warm-up' },
+  { value: 200, label: '200 words', sub: 'A steady practice target' },
+  { value: 300, label: '300 words', sub: 'The balanced default' },
+  { value: 500, label: '500 words', sub: 'A bigger daily stretch' },
+] as const;
+
+const ONBOARDING_COMPLETE_PREFIX = 'draftora-onboarding-complete-v1';
+
+function getOnboardingCompleteKey(userId: string) {
+  return `${ONBOARDING_COMPLETE_PREFIX}:${userId}`;
+}
+
+function readOnboardingComplete(userId?: string | null) {
+  if (typeof window === 'undefined' || !userId) return false;
+  try {
+    return localStorage.getItem(getOnboardingCompleteKey(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingComplete(userId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(getOnboardingCompleteKey(userId), '1');
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function getDailyGoalLabel(value: number) {
+  return `${value.toLocaleString()} words`;
+}
+
+function getRoleCopy(choice: AccountTypeChoice) {
+  if (choice === 'teacher') return 'Open teacher app';
+  if (choice === 'parent') return 'Open parent app';
+  return 'Continue to student setup';
+}
 
 export default function OnboardingModal() {
   const { profile, refreshProfile } = useAuth();
-  const [step, setStep]           = useState(1);
-  const [ageGroup, setAgeGroup]   = useState('');
-  const [goal, setGoal]           = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
-  // Show only for users who haven't completed onboarding.
-  // Use custom_daily_goal as the indicator (always exists) — default is 'Write for 10 minutes'.
-  // Also respect local dismissed flag so the modal closes instantly without waiting for DB.
-  const DEFAULTS = ['Write for 10 minutes', 'Skipped onboarding', ''];
-  const needsOnboarding = profile && DEFAULTS.includes(profile.custom_daily_goal);
-  if (dismissed || !needsOnboarding) return null;
+  const [ready, setReady] = useState(false);
+  const [complete, setComplete] = useState(false);
+  const [step, setStep] = useState<OnboardingStep>(1);
+  const [saving, setSaving] = useState(false);
+  const [busyChoice, setBusyChoice] = useState<AccountTypeChoice | null>(null);
+  const [error, setError] = useState('');
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState('');
+  const [selectedDailyGoal, setSelectedDailyGoal] = useState<number | null>(null);
+  const [selectedExperience, setSelectedExperience] = useState<number | null>(null);
 
-  const handleSave = async () => {
-    if (!goal.trim()) return;
-    setSaving(true);
-    await supabase
-      .from('profiles')
-      .update({ custom_daily_goal: goal.trim(), age_group: ageGroup })
-      .eq('id', profile!.id);
-    await refreshProfile();
+  useEffect(() => {
+    if (!profile?.id) {
+      setReady(false);
+      setComplete(false);
+      return;
+    }
+
+    setStep(1);
     setSaving(false);
-    setDismissed(true);
+    setBusyChoice(null);
+    setError('');
+    setSelectedAgeGroup((current) => current || profile.age_group || AGE_GROUP_OPTIONS[0].value);
+    setSelectedDailyGoal((current) => current ?? profile.daily_word_goal ?? 300);
+    setSelectedExperience((current) => current ?? normalizeWritingExperienceScore(profile.writing_experience_score));
+    setComplete(readOnboardingComplete(profile.id));
+    setReady(true);
+  }, [profile?.id, profile?.age_group, profile?.daily_word_goal, profile?.writing_experience_score]);
+
+  if (!profile || !ready || complete) return null;
+
+  if (profile.account_type === 'teacher' || profile.account_type === 'parent') return null;
+
+  const stepTitle =
+    step === 1 ? 'Choose your app' :
+    step === 2 ? 'Age group' :
+    step === 3 ? 'Daily goal' :
+    'Writing level';
+
+  const stepDescription =
+    step === 1
+      ? 'Pick the workspace that should open after sign-in.'
+      : step === 2
+        ? 'This shapes prompts, vocabulary, and feedback.'
+        : step === 3
+          ? 'This sets the target shown on your dashboard.'
+          : 'This tunes the depth of coaching and feedback.';
+
+  const stepCounter = step === 1 ? 'Start here' : `Step ${step - 1} of 3`;
+
+  const goBack = () => {
+    setError('');
+    setStep((current) => (current > 1 ? ((current - 1) as OnboardingStep) : current));
   };
 
-  const handleSkip = () => {
-    setDismissed(true);
+  const persistProfilePatch = async (patch: Record<string, unknown>) => {
+    try {
+      const { error: updateError } = await withPromiseTimeout(
+        supabase.from('profiles').update(patch).eq('id', profile.id),
+        15000,
+        'Saving your setup took too long.',
+      );
+
+      return updateError ?? null;
+    } catch (caught) {
+      if (caught instanceof PromiseTimeoutError) {
+        return caught;
+      }
+      throw caught;
+    }
   };
+
+  const completeStudentOnboarding = async () => {
+    if (!profile) return;
+
+    const nextAgeGroup = selectedAgeGroup || AGE_GROUP_OPTIONS[0].value;
+    const nextDailyGoal = Number.isFinite(selectedDailyGoal ?? NaN) ? (selectedDailyGoal as number) : 300;
+    const nextExperience = normalizeWritingExperienceScore(selectedExperience ?? profile.writing_experience_score);
+
+    setSaving(true);
+    setError('');
+
+    writeAccountTypeOverride(profile.id, 'student');
+    writeAgeGroupOverride(profile.id, nextAgeGroup);
+    writeWritingExperienceOverride(profile.id, nextExperience);
+
+    const { error: metadataError } = await supabase.auth.updateUser({
+      data: { account_type: 'student' },
+    });
+
+    if (metadataError) {
+      setError(metadataError.message || 'Could not save your setup right now.');
+      setSaving(false);
+      return;
+    }
+
+    const updateError = await persistProfilePatch({
+      account_type: 'student',
+      student_id: profile.student_id ?? generateStudentCode(),
+      age_group: nextAgeGroup,
+      daily_word_goal: nextDailyGoal,
+      custom_daily_goal: `Write ${getDailyGoalLabel(nextDailyGoal)} each day`,
+      writing_experience_score: nextExperience,
+    }).catch((caught) => caught);
+
+    if (updateError) {
+      const message =
+        updateError instanceof Error
+          ? updateError.message
+          : typeof updateError === 'object' && updateError !== null && 'message' in updateError
+            ? String((updateError as { message?: unknown }).message ?? '')
+            : '';
+      const missingField =
+        isMissingAccountTypeColumnError(message) ||
+        isMissingAgeGroupColumnError(message) ||
+        isMissingWritingExperienceColumnError(message);
+
+      if (!missingField && !(updateError instanceof PromiseTimeoutError)) {
+        setError('Could not save your student setup. Please try again.');
+        setSaving(false);
+        return;
+      }
+    }
+
+    markOnboardingComplete(profile.id);
+    setComplete(true);
+    setSaving(false);
+    void refreshProfile().catch(() => {});
+  };
+
+  const chooseAppType = async (choice: AccountTypeChoice) => {
+    if (!profile || saving) return;
+
+    setBusyChoice(choice);
+    setError('');
+
+    if (choice === 'student') {
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: { account_type: 'student' },
+      });
+
+      if (metadataError) {
+        setError(metadataError.message || 'Could not open the student app yet.');
+        setBusyChoice(null);
+        return;
+      }
+
+      setStep(2);
+      setBusyChoice(null);
+      return;
+    }
+
+    writeAccountTypeOverride(profile.id, choice);
+
+    const { error: metadataError } = await supabase.auth.updateUser({
+      data: { account_type: choice },
+    });
+
+    if (metadataError) {
+      setError(metadataError.message || 'Could not open that app right now.');
+      setBusyChoice(null);
+      return;
+    }
+
+    const updateError = await persistProfilePatch({ account_type: choice });
+    if (updateError) {
+      const message =
+        updateError instanceof Error
+          ? updateError.message
+          : typeof updateError === 'object' && updateError !== null && 'message' in updateError
+            ? String((updateError as { message?: unknown }).message ?? '')
+            : '';
+      const missingField = isMissingAccountTypeColumnError(message);
+
+      if (!missingField && !(updateError instanceof PromiseTimeoutError)) {
+        setError(message || 'Could not open that app right now.');
+        setBusyChoice(null);
+        return;
+      }
+    }
+
+    markOnboardingComplete(profile.id);
+    setComplete(true);
+    setBusyChoice(null);
+    void refreshProfile().catch(() => {});
+    window.location.replace(getAccountHomePath(choice));
+  };
+
+  const finishStudentFlow = async () => {
+    if (step < 4) {
+      setStep((current) => ((current + 1) as OnboardingStep));
+      return;
+    }
+
+    await completeStudentOnboarding();
+  };
+
+  const appChoices: Array<{
+    value: AccountTypeChoice;
+    title: string;
+    description: string;
+    icon: ReactNode;
+    accent: string;
+  }> = [
+    {
+      value: 'teacher',
+      title: 'Teacher app',
+      description: 'Classrooms, student reports, and batch setup.',
+      icon: <School style={{ width: 18, height: 18 }} />,
+      accent: '#60a5fa',
+    },
+    {
+      value: 'student',
+      title: 'Student app',
+      description: 'Set up your writing space and daily routine.',
+      icon: <BookOpen style={{ width: 18, height: 18 }} />,
+      accent: '#67e8f9',
+    },
+    {
+      value: 'parent',
+      title: 'Parent app',
+      description: 'Linked students, progress reports, and family settings.',
+      icon: <Users style={{ width: 18, height: 18 }} />,
+      accent: '#2dd4bf',
+    },
+  ];
 
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(0,0,0,0.8)',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 80,
+        display: 'grid',
+        placeItems: 'center',
+        padding: '1rem',
+        background: 'linear-gradient(180deg, rgba(2, 8, 20, 0.82) 0%, rgba(2, 8, 20, 0.9) 100%)',
         backdropFilter: 'blur(16px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 20,
       }}
     >
       <div
         style={{
-          width: '100%', maxWidth: 580,
+          width: 'min(920px, calc(100vw - 1rem))',
+          maxHeight: 'calc(100vh - 1rem)',
+          overflowY: 'auto',
           borderRadius: 28,
-          background: 'var(--t-card)',
-          border: '1px solid var(--t-brd)',
-          boxShadow: '0 40px 100px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
-          overflow: 'hidden',
+          background: 'linear-gradient(180deg, rgba(3, 23, 38, 0.98) 0%, rgba(2, 12, 24, 0.98) 100%)',
+          border: '1px solid rgba(45, 212, 191, 0.18)',
+          boxShadow: '0 32px 90px rgba(2, 18, 38, 0.72)',
+          color: '#e8fbff',
         }}
       >
-        {/* ── Gradient header ── */}
-        <div style={{
-          padding: '28px 32px 22px',
-          background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 18%, var(--t-card)), var(--t-card))',
-          borderBottom: '1px solid var(--t-brd)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 16,
-              background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
-              border: '1px solid var(--t-brd-a)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <PenLine style={{ width: 22, height: 22, color: 'var(--t-acc)' }} />
-            </div>
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-acc)', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 3 }}>
-                Welcome to Draftly
+        <div style={{ padding: '1.25rem 1.25rem 0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.24em', textTransform: 'uppercase', color: 'rgba(103, 232, 249, 0.9)' }}>
+                {stepCounter}
               </p>
-              <h1 style={{ fontSize: 20, fontWeight: 900, color: 'var(--t-tx)', lineHeight: 1.2 }}>
-                {step === 1 ? 'Let\'s personalise your journey' : 'What\'s your writing goal?'}
-              </h1>
+              <h2 style={{ margin: '0.75rem 0 0', fontFamily: 'var(--font-playfair), Georgia, serif', fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 0.96, color: '#ffffff' }}>
+                {stepTitle}
+              </h2>
+              <p style={{ margin: '0.85rem 0 0', maxWidth: 760, color: 'rgba(199, 249, 255, 0.76)', lineHeight: 1.7, fontSize: 15 }}>
+                {stepDescription}
+              </p>
             </div>
+
+            <button
+              type="button"
+              onClick={step > 1 ? goBack : undefined}
+              disabled={step === 1}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                border: '1px solid rgba(125, 211, 252, 0.2)',
+                background: step === 1 ? 'rgba(3, 23, 38, 0.55)' : 'rgba(103, 232, 249, 0.1)',
+                color: step === 1 ? 'rgba(199, 249, 255, 0.3)' : '#67e8f9',
+                cursor: step === 1 ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+              aria-label="Go back"
+            >
+              <ArrowLeft style={{ width: 17, height: 17 }} />
+            </button>
           </div>
 
-          {/* Step bar */}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {[1, 2].map(s => (
-              <div key={s} style={{
-                height: 5, borderRadius: 99, flex: 1,
-                background: s <= step ? 'var(--t-acc)' : 'var(--t-brd)',
-                transition: 'background 0.3s',
-                boxShadow: s <= step ? '0 0 8px var(--t-acc-a)' : 'none',
-              }} />
-            ))}
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-tx3)', marginLeft: 8, whiteSpace: 'nowrap' }}>
-              Step {step} of 2
-            </span>
+          <div style={{ marginTop: 18, height: 6, borderRadius: 999, background: 'rgba(125, 211, 252, 0.12)', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${step * 25}%`,
+                borderRadius: 999,
+                background: 'linear-gradient(90deg, #0f766e, #14b8a6 45%, #67e8f9 100%)',
+                transition: 'width 0.35s ease',
+              }}
+            />
           </div>
         </div>
 
-        {/* ── Body ── */}
-        <div style={{ padding: '24px 32px 28px' }}>
+        {error ? (
+          <div style={{ margin: '0.9rem 1.25rem 0', padding: '0.9rem 1rem', borderRadius: 16, background: 'rgba(127, 29, 29, 0.2)', border: '1px solid rgba(248, 113, 113, 0.26)', color: '#fecaca', fontSize: 14, lineHeight: 1.55 }}>
+            {error}
+          </div>
+        ) : null}
 
-          {/* ── STEP 1: Age group ── */}
+        <div style={{ padding: '1.1rem 1.25rem 1.25rem' }}>
           {step === 1 && (
-            <>
-              <p style={{ fontSize: 14, color: 'var(--t-tx3)', marginBottom: 18 }}>
-                This helps us tailor feedback, prompts, and lessons to suit your level.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>
-                {AGE_GROUPS.map(ag => {
-                  const selected = ageGroup === ag.value;
-                  return (
-                    <button
-                      key={ag.value}
-                      onClick={() => setAgeGroup(ag.value)}
-                      style={{
-                        padding: '14px 12px',
-                        borderRadius: 16,
-                        border: selected ? '2px solid var(--t-acc)' : '1.5px solid var(--t-brd)',
-                        background: selected ? 'var(--t-acc-a)' : 'var(--t-bg)',
-                        cursor: 'pointer', textAlign: 'center',
-                        transition: 'all 0.15s',
-                        position: 'relative',
-                      }}
-                    >
-                      {selected && (
-                        <div style={{
-                          position: 'absolute', top: 8, right: 8,
-                          width: 18, height: 18, borderRadius: 99,
-                          background: 'var(--t-acc)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <Check style={{ width: 11, height: 11, color: '#fff' }} />
-                        </div>
-                      )}
-                      <div style={{ fontSize: 26, marginBottom: 6 }}>{ag.emoji}</div>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: selected ? 'var(--t-acc)' : 'var(--t-tx)', lineHeight: 1 }}>{ag.label}</p>
-                      <p style={{ fontSize: 10, color: 'var(--t-tx3)', marginTop: 4, lineHeight: 1.3 }}>{ag.sub}</p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  onClick={handleSkip}
-                  style={{
-                    padding: '12px 20px', borderRadius: 14, fontSize: 13, fontWeight: 600,
-                    border: '1px solid var(--t-brd)', background: 'transparent',
-                    color: 'var(--t-tx3)', cursor: 'pointer',
-                  }}
-                >
-                  Skip for now
-                </button>
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={!ageGroup}
-                  style={{
-                    flex: 1, padding: '13px 20px', borderRadius: 14,
-                    background: ageGroup ? 'var(--t-btn)' : 'var(--t-bg)',
-                    color: ageGroup ? 'var(--t-btn-color)' : 'var(--t-tx3)',
-                    border: 'none', fontSize: 15, fontWeight: 700,
-                    cursor: ageGroup ? 'pointer' : 'not-allowed',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  Continue <ChevronRight style={{ width: 16, height: 16 }} />
-                </button>
-              </div>
-            </>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+              {appChoices.map((choice) => {
+                const active = busyChoice === choice.value;
+                return (
+                  <button
+                    key={choice.value}
+                    type="button"
+                    onClick={() => void chooseAppType(choice.value)}
+                    disabled={saving || busyChoice !== null}
+                    style={{
+                      minHeight: 180,
+                      padding: '1.1rem',
+                      borderRadius: 22,
+                      textAlign: 'left',
+                      border: `1px solid ${choice.accent}33`,
+                      background: `linear-gradient(180deg, color-mix(in srgb, ${choice.accent} 10%, rgba(3, 23, 38, 0.96)) 0%, rgba(3, 23, 38, 0.92) 100%)`,
+                      boxShadow: active ? `0 18px 44px color-mix(in srgb, ${choice.accent} 18%, transparent)` : '0 16px 36px rgba(0,0,0,0.18)',
+                      color: '#e8fbff',
+                      cursor: saving || busyChoice !== null ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 16,
+                      background: `linear-gradient(135deg, ${choice.accent}, color-mix(in srgb, ${choice.accent} 55%, white))`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      boxShadow: `0 10px 22px color-mix(in srgb, ${choice.accent} 22%, transparent)`,
+                    }}>
+                      {choice.icon}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: '-0.03em' }}>
+                        {choice.title}
+                      </p>
+                      <p style={{ margin: '0.5rem 0 0', color: 'rgba(199, 249, 255, 0.76)', lineHeight: 1.6, fontSize: 13.5 }}>
+                        {choice.description}
+                      </p>
+                    </div>
+                    <div style={{
+                      marginTop: 'auto',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      color: choice.accent,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}>
+                      {active ? 'Opening...' : getRoleCopy(choice.value)}
+                      <PenLine style={{ width: 13, height: 13 }} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           )}
 
-          {/* ── STEP 2: Writing goal ── */}
           {step === 2 && (
-            <>
-              <p style={{ fontSize: 14, color: 'var(--t-tx3)', marginBottom: 16 }}>
-                Your coach will use this to give personalised guidance and track your progress toward your goal.
-              </p>
-
-              {/* Quick chips */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                {GOAL_CHIPS.map(chip => {
-                  const selected = goal === chip;
-                  return (
-                    <button
-                      key={chip}
-                      onClick={() => setGoal(chip)}
-                      style={{
-                        padding: '7px 14px', borderRadius: 99,
-                        border: selected ? '1.5px solid var(--t-acc)' : '1.5px solid var(--t-brd)',
-                        background: selected ? 'var(--t-acc-a)' : 'transparent',
-                        color: selected ? 'var(--t-acc)' : 'var(--t-tx3)',
-                        fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {chip}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <textarea
-                value={goal}
-                onChange={e => setGoal(e.target.value)}
-                placeholder="Or write your own goal…"
-                rows={3}
-                style={{
-                  width: '100%', borderRadius: 14,
-                  background: 'var(--t-bg)',
-                  border: '1.5px solid var(--t-brd)',
-                  color: 'var(--t-tx)',
-                  fontSize: 15, padding: '12px 16px',
-                  resize: 'none', outline: 'none',
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit',
-                  lineHeight: 1.6,
-                }}
-                onFocus={e => { e.target.style.borderColor = 'var(--t-brd-a)'; }}
-                onBlur={e => { e.target.style.borderColor = 'var(--t-brd)'; }}
-              />
-
-              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                <button
-                  onClick={() => setStep(1)}
-                  style={{
-                    padding: '12px 20px', borderRadius: 14, fontSize: 13, fontWeight: 600,
-                    border: '1px solid var(--t-brd)', background: 'transparent',
-                    color: 'var(--t-tx3)', cursor: 'pointer',
-                  }}
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={!goal.trim() || saving}
-                  style={{
-                    flex: 1, padding: '13px 20px', borderRadius: 14,
-                    background: goal.trim() ? 'var(--t-btn)' : 'var(--t-bg)',
-                    color: goal.trim() ? 'var(--t-btn-color)' : 'var(--t-tx3)',
-                    border: 'none', fontSize: 15, fontWeight: 700,
-                    cursor: goal.trim() && !saving ? 'pointer' : 'not-allowed',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {saving
-                    ? 'Saving…'
-                    : <><Sparkles style={{ width: 16, height: 16 }} /> Start my journey</>}
-                </button>
-              </div>
-            </>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+              {AGE_GROUP_OPTIONS.map((option) => {
+                const selected = selectedAgeGroup === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedAgeGroup(option.value)}
+                    style={{
+                      borderRadius: 18,
+                      padding: '1rem 1rem 0.95rem',
+                      border: selected ? '1px solid rgba(103, 232, 249, 0.42)' : '1px solid rgba(125, 211, 252, 0.14)',
+                      background: selected
+                        ? 'linear-gradient(135deg, rgba(8, 145, 178, 0.32), rgba(3, 23, 38, 0.94))'
+                        : 'rgba(3, 23, 38, 0.72)',
+                      color: '#e8fbff',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{option.label}</p>
+                    <p style={{ margin: '0.45rem 0 0', color: 'rgba(199, 249, 255, 0.72)', fontSize: 13.5, lineHeight: 1.5 }}>
+                      {option.sub}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
           )}
+
+          {step === 3 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+              {DAILY_GOAL_OPTIONS.map((option) => {
+                const selected = selectedDailyGoal === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedDailyGoal(option.value)}
+                    style={{
+                      borderRadius: 18,
+                      padding: '1rem 1rem 0.95rem',
+                      border: selected ? '1px solid rgba(45, 212, 191, 0.5)' : '1px solid rgba(125, 211, 252, 0.14)',
+                      background: selected
+                        ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.28), rgba(3, 23, 38, 0.94))'
+                        : 'rgba(3, 23, 38, 0.72)',
+                      color: '#e8fbff',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{option.label}</p>
+                    <p style={{ margin: '0.45rem 0 0', color: 'rgba(199, 249, 255, 0.72)', fontSize: 13.5, lineHeight: 1.5 }}>
+                      {option.sub}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {step === 4 && (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {WRITING_EXPERIENCE_CHOICES.map((choice) => {
+                const selected = selectedExperience === choice.score;
+                return (
+                  <button
+                    key={choice.value}
+                    type="button"
+                    onClick={() => setSelectedExperience(choice.score)}
+                    style={{
+                      borderRadius: 18,
+                      padding: '1rem 1rem 0.95rem',
+                      border: selected ? '1px solid rgba(103, 232, 249, 0.42)' : '1px solid rgba(125, 211, 252, 0.14)',
+                      background: selected
+                        ? 'linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(3, 23, 38, 0.94))'
+                        : 'rgba(3, 23, 38, 0.72)',
+                      color: '#e8fbff',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{choice.label}</p>
+                    <p style={{ margin: '0.45rem 0 0', color: 'rgba(199, 249, 255, 0.72)', fontSize: 13.5, lineHeight: 1.5 }}>
+                      {choice.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {step > 1 ? (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  void finishStudentFlow();
+                }}
+                disabled={saving}
+                style={{
+                  minWidth: 170,
+                  minHeight: 48,
+                  padding: '0 1.25rem',
+                  borderRadius: 16,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #0f766e, #14b8a6 48%, #67e8f9 100%)',
+                  color: '#ecfeff',
+                  fontWeight: 800,
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 16px 36px rgba(34, 211, 238, 0.18)',
+                }}
+              >
+                {saving ? 'Saving...' : step === 4 ? 'Finish setup' : 'Continue'}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

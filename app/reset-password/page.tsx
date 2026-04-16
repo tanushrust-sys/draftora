@@ -65,10 +65,10 @@ export default function ResetPasswordPage() {
     <AuthShell
       eyebrow="Secure your account"
       title="Choose a new password"
-      description="Set a fresh password for your account and we’ll send you straight back into Draftly."
+      description="Set a fresh password for your account and we’ll send you straight back into Draftora."
       footer={
         !success ? (
-          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.62)' }}>
+          <p className="text-sm" style={{ color: 'var(--t-tx2)' }}>
             Want to return instead? <Link href="/login" className="auth-link">Go to login</Link>
           </p>
         ) : undefined

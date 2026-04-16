@@ -2,9 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
+import { FetchTimeoutError, fetchWithTimeout } from '@/app/lib/fetch-with-timeout';
+import {
+  mergeStoredCoachConversations,
+  readStoredCoachConversations,
+  type StoredCoachConversation,
+} from '@/app/lib/coach-conversation-storage';
+import { withPromiseTimeout } from '@/app/lib/promise-with-timeout';
 import { supabase } from '@/app/lib/supabase';
-import { getTrialStatus, TRIAL_LIMITS } from '@/app/lib/trial';
-import UpgradeModal, { FeatureBlockWall, LimitWarningBanner } from '@/app/components/UpgradeModal';
+import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
+import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import {
   Bot, Send, Brain, Sparkles, RotateCcw,
   Plus, MessageSquare, Clock, Target, PenLine, BookOpen,
@@ -13,7 +20,7 @@ import {
 } from 'lucide-react';
 
 type Message      = { role: 'user' | 'assistant'; content: string };
-type Conversation = { id: string; mode: string; trainer_type: string; messages: Message[]; updated_at: string };
+type Conversation = StoredCoachConversation;
 type GoalData = {
   writings:      { id: string; title: string; word_count: number; status: string; created_at: string; category: string }[];
   vocabTotal:    number;
@@ -32,6 +39,10 @@ const TRAINERS = [
   { value: 'goal',               label: 'My Goal',            icon: Trophy,       color: '#f0c846', bg: 'rgba(240,200,70,0.14)',  emoji: '🎯' },
 ] as const;
 
+const COACH_REPLY_TIMEOUT_MS = 20000;
+const COACH_SAVE_TIMEOUT_MS = 20000;
+const COACH_PROFILE_REFRESH_TIMEOUT_MS = 5000;
+
 const STARTER_QUESTIONS: Record<string, string[]> = {
   general:              ['Help me write a strong thesis statement', 'How do I make my writing more descriptive?', 'Give me ideas for a creative story', 'What makes a great opening line?', 'How can I improve my vocabulary usage?', 'Help me structure my ideas better'],
   creative:             ['Give me a vivid story idea', 'How do I write better characters?', 'What makes a great plot twist?', 'Help me write a powerful opening scene', 'How do I show emotion in writing?', 'Give me a creative writing prompt'],
@@ -42,6 +53,14 @@ const STARTER_QUESTIONS: Record<string, string[]> = {
   Email:                ['Help me write a professional email', 'How do I write a clear subject line?', 'How do I politely decline something?', 'Help me write a follow-up email', 'How do I sound confident but not arrogant?', 'Help me apologise professionally'],
   goal:                 [],
 };
+
+function formatCoachResponse(text: string) {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -104,10 +123,10 @@ function GoalDashboard({
       {/* ── Stats ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { emoji: '✍️', label: 'Writings',    value: goalData?.writings.length ?? '—', color: 'var(--t-mod-write)' },
-          { emoji: '📚', label: 'Words mastered', value: goalData?.vocabMastered ?? '—',  color: 'var(--t-mod-vocab)' },
-          { emoji: '🔥', label: 'Day streak',  value: profile.streak,                   color: 'var(--t-warning)' },
-          { emoji: '⚡', label: 'Total XP',    value: profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp, color: 'var(--t-mod-rewards)' },
+          { emoji: '✍️', label: 'Drafts',         value: goalData?.writings.length ?? '—', color: 'var(--t-mod-write)' },
+          { emoji: '📚', label: 'Word Wins',      value: goalData?.vocabMastered ?? '—',  color: 'var(--t-mod-vocab)' },
+          { emoji: '🔥', label: 'Hot Streak',     value: profile.streak,                   color: 'var(--t-warning)' },
+          { emoji: '⚡', label: 'XP Stash',       value: profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp, color: 'var(--t-mod-rewards)' },
         ].map(({ emoji, label, value, color }) => (
           <div key={label} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 18, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: -12, right: -12, fontSize: 40, opacity: 0.08, pointerEvents: 'none' }}>{emoji}</div>
@@ -120,7 +139,7 @@ function GoalDashboard({
       {/* ── Recent writings ── */}
       {goalData && goalData.writings.length > 0 && (
         <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '18px 20px', marginBottom: 20 }}>
-          <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.18em', marginBottom: 14 }}>Recent Writings</p>
+          <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.18em', marginBottom: 14 }}>Fresh Drafts</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {goalData.writings.slice(0, 5).map(w => (
               <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 14, background: 'var(--t-bg)', border: '1px solid var(--t-brd)' }}>
@@ -176,20 +195,22 @@ function GoalDashboard({
    MAIN COMPONENT
    ────────────────────────────────────────────────────────────────────────── */
 export default function CoachPage() {
-  const { profile, refreshProfile } = useAuth();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const { profile, session, refreshProfile } = useAuth();
 
   const [messages, setMessages]           = useState<Message[]>([]);
   const [input, setInput]                 = useState('');
   const [mode, setMode]                   = useState<'thinking' | 'creative'>('thinking');
   const [trainerType, setTrainerType]     = useState('general');
   const [loading, setLoading]             = useState(false);
+  const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
+  const [coachError, setCoachError]       = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId]           = useState<string | null>(null);
   const [goalData, setGoalData]           = useState<GoalData | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
+  const initialConversationHydrated = useRef(false);
 
   const trainer = getTrainer(trainerType);
 
@@ -212,111 +233,245 @@ export default function CoachPage() {
 
   const loadConversations = useCallback(async () => {
     if (!profile) return;
-    const { data } = await supabase.from('coach_conversations').select('id, mode, trainer_type, messages, updated_at').eq('user_id', profile.id).order('updated_at', { ascending: false }).limit(30);
-    setConversations((data ?? []) as Conversation[]);
+    const stored = readStoredCoachConversations(profile.id);
+
+    try {
+      const { data, error } = await supabase
+        .from('coach_conversations')
+        .select('id, mode, trainer_type, messages, updated_at')
+        .eq('user_id', profile.id)
+        .order('updated_at', { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+
+      const merged = mergeStoredCoachConversations(profile.id, (data ?? []) as Conversation[]);
+      setConversations(merged);
+    } catch (error) {
+      console.warn('loadConversations warning:', error);
+      setConversations(stored);
+    }
   }, [profile]);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
-  const saveConversation = useCallback(async (msgs: Message[], convId: string | null) => {
-    if (!profile || msgs.length < 2) return convId;
-    if (convId) {
-      await supabase.from('coach_conversations').update({ messages: msgs, updated_at: new Date().toISOString() }).eq('id', convId);
-      await loadConversations();
-      return convId;
-    } else {
-      const { data } = await supabase.from('coach_conversations').insert({ user_id: profile.id, mode, trainer_type: trainerType, messages: msgs }).select('id').single();
-      await loadConversations();
-      return data?.id ?? null;
-    }
-  }, [profile, mode, trainerType, loadConversations]);
+  const saveConversation = useCallback(async (
+    msgs: Message[],
+    convId: string | null,
+    conversationMode: 'thinking' | 'creative' = mode,
+    conversationTrainerType: string = trainerType,
+  ) => {
+    if (!profile || msgs.length === 0) return convId;
+
+    const id = convId ?? crypto.randomUUID();
+    const updatedAt = new Date().toISOString();
+    const snapshot: Conversation = {
+      id,
+      mode: conversationMode,
+      trainer_type: conversationTrainerType,
+      messages: msgs,
+      updated_at: updatedAt,
+    };
+
+    const merged = mergeStoredCoachConversations(profile.id, [snapshot]);
+    setConversations(merged);
+
+    void withPromiseTimeout(
+      supabase.from('coach_conversations').upsert({
+        id,
+        user_id: profile.id,
+        mode: conversationMode,
+        trainer_type: conversationTrainerType,
+        messages: msgs,
+        updated_at: updatedAt,
+      }, {
+        onConflict: 'id',
+      }),
+      COACH_SAVE_TIMEOUT_MS,
+      'Saving coach conversation took too long.',
+    ).catch((error) => {
+      console.error('saveConversation error:', error);
+    });
+
+    return id;
+  }, [profile, mode, trainerType]);
+
+  const loadSession = useCallback((conv: Conversation) => {
+    setMessages(conv.messages as Message[]);
+    setActiveId(conv.id);
+    setMode(conv.mode as 'thinking' | 'creative');
+    setTrainerType(conv.trainer_type);
+    setQueuedMessages([]);
+    setCoachError('');
+  }, []);
+
+  useEffect(() => {
+    if (initialConversationHydrated.current || activeId || messages.length > 0 || conversations.length === 0) return;
+    initialConversationHydrated.current = true;
+    loadSession(conversations[0]);
+  }, [activeId, conversations, loadSession, messages.length]);
 
   const send = async (text?: string) => {
-    const msg = text || input.trim();
-    if (!msg || loading || !profile) return;
+    const msg = (text ?? input).trim();
+    if (!msg || !profile) return;
 
-    // ── Trial gate ──
-    const ts = getTrialStatus(profile);
-    if (ts.coachBlocked) { setShowUpgradeModal(true); return; }
+    if (loading) {
+      setQueuedMessages(prev => [...prev, msg]);
+      setInput('');
+      return;
+    }
 
     const updated: Message[] = [...messages, { role: 'user', content: msg }];
+    const conversationId = activeId ?? crypto.randomUUID();
     setMessages(updated);
+    if (!activeId) setActiveId(conversationId);
     setInput('');
+    setCoachError('');
     setLoading(true);
+    void saveConversation(updated, conversationId, mode, trainerType);
     try {
-      const res = await fetch('/api/ai-coach', {
+      let accessToken = session?.access_token ?? null;
+      if (!accessToken) {
+        const { data } = await supabase.auth.getSession();
+        accessToken = data.session?.access_token ?? null;
+      }
+      const [latestRes, reviewedRes] = await Promise.all([
+        supabase
+          .from('writings')
+          .select('id, title, category, prompt, word_count, content, feedback, strengths, improvements, status, created_at')
+          .eq('user_id', profile.id)
+          .order('created_at', { ascending: false })
+          .limit(1),
+        supabase
+          .from('writings')
+          .select('id, title, category, prompt, word_count, content, feedback, strengths, improvements, status, created_at')
+          .eq('user_id', profile.id)
+          .eq('status', 'reviewed')
+          .order('created_at', { ascending: false })
+          .limit(8),
+      ]);
+      const clientContext = {
+        latestWriting: latestRes.data?.[0] ?? null,
+        reviewed: reviewedRes.data ?? [],
+      };
+      const res = await fetchWithTimeout('/api/ai-coach', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updated, mode, trainerType, userId: profile.id,
-          userContext: { username: profile.username, level: profile.level, xp: profile.xp, streak: profile.streak, customGoal: profile.custom_daily_goal, ageGroup: (profile as { age_group?: string })?.age_group },
+          accessToken,
+          clientContext,
+          userContext: {
+            username: profile.username,
+            level: profile.level,
+            xp: profile.xp,
+            streak: profile.streak,
+            customGoal: profile.custom_daily_goal,
+            ageGroup: profile.age_group,
+            writingExperienceScore: profile.writing_experience_score ?? 0,
+          },
         }),
-      });
-      const data = await res.json();
-      const withReply: Message[] = [...updated, { role: 'assistant', content: data.response }];
+      }, COACH_REPLY_TIMEOUT_MS);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || typeof data.response !== 'string') {
+        throw new Error(data?.error || 'Failed to get coach response.');
+      }
+      const withReply: Message[] = [...updated, { role: 'assistant', content: formatCoachResponse(data.response) }];
       setMessages(withReply);
-      const newId = await saveConversation(withReply, activeId);
-      if (newId && !activeId) setActiveId(newId as string);
+      void saveConversation(withReply, conversationId, mode, trainerType);
+      void persistWritingExperienceScore(
+        profile.id,
+        (readWritingExperienceOverride(profile.id) ?? profile.writing_experience_score ?? 0) + getExperienceIncreaseForAction('coach'),
+      ).catch(() => {});
+      incrementProfileOverride(profile.id, 'coach_messages_used', 1);
 
       // Increment coach_messages_used counter
-      if (profile.plan !== 'plus') {
-        await supabase.from('profiles')
+      void withPromiseTimeout(
+        supabase.from('profiles')
           .update({ coach_messages_used: (profile.coach_messages_used ?? 0) + 1 })
-          .eq('id', profile.id);
-        await refreshProfile();
-      }
-    } catch {
+          .eq('id', profile.id),
+        COACH_PROFILE_REFRESH_TIMEOUT_MS,
+        'Updating coach usage took too long.',
+      ).catch(() => {});
+
+      void withPromiseTimeout(
+        refreshProfile(),
+        COACH_PROFILE_REFRESH_TIMEOUT_MS,
+        'Refreshing coach usage took too long.',
+      ).catch(() => {});
+    } catch (error) {
+      const fallbackMessage = error instanceof FetchTimeoutError
+        ? 'I took too long to answer, but your message is still saved. Send the next message and I will keep going.'
+        : "I hit a snag answering that, but your message is still saved. Try the next message and I'll keep helping.";
+      const withFallback: Message[] = [...updated, { role: 'assistant', content: fallbackMessage }];
+      setMessages(withFallback);
+      setCoachError(
+        error instanceof FetchTimeoutError
+          ? 'Coach took too long to reply, so you can keep sending while it catches up.'
+          : 'Coach ran into an error, but your chat was still saved.',
+      );
+      void saveConversation(withFallback, conversationId, mode, trainerType);
+      setLoading(false);
+      return;
       setMessages(prev => [...prev, { role: 'assistant', content: "I'm having a moment — please try again!" }]);
     }
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (loading || queuedMessages.length === 0) return;
+    const [nextQueued, ...remainingQueued] = queuedMessages;
+    setQueuedMessages(remainingQueued);
+    void send(nextQueued);
+  }, [loading, queuedMessages]);
+
   const startNewChat = () => {
+    initialConversationHydrated.current = true;
     setMessages([]);
     setActiveId(null);
     setMode('thinking');
     setTrainerType('general');
+    setQueuedMessages([]);
+    setCoachError('');
     inputRef.current?.focus();
-  };
-
-  const loadSession = (conv: Conversation) => {
-    setMessages(conv.messages as Message[]);
-    setActiveId(conv.id);
-    setMode(conv.mode as 'thinking' | 'creative');
-    setTrainerType(conv.trainer_type);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
-  if (!profile) return null;
-
-  const trialStatus = getTrialStatus(profile);
-  const starters    = STARTER_QUESTIONS[trainerType] ?? STARTER_QUESTIONS.general;
-  const TrainerIcon = trainer.icon as LucideIcon;
-
-  /* ── Coach fully blocked ── */
-  if (trialStatus.coachBlocked) {
+  if (!profile) {
     return (
-      <>
-        {showUpgradeModal && (
-          <UpgradeModal reason="coach" status={trialStatus} onClose={() => setShowUpgradeModal(false)} />
-        )}
-        <FeatureBlockWall
-          reason="coach"
-          status={trialStatus}
-          onUpgradeClick={() => setShowUpgradeModal(true)}
-        />
-      </>
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--t-bg)',
+        color: 'var(--t-tx3)',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 18px',
+          borderRadius: 16,
+          background: 'var(--t-card)',
+          border: '1px solid var(--t-brd)',
+          boxShadow: '0 18px 50px rgba(0,0,0,0.18)',
+        }}>
+          <div style={{ width: 18, height: 18, borderRadius: 999, background: 'var(--t-acc)', animation: 'pulse 1.4s infinite' }} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Loading your coach...</span>
+        </div>
+      </div>
     );
   }
+
+  const starters    = STARTER_QUESTIONS[trainerType] ?? STARTER_QUESTIONS.general;
+  const TrainerIcon = trainer.icon as LucideIcon;
 
   /* ────────────────────────────────────── RENDER ────────────────────────── */
   return (
     <>
-    {showUpgradeModal && (
-      <UpgradeModal reason="coach" status={trialStatus} onClose={() => setShowUpgradeModal(false)} />
-    )}
     <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'var(--t-bg)', overflow: 'hidden', borderRadius: 20 }}>
 
       {/* ══════════════════════════════════════════
@@ -470,7 +625,7 @@ export default function CoachPage() {
                 return (
                   <button
                     key={t.value}
-                    onClick={() => { setTrainerType(t.value); setMessages([]); setActiveId(null); }}
+                    onClick={() => { setTrainerType(t.value); setMessages([]); setActiveId(null); setQueuedMessages([]); setCoachError(''); }}
                     title={t.label}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
@@ -646,19 +801,6 @@ export default function CoachPage() {
                   </div>
                 ))}
 
-                {/* Typing indicator */}
-                {loading && (
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 12, background: trainer.bg, border: `1px solid ${trainer.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
-                      {trainer.emoji}
-                    </div>
-                    <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderLeft: `3px solid ${trainer.color}`, borderRadius: '5px 20px 20px 20px', padding: '16px 20px', display: 'flex', gap: 5, alignItems: 'center' }}>
-                      {[0, 150, 300].map(d => (
-                        <div key={d} style={{ width: 7, height: 7, borderRadius: '50%', background: trainer.color, animation: 'bounce 1.2s infinite', animationDelay: `${d}ms` }} />
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div ref={bottomRef} />
               </div>
             </div>
@@ -673,14 +815,24 @@ export default function CoachPage() {
           padding: '14px 20px 16px',
         }}>
           <div style={{ maxWidth: 780, margin: '0 auto' }}>
-            {/* Approaching-limit warning */}
-            {!trialStatus.isPlus && (
-              <LimitWarningBanner
-                left={trialStatus.coachLeft}
-                total={TRIAL_LIMITS.COACH_MESSAGES}
-                label="Coach messages"
-                color={trainer.color}
-              />
+            {(loading || queuedMessages.length > 0 || coachError) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                {loading && (
+                  <div style={{ padding: '7px 11px', borderRadius: 999, background: trainer.bg, border: `1px solid ${trainer.color}30`, color: trainer.color, fontSize: 11, fontWeight: 700 }}>
+                    Coach is replying...
+                  </div>
+                )}
+                {queuedMessages.length > 0 && (
+                  <div style={{ padding: '7px 11px', borderRadius: 999, background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx2)', fontSize: 11, fontWeight: 700 }}>
+                    {queuedMessages.length} message{queuedMessages.length === 1 ? '' : 's'} queued
+                  </div>
+                )}
+                {coachError && (
+                  <div style={{ padding: '7px 11px', borderRadius: 999, background: 'color-mix(in srgb, var(--t-danger, #ff6b6b) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-danger, #ff6b6b) 24%, transparent)', color: 'var(--t-danger, #ff6b6b)', fontSize: 11, fontWeight: 700 }}>
+                    {coachError}
+                  </div>
+                )}
+              </div>
             )}
             <div style={{
               display: 'flex', alignItems: 'flex-end', gap: 10,
@@ -719,7 +871,7 @@ export default function CoachPage() {
 
               <button
                 onClick={() => send()}
-                disabled={!input.trim() || loading}
+                disabled={!input.trim()}
                 style={{
                   width: 38, height: 38, borderRadius: 13, flexShrink: 0,
                   background: input.trim() ? 'var(--t-btn)' : 'var(--t-card2)',

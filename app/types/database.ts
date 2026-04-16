@@ -1,5 +1,7 @@
 // TypeScript types for all our Supabase database tables
 
+export type AccountType = 'teacher' | 'student' | 'parent';
+
 export type CoachMessage = { role: 'user' | 'assistant'; content: string; timestamp: string };
 
 export type Database = {
@@ -23,16 +25,25 @@ export type Database = {
           custom_daily_goal: string;
           active_theme: string;
           unlocked_themes: string[];
-          plan: 'free' | 'plus';
+          plan: 'free' | 'plus' | 'pro';
           student_id: string | null;
+          teacher_id: string | null;
+          account_type: AccountType;
           age_group: string;
           writing_goal: string;
+          writing_experience_score: number;
           /** Running count of coach messages sent (free trial gate) */
           coach_messages_used: number;
           /** Running count of new writings created (free trial gate) */
           writings_created: number;
           /** Running count of vocab words added to the word bank (free trial gate) */
           vocab_words_saved: number;
+          free_started_at: string;
+          usage_period_started_at: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          stripe_subscription_status: string | null;
+          deleted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -51,13 +62,22 @@ export type Database = {
           custom_daily_goal?: string;
           active_theme?: string;
           unlocked_themes?: string[];
-          plan?: 'free' | 'plus';
+          plan?: 'free' | 'plus' | 'pro';
           student_id?: string | null;
+          teacher_id?: string | null;
+          account_type?: AccountType;
           age_group?: string;
           writing_goal?: string;
+          writing_experience_score?: number;
           coach_messages_used?: number;
           writings_created?: number;
           vocab_words_saved?: number;
+          free_started_at?: string;
+          usage_period_started_at?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_subscription_status?: string | null;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -76,15 +96,120 @@ export type Database = {
           custom_daily_goal?: string;
           active_theme?: string;
           unlocked_themes?: string[];
-          plan?: 'free' | 'plus';
+          plan?: 'free' | 'plus' | 'pro';
           student_id?: string | null;
+          teacher_id?: string | null;
+          account_type?: AccountType;
           age_group?: string;
           writing_goal?: string;
+          writing_experience_score?: number;
           coach_messages_used?: number;
           writings_created?: number;
           vocab_words_saved?: number;
+          free_started_at?: string;
+          usage_period_started_at?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_subscription_status?: string | null;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      deleted_accounts: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          username: string;
+          account_type: AccountType;
+          deleted_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          username: string;
+          account_type: AccountType;
+          deleted_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          email?: string;
+          username?: string;
+          account_type?: AccountType;
+          deleted_at?: string;
+        };
+        Relationships: [];
+      };
+      teacher_classes: {
+        Row: {
+          id: string;
+          teacher_id: string;
+          name: string;
+          description: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          teacher_id: string;
+          name: string;
+          description?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          teacher_id?: string;
+          name?: string;
+          description?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      teacher_class_students: {
+        Row: {
+          class_id: string;
+          student_id: string;
+          created_at: string;
+        };
+        Insert: {
+          class_id: string;
+          student_id: string;
+          created_at?: string;
+        };
+        Update: {
+          class_id?: string;
+          student_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      parent_student_links: {
+        Row: {
+          id: string;
+          parent_id: string;
+          student_id: string;
+          linked_student_code: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          parent_id: string;
+          student_id: string;
+          linked_student_code: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          parent_id?: string;
+          student_id?: string;
+          linked_student_code?: string;
+          created_at?: string;
         };
         Relationships: [];
       };

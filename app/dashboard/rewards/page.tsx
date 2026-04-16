@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
+import { supabase } from '@/app/lib/supabase';
 import { getXPProgress, getTitleForLevel, LEVEL_XP, TITLES, MAX_LEVEL } from '@/app/types/database';
 import {
   Trophy, Zap, PenLine, BookOpen, Bot, Flame,
@@ -49,22 +51,49 @@ const LEVEL_MILESTONES = [...TITLES]
     color: TITLE_COLORS[i] ?? '#a78bfa',
   }));
 
+type XPLogEntry = { id: string; amount: number; reason: string; created_at: string };
+
 /* ─── Component ─────────────────────────────────────────────────── */
 export default function RewardsPage() {
   const { profile } = useAuth();
+  const [xpLog, setXpLog]       = useState<XPLogEntry[]>([]);
+  const [xpLogLoading, setXpLogLoading] = useState(true);
+  const fetchedForUser = useRef<string | null>(null);
+  // Hold the last non-null profile so the page doesn't flash to spinner on re-renders
+  const stableProfile = useRef(profile);
+  if (profile) stableProfile.current = profile;
+  const p = stableProfile.current;
 
-  if (!profile) return (
+  useEffect(() => {
+    if (!p) return;
+    // Only fetch once per user — profile re-renders shouldn't retrigger this
+    if (fetchedForUser.current === p.id) return;
+    fetchedForUser.current = p.id;
+    setXpLogLoading(true);
+    supabase
+      .from('xp_log')
+      .select('id, amount, reason, created_at')
+      .eq('user_id', p.id)
+      .order('created_at', { ascending: false })
+      .limit(7)
+      .then(({ data }) => {
+        setXpLog((data || []) as XPLogEntry[]);
+        setXpLogLoading(false);
+      });
+  }, [p]);
+
+  if (!p) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-bg)' }}>
       <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--t-acc)', animation: 'pulse 1.5s infinite' }} />
     </div>
   );
 
-  const xp          = getXPProgress(profile.xp);
-  const title       = getTitleForLevel(profile.level);
-  const isMaxLevel  = profile.level >= MAX_LEVEL;
-  const nextStreak  = STREAK_MILESTONES.find(m => profile.streak < m.days);
-  const daysToNext  = nextStreak ? nextStreak.days - profile.streak : 0;
-  const nextTitle   = LEVEL_MILESTONES.find(m => profile.level < m.level);
+  const xp          = getXPProgress(p.xp);
+  const title       = getTitleForLevel(p.level);
+  const isMaxLevel  = p.level >= MAX_LEVEL;
+  const nextStreak  = STREAK_MILESTONES.find(m => p.streak < m.days);
+  const daysToNext  = nextStreak ? nextStreak.days - p.streak : 0;
+  const nextTitle   = LEVEL_MILESTONES.find(m => p.level < m.level);
 
   return (
     <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: '2rem 2rem 5rem' }}>
@@ -107,7 +136,7 @@ export default function RewardsPage() {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 8px 32px var(--t-acc-a)',
               }}>
-                <span style={{ fontSize: 44, fontWeight: 900, color: 'var(--t-acc)', lineHeight: 1 }}>{profile.level}</span>
+                <span style={{ fontSize: 44, fontWeight: 900, color: 'var(--t-acc)', lineHeight: 1 }}>{p.level}</span>
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--t-acc)', opacity: 0.7 }}>LEVEL</span>
               </div>
               <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-tx)', marginTop: 10 }}>{title}</p>
@@ -121,21 +150,21 @@ export default function RewardsPage() {
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div>
                   <span style={{ fontSize: 32, fontWeight: 900, color: 'var(--t-tx)', letterSpacing: '-0.03em' }}>
-                    {profile.xp.toLocaleString()}
+                    {p.xp.toLocaleString()}
                   </span>
                   <span style={{ fontSize: 15, color: 'var(--t-tx3)', marginLeft: 8 }}>total XP</span>
                 </div>
                 <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--t-acc)' }}>{Math.round(xp.percent)}%</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--t-tx3)', marginBottom: 12 }}>
-                {isMaxLevel ? 'Maximum level — incredible!' : `${xp.current} / ${xp.needed} XP to Level ${profile.level + 1}`}
+                {isMaxLevel ? 'Maximum level — incredible!' : `${xp.current} / ${xp.needed} XP to Level ${p.level + 1}`}
               </p>
               <div style={{ height: 12, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
                 <div style={{ height: '100%', width: `${xp.percent}%`, background: 'var(--t-xp)', borderRadius: 99, transition: 'width 0.7s' }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t-tx3)' }}>
-                <span>Level {profile.level}</span>
-                <span>{isMaxLevel ? 'MAX' : `Level ${profile.level + 1}`}</span>
+                <span>Level {p.level}</span>
+                <span>{isMaxLevel ? 'MAX' : `Level ${p.level + 1}`}</span>
               </div>
             </div>
           </div>
@@ -147,9 +176,9 @@ export default function RewardsPage() {
             borderTop: '1px solid var(--t-brd)',
           }}>
             {[
-              { icon: Flame, label: 'Day Streak',  value: profile.streak,          color: 'var(--t-acc)' },
-              { icon: Star,  label: 'Total XP',    value: profile.xp.toLocaleString(), color: 'var(--t-acc)' },
-              { icon: TrendingUp, label: 'Best Streak', value: profile.longest_streak, color: '#4ade80' },
+              { icon: Flame, label: 'Hot Streak', value: p.streak,              color: 'var(--t-acc)' },
+              { icon: Star,  label: 'XP Stash',   value: p.xp.toLocaleString(), color: 'var(--t-acc)' },
+              { icon: TrendingUp, label: 'Best Run', value: p.longest_streak,   color: '#4ade80' },
             ].map((s, i) => (
               <div key={s.label} style={{
                 textAlign: 'center',
@@ -167,6 +196,82 @@ export default function RewardsPage() {
           </div>
         </div>
 
+        {/* ══ XP ACTIVITY FEED ══ */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <Zap style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', margin: 0 }}>Recent Activity</h2>
+          </div>
+          <p style={{ color: 'var(--t-tx3)', fontSize: 13, marginBottom: '1.25rem' }}>
+            Your 7 most recent XP gains
+          </p>
+
+          <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 24, overflow: 'hidden' }}>
+            {xpLogLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i < 4 ? '1px solid var(--t-brd)' : 'none' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--t-card2)', animation: 'pulse 1.5s infinite', flexShrink: 0 }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ height: 13, borderRadius: 6, background: 'var(--t-card2)', width: '60%', animation: 'pulse 1.5s infinite' }} />
+                    <div style={{ height: 11, borderRadius: 6, background: 'var(--t-card2)', width: '30%', animation: 'pulse 1.5s infinite' }} />
+                  </div>
+                  <div style={{ width: 40, height: 16, borderRadius: 6, background: 'var(--t-card2)', animation: 'pulse 1.5s infinite' }} />
+                </div>
+              ))
+            ) : xpLog.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center' }}>
+                <Zap style={{ width: 32, height: 32, color: 'var(--t-tx3)', margin: '0 auto 12px' }} />
+                <p style={{ color: 'var(--t-tx3)', fontSize: 14 }}>No activity yet — start earning XP!</p>
+              </div>
+            ) : xpLog.map((entry, i) => {
+              const r = entry.reason?.toLowerCase() ?? '';
+              const meta: { Icon: LucideIcon; label: string; color: string } =
+                r.includes('submit') || r.includes('writing')
+                  ? { Icon: PenLine,       label: 'Writing Submitted',         color: '#fb923c' }
+                  : r.includes('feedback') || r.includes('ai feedback')
+                  ? { Icon: Bot,           label: 'AI Feedback Received',      color: '#22d3ee' }
+                  : r.includes('vocab') && r.includes('master')
+                  ? { Icon: GraduationCap, label: 'Word Mastered',             color: '#fbbf24' }
+                  : r.includes('vocab') && r.includes('sentence')
+                  ? { Icon: Zap,           label: 'Vocab Sentence Practice',   color: '#f472b6' }
+                  : r.includes('vocab') || r.includes('word')
+                  ? { Icon: BookOpen,      label: 'Vocabulary Used in Writing', color: '#60a5fa' }
+                  : r.includes('test') || r.includes('quiz')
+                  ? { Icon: Star,          label: 'Vocab Test Completed',      color: '#818cf8' }
+                  : r.includes('streak') || r.includes('milestone')
+                  ? { Icon: Flame,         label: 'Streak Milestone',          color: '#f97316' }
+                  : r.includes('goal') || r.includes('daily')
+                  ? { Icon: Target,        label: 'Daily Goal Reached',        color: '#4ade80' }
+                  : r.includes('level')
+                  ? { Icon: TrendingUp,    label: 'Level Up',                  color: '#a78bfa' }
+                  : { Icon: Zap,           label: 'XP Earned',                 color: 'var(--t-acc)' };
+
+              return (
+                <div key={entry.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 20px',
+                  borderBottom: i < xpLog.length - 1 ? '1px solid var(--t-brd)' : 'none',
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                    background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <meta.Icon style={{ width: 17, height: 17, color: meta.color }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-tx)', margin: 0 }}>{meta.label}</p>
+                    <p style={{ fontSize: 12, color: 'var(--t-tx3)', margin: '3px 0 0' }}>
+                      {new Date(entry.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 900, color: meta.color, flexShrink: 0 }}>+{entry.amount} XP</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ══ HOW TO EARN XP ══ */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -174,7 +279,7 @@ export default function RewardsPage() {
             <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', margin: 0 }}>How to Earn XP</h2>
           </div>
           <p style={{ color: 'var(--t-tx3)', fontSize: 13, marginBottom: '1.25rem' }}>
-            Every action in Draftly earns XP toward your next level.
+            Every action in Draftora earns XP toward your next level.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
@@ -249,7 +354,7 @@ export default function RewardsPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <Flame style={{ width: 18, height: 18, color: '#fb923c' }} />
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', margin: 0 }}>Streak Bonuses</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', margin: 0 }}>Streak Boosts</h2>
           </div>
           <p style={{ color: 'var(--t-tx3)', fontSize: 13, marginBottom: '1.25rem' }}>
             {nextStreak
@@ -261,9 +366,9 @@ export default function RewardsPage() {
 
           <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 24, overflow: 'hidden' }}>
             {STREAK_MILESTONES.map((m, i) => {
-              const reached = profile.streak >= m.days;
+              const reached = p.streak >= m.days;
               const isNext  = nextStreak?.days === m.days;
-              const pct     = Math.min((profile.streak / m.days) * 100, 100);
+              const pct     = Math.min((p.streak / m.days) * 100, 100);
 
               return (
                 <div key={m.days} style={{
@@ -301,13 +406,13 @@ export default function RewardsPage() {
                       )}
                     </div>
                     {reached && <p style={{ fontSize: 12, color: '#4ade80', margin: 0 }}>Bonus earned ✓</p>}
-                    {!reached && !isNext && <p style={{ fontSize: 12, color: 'var(--t-tx3)', margin: 0 }}>{m.days - profile.streak} days to go</p>}
+                    {!reached && !isNext && <p style={{ fontSize: 12, color: 'var(--t-tx3)', margin: 0 }}>{m.days - p.streak} days to go</p>}
                     {isNext && (
                       <div style={{ marginTop: 8 }}>
                         <div style={{ height: 5, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${pct}%`, background: 'var(--t-xp)', borderRadius: 99 }} />
                         </div>
-                        <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 4 }}>{profile.streak} / {m.days} days</p>
+                        <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 4 }}>{p.streak} / {m.days} days</p>
                       </div>
                     )}
                   </div>
@@ -378,7 +483,7 @@ export default function RewardsPage() {
             </div>
 
             {LEVEL_MILESTONES.map((m, i) => {
-              const reached   = profile.level >= m.level;
+              const reached   = p.level >= m.level;
               const isCurrent = title === m.title;
               const isNext    = nextTitle?.level === m.level;
               const isLast    = i === LEVEL_MILESTONES.length - 1;

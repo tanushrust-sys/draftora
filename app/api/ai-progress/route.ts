@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { chat } from '@/app/lib/ai-provider';
+import { NextResponse } from 'next/server';
+import { chat, extractJSON } from '@/app/lib/ai-provider';
+import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
 
 interface WritingEntry {
   id: string;
   title: string;
+  content?: string | null;
+  prompt?: string | null;
   word_count: number;
   strengths: string | null;
   improvements: string | null;
@@ -12,55 +15,103 @@ interface WritingEntry {
   category: string;
 }
 
-export async function POST(request: NextRequest) {
+function buildFeedbackSummary(writings: WritingEntry[]): string {
+  const sorted = [...writings].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const totalWords = sorted.reduce((sum, writing) => sum + (writing.word_count || 0), 0);
+  const avgWords = sorted.length ? Math.round(totalWords / sorted.length) : 0;
+  const categories = [...new Set(sorted.map((writing) => writing.category).filter(Boolean))];
+
+  const piecesSummary = sorted.map((writing, index) => {
+    const lines: string[] = [`Piece ${index + 1}: ${writing.title || 'Untitled'} (${writing.category}, ${writing.word_count} words)`];
+    if (writing.prompt) lines.push(`  Prompt: ${writing.prompt.slice(0, 220)}`);
+    if (writing.content) lines.push(`  Draft sample: ${writing.content.slice(0, 260)}`);
+    if (writing.feedback) lines.push(`  Overall feedback: ${writing.feedback.slice(0, 300)}`);
+    if (writing.improvements) lines.push(`  Section feedback: ${writing.improvements.slice(0, 300)}`);
+    return lines.join('\n');
+  }).join('\n\n');
+
+  return `Writer stats: ${sorted.length} reviewed pieces, avg ${avgWords} words per piece, categories: ${categories.join(', ')}.
+
+${piecesSummary}`;
+}
+
+export async function POST(request: Request) {
+  let writings: WritingEntry[] = [];
+  let ageGroup: string | undefined;
   try {
-    const { writings }: { writings: WritingEntry[] } = await request.json();
+    ({ writings, ageGroup } = await request.json() as { writings: WritingEntry[]; ageGroup?: string });
 
     if (!writings || writings.length === 0) {
-      return NextResponse.json({ scores: [] });
+      return NextResponse.json({ scores: [], analysis: null });
     }
 
-    // If only 1 writing, score it simply without an AI call
-    if (writings.length === 1) {
-      const w = writings[0];
-      const base = Math.min(50 + Math.round(w.word_count / 10), 70);
-      return NextResponse.json({
-        scores: [{ id: w.id, score: base, note: 'Keep writing to see your progress chart!' }],
-      });
-    }
+    const sorted = [...writings].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const scores = buildProgressScores(sorted, ageGroup);
+    const avgScore = Math.round(scores.reduce((sum, item) => sum + item.score, 0) / scores.length);
+    const trend = scores.length >= 2 ? scores[scores.length - 1].score - scores[0].score : 0;
+    const totalWords = sorted.reduce((sum, writing) => sum + (writing.word_count || 0), 0);
+    const avgWords = sorted.length ? Math.round(totalWords / sorted.length) : 0;
+    const feedbackSummary = buildFeedbackSummary(sorted);
 
-    const prompt = `You are assessing a student's writing quality over time based on AI feedback they received.
+    const system = `You are a writing coach analyzing a student's portfolio of reviewed pieces. Based on the actual drafts and feedback, generate a personalized progress report. Be specific. If some pieces mostly copy the prompt or fail to become real writing, say that clearly and let it meaningfully affect the report.
 
-For each writing piece below, give a quality score from 20 to 95 (integers only).
-Base scores on:
-- How positive the strengths feedback is (strong strengths = higher score)
-- How many/how serious the improvements needed are (fewer/minor = higher)
-- Word count (longer pieces usually show more effort; 50 words ≈ 40pts base, 300+ words ≈ 65+ pts base)
-- Make scores vary realistically — they should go up AND down to show a genuine learning curve
+Return strict JSON with exactly these keys:
+{
+  "summary": "2 sentences: state how many pieces, the average length and score, and one specific observation about their trajectory.",
+  "strengths": ["3 specific strengths observed across the portfolio"],
+  "areasToImprove": ["3 specific improvement areas drawn from recurring patterns"],
+  "writingPatterns": "1-2 sentences about visible patterns across categories, length, originality, and structure.",
+  "vocabularyTrend": "1 sentence about word choice or originality patterns.",
+  "recommendation": "1 focused next step for the next piece."
+}
 
-Pieces:
-${writings.map((w, i) =>
-  `[${i + 1}] id="${w.id}" | Title: "${w.title}" | Category: ${w.category} | Words: ${w.word_count}
-  Strengths: ${w.strengths || 'none'}
-  Needs improving: ${w.improvements || 'none'}
-  Overall: ${w.feedback || 'none'}`
-).join('\n\n')}
+The tone must be heavily tailored to the writer age group. If the age group is 5-10, use very simple child-friendly wording with short sentences and avoid academic language.`;
 
-Respond ONLY with valid JSON, no markdown fences, no explanation:
-{"scores":[{"id":"<id>","score":<number>,"note":"<5 word summary of key growth>"}]}`;
+    const userPrompt = `Analyze this writer's portfolio and generate their progress report.
 
-    const text = await chat({
+Age group: ${ageGroup || 'unknown'}
+Average score: ${avgScore}/100
+Average piece length: ${avgWords} words
+Score trend: ${trend >= 0 ? `+${trend}` : trend} points from first to latest
+
+Portfolio:
+
+${feedbackSummary}
+
+Return ONLY valid JSON with keys: summary, strengths, areasToImprove, writingPatterns, vocabularyTrend, recommendation.`;
+
+    const raw = await chat({
       tier: 'fast',
-      maxTokens: 800,
-      messages: [{ role: 'user', content: prompt }],
+      system,
+      maxTokens: 700,
+      jsonMode: true,
+      messages: [{ role: 'user', content: userPrompt }],
     });
 
-    // Strip markdown code fences if the model adds them anyway
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    let analysis = buildAgeAwareProgressAnalysis(sorted, ageGroup);
+    try {
+      const parsed = JSON.parse(extractJSON(raw)) as typeof analysis;
+      if (parsed?.summary && Array.isArray(parsed.strengths) && Array.isArray(parsed.areasToImprove)) {
+        analysis = parsed;
+      }
+    } catch {
+      analysis = buildAgeAwareProgressAnalysis(sorted, ageGroup);
+    }
 
-    return NextResponse.json(JSON.parse(clean));
+    if (analysis && !analysis.summary.includes(String(sorted.length))) {
+      analysis.summary = `You have ${sorted.length} reviewed piece${sorted.length === 1 ? '' : 's'} averaging ${avgWords} words and ${avgScore}/100. ${analysis.summary}`;
+    }
+
+    return NextResponse.json({ scores, analysis });
   } catch (err) {
     console.error('ai-progress error:', err);
-    return NextResponse.json({ scores: [] }, { status: 500 });
+    if (writings.length > 0) {
+      const sorted = [...writings].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+      return NextResponse.json({
+        scores: buildProgressScores(sorted, ageGroup),
+        analysis: buildAgeAwareProgressAnalysis(sorted, ageGroup),
+      });
+    }
+    return NextResponse.json({ scores: [], analysis: null });
   }
 }

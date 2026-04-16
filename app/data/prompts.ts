@@ -1,60 +1,129 @@
-// Master prompt index — flat arrays (legacy) + age-specific arrays
-// getDailyPrompt prefers age-specific content when available.
+// Master prompt index. Age-aware prompt pools are built here so every topic
+// resolves cleanly, even when a dedicated per-age file is missing entries.
 
-import { PERSUASIVE_ESSAY_PROMPTS, CREATIVE_STORY_PROMPTS, BLOG_ENTRY_PROMPTS } from './prompts-1';
-import { EMAIL_PROMPTS, FEATURE_ARTICLE_PROMPTS, PERSONAL_PROMPTS } from './prompts-2';
-import { POETRY_PROMPTS, OTHER_PROMPTS } from './prompts-3';
 import { PROMPTS_BY_AGE } from './prompts-by-age';
 
+const AGE_GROUPS = ['5-7', '8-10', '11-13', '14-17', '18-21', '22+'] as const;
+
+export const PROMPTS_PER_TOPIC = 300;
+
 export const ALL_PROMPTS: Record<string, string[]> = {
-  'Persuasive Essay': PERSUASIVE_ESSAY_PROMPTS,
-  'Creative Story':   CREATIVE_STORY_PROMPTS,
-  'Blog Entry':       BLOG_ENTRY_PROMPTS,
-  'Email':            EMAIL_PROMPTS,
-  'Feature Article':  FEATURE_ARTICLE_PROMPTS,
-  'Personal':         PERSONAL_PROMPTS,
-  'Diary':            PERSONAL_PROMPTS,
-  'Poetry':           POETRY_PROMPTS,
-  'Other':            OTHER_PROMPTS,
+  'Persuasive Essay': [],
+  'Creative Story': [],
+  'Blog Entry': [],
+  Email: [],
+  'Feature Article': [],
+  Personal: [],
+  Diary: [],
+  Poetry: [],
+  Other: [],
 };
 
-export const CATEGORIES = Object.keys(ALL_PROMPTS).filter(k => k !== 'Diary');
+export const CATEGORIES = Object.keys(ALL_PROMPTS).filter((category) => category !== 'Diary');
 
-/**
- * Returns a day number that increments at the user's LOCAL midnight.
- */
+const CATEGORY_ALIASES: Record<string, string[]> = {
+  'Persuasive Essay': ['Persuasive Essay'],
+  'Creative Story': ['Creative Story'],
+  'Blog Entry': ['Blog Entry'],
+  Email: ['Email'],
+  'Feature Article': ['Feature Article'],
+  Personal: ['Personal', 'Diary'],
+  Diary: ['Diary', 'Personal'],
+  Poetry: ['Poetry'],
+  Other: ['Other'],
+};
+
+const AGE_GUIDANCE: Record<string, string> = {
+  '5-7': 'Use simple words, clear actions, and playful ideas.',
+  '8-10': 'Keep the writing lively, clear, and easy to follow.',
+  '11-13': 'Add strong detail, feeling, and a clear structure.',
+  '14-17': 'Aim for stronger voice, sharper structure, and more nuance.',
+  '18-21': 'Take a mature, reflective, and well-structured approach.',
+  '22+': 'Approach this with depth, nuance, and lived perspective.',
+};
+
 function localDayIndex(): number {
   const now = new Date();
   const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.floor(localMidnight.getTime() / 86400000);
 }
 
-/**
- * Get today's prompt for a given category, optionally age-group-specific.
- * Falls back to flat arrays if no age-specific content exists.
- */
-export function getDailyPrompt(category: string, ageGroup?: string): string {
-  const dayIdx  = localDayIndex();
-  const offset  = category.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-
-  // Try age-specific prompts first
-  if (ageGroup && ageGroup !== '') {
-    const ageBucket = PROMPTS_BY_AGE[ageGroup];
-    if (ageBucket) {
-      const prompts = ageBucket[category] ?? ageBucket['Creative Story'] ?? [];
-      if (prompts.length > 0) return prompts[(dayIdx + offset) % prompts.length];
-    }
-  }
-
-  // Fall back to flat per-category arrays
-  const prompts = ALL_PROMPTS[category];
-  if (!prompts || prompts.length === 0) return 'Write about anything that inspires you today.';
-  return prompts[(dayIdx + offset) % prompts.length];
+function normalizePrompt(prompt: string) {
+  return prompt.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-/**
- * Get a difficulty level based on the local day index.
- */
+function uniquePrompts(prompts: string[]) {
+  const seen = new Set<string>();
+  return prompts.filter((prompt) => {
+    const key = normalizePrompt(prompt);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function fillToCount(base: string[], count: number, offset = 0) {
+  if (base.length >= count) return base.slice(0, count);
+  if (base.length === 0) return base;
+  const extra = Array.from({ length: count - base.length }, (_, index) => base[(offset + index) % base.length]);
+  return [...base, ...extra];
+}
+
+function collectPrompts(category: string, source?: Record<string, string[]>) {
+  const aliases = CATEGORY_ALIASES[category] ?? [category];
+  return aliases.flatMap((alias) => source?.[alias] ?? []);
+}
+
+function withAgeGuidance(prompt: string, ageGroup?: string) {
+  if (!ageGroup) return prompt;
+  const guidance = AGE_GUIDANCE[ageGroup];
+  if (!guidance) return prompt;
+  return `${prompt} ${guidance}`;
+}
+
+const promptPoolCache = new Map<string, string[]>();
+
+export function getPromptPool(category: string, ageGroup?: string): string[] {
+  const cacheKey = `${ageGroup || 'generic'}::${category}`;
+  const cached = promptPoolCache.get(cacheKey);
+  if (cached) return cached;
+
+  const genericPrompts = uniquePrompts(collectPrompts(category, ALL_PROMPTS));
+  const agePrompts = ageGroup && ageGroup in PROMPTS_BY_AGE
+    ? uniquePrompts(collectPrompts(category, PROMPTS_BY_AGE[ageGroup]))
+    : [];
+
+  let pool = agePrompts;
+
+  if (ageGroup === '5-7' && pool.length > 0) {
+    pool = fillToCount(pool, PROMPTS_PER_TOPIC, 7);
+  }
+
+  if (pool.length < PROMPTS_PER_TOPIC) {
+    const fallbackPrompts = genericPrompts.map((prompt) => withAgeGuidance(prompt, ageGroup));
+    pool = uniquePrompts([...pool, ...fallbackPrompts]);
+  }
+
+  if (pool.length === 0) {
+    pool = ['Write about anything that inspires you today.'];
+  }
+
+  const finalPool = pool.slice(0, PROMPTS_PER_TOPIC);
+  promptPoolCache.set(cacheKey, finalPool);
+  return finalPool;
+}
+
+function hashParts(parts: string[]) {
+  return parts.join('|').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+export function getDailyPrompt(category: string, ageGroup?: string): string {
+  const prompts = getPromptPool(category, ageGroup);
+  const ageBucket = AGE_GROUPS.includes(ageGroup as (typeof AGE_GROUPS)[number]) ? ageGroup : '';
+  const offset = hashParts([CATEGORY_ALIASES[category]?.[0] ?? category, ageBucket || 'generic']);
+  return prompts[(localDayIndex() + offset) % prompts.length];
+}
+
 export function getPromptDifficulty(): 'beginner' | 'intermediate' | 'advanced' {
   const levels: ('beginner' | 'intermediate' | 'advanced')[] = ['beginner', 'intermediate', 'advanced'];
   return levels[localDayIndex() % 3];

@@ -1,183 +1,309 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 
-export type ThemeName = 'default' | 'lavender' | 'sunrise' | 'bubbles' | 'golden';
+export type ThemeName =
+  | 'cloud-atlas'
+  | 'midnight-blue'
+  | 'midnight-bloom'
+  | 'rose-glow'
+  | 'forest-moss'
+  | 'sunset-glow';
+
+type ThemePreview = {
+  bg: string;
+  card: string;
+  topbar: string;
+  sidebar: string;
+  accent: string;
+  text: string;
+  muted: string;
+  write: string;
+  vocab: string;
+  coach: string;
+  rewards: string;
+  xpBar: string;
+};
+
+type ThemeConfig = {
+  name: ThemeName;
+  label: string;
+  description: string;
+  bg: string;
+  card: string;
+  text: string;
+  accent: string;
+  border: string;
+  muted: string;
+  button: string;
+  xpBar: string;
+  preview: ThemePreview;
+};
 
 export const THEMES = {
-  default: {
-    name: 'default',
-    label: 'Midnight Ink',
-    description: 'Obsidian black canvas with liquid gold accents — bold, sharp, editorial.',
-    bg: 'bg-zinc-950', card: 'bg-zinc-900', text: 'text-zinc-100',
-    accent: 'text-yellow-400', border: 'border-zinc-800', muted: 'text-zinc-400',
-    button: 'bg-yellow-500 hover:bg-yellow-400', xpBar: 'bg-yellow-500',
-    preview: {
-      bg: '#05060d',
-      card: '#0d1020',
-      topbar: '#111526',
-      sidebar: '#08091a',
-      accent: '#f0c846',
-      text: '#f8f9fd',
-      muted: '#6a758f',
-      write: '#6a9fff',
-      vocab: '#4dd4a8',
-      coach: '#b090ff',
-      rewards: '#f8c440',
-      xpBar: '#d8ac3a',
-    },
-  },
-  lavender: {
-    name: 'lavender',
-    label: 'Aurora Nebula',
-    description: 'Deep space violet with electric neon star-glow — cosmic and immersive.',
-    bg: 'bg-purple-50', card: 'bg-white', text: 'text-purple-950',
-    accent: 'text-purple-500', border: 'border-purple-200', muted: 'text-purple-400',
-    button: 'bg-purple-600 hover:bg-purple-500', xpBar: 'bg-purple-500',
-    preview: {
-      bg: '#080512',
-      card: '#110e22',
-      topbar: '#18143a',
-      sidebar: '#060318',
-      accent: '#c878ff',
-      text: '#f5f0ff',
-      muted: '#8070b8',
-      write: '#88aaff',
-      vocab: '#60e4c0',
-      coach: '#d898ff',
-      rewards: '#ffcc70',
-      xpBar: '#ac70f8',
-    },
-  },
-  sunrise: {
-    name: 'sunrise',
-    label: 'Ember Forge',
-    description: 'Molten volcanic darkness with fiery copper and smouldering amber heat.',
-    bg: 'bg-orange-50', card: 'bg-white', text: 'text-orange-950',
-    accent: 'text-orange-500', border: 'border-orange-200', muted: 'text-orange-400',
-    button: 'bg-orange-600 hover:bg-orange-500', xpBar: 'bg-orange-500',
-    preview: {
-      bg: '#0e0502',
-      card: '#190b08',
-      topbar: '#221009',
-      sidebar: '#0a0301',
-      accent: '#ff8844',
-      text: '#fff8f0',
-      muted: '#b88060',
-      write: '#ff9c66',
-      vocab: '#8cdea0',
-      coach: '#cc88ff',
-      rewards: '#ffc058',
-      xpBar: '#e06030',
-    },
-  },
-  bubbles: {
-    name: 'bubbles',
+  'cloud-atlas': {
+    name: 'cloud-atlas',
     label: 'Cloud Atlas',
-    description: 'Pure white clarity with electric sky blue — clean, modern, fresh energy.',
-    bg: 'bg-sky-50', card: 'bg-white', text: 'text-sky-950',
-    accent: 'text-blue-600', border: 'border-sky-200', muted: 'text-sky-500',
-    button: 'bg-blue-600 hover:bg-blue-500', xpBar: 'bg-blue-500',
+    description: 'Ultra-bright sky blue on a clean white canvas. Sharp, glossy, and vivid.',
+    bg: 'bg-sky-100',
+    card: 'bg-white',
+    text: 'text-sky-950',
+    accent: 'text-sky-800',
+    border: 'border-sky-200',
+    muted: 'text-sky-700',
+    button: 'bg-sky-800 hover:bg-sky-700',
+    xpBar: 'bg-sky-700',
     preview: {
-      bg: '#f0f5ff',
+      bg: '#eaf8ff',
       card: '#ffffff',
-      topbar: '#e8f0ff',
-      sidebar: '#0f1e3a',
-      accent: '#3378e8',
-      text: '#0c1e3a',
-      muted: '#6680a8',
-      write: '#3878f8',
-      vocab: '#18b098',
-      coach: '#6055f0',
-      rewards: '#d88000',
-      xpBar: '#4890f0',
+      topbar: '#d6ebff',
+      sidebar: '#e2f5ff',
+      accent: '#006dff',
+      text: '#081528',
+      muted: '#45688f',
+      write: '#005ff0',
+      vocab: '#00a88f',
+      coach: '#4d3fff',
+      rewards: '#f38a14',
+      xpBar: '#006dff',
     },
   },
-  golden: {
-    name: 'golden',
-    label: 'Parchment Guild',
-    description: 'Antique ivory and cognac ink — like writing in a leather-bound journal.',
-    bg: 'bg-yellow-50', card: 'bg-amber-50', text: 'text-yellow-950',
-    accent: 'text-amber-700', border: 'border-yellow-300', muted: 'text-amber-600',
-    button: 'bg-amber-700 hover:bg-amber-600', xpBar: 'bg-amber-600',
+  'midnight-blue': {
+    name: 'midnight-blue',
+    label: 'Midnight Blue',
+    description: 'Deep blue night with electric cyan highlights. Bold, moody, and neon.',
+    bg: 'bg-slate-950',
+    card: 'bg-slate-900',
+    text: 'text-slate-50',
+    accent: 'text-cyan-300',
+    border: 'border-cyan-500/30',
+    muted: 'text-slate-300',
+    button: 'bg-cyan-500 hover:bg-cyan-400',
+    xpBar: 'bg-cyan-400',
     preview: {
-      bg: '#f4ebd8',
-      card: '#fdf8ee',
-      topbar: '#f2e8d0',
-      sidebar: '#1c1008',
-      accent: '#a86820',
-      text: '#2c1a08',
-      muted: '#907050',
-      write: '#7060cc',
-      vocab: '#389870',
-      coach: '#8860cc',
-      rewards: '#b07830',
-      xpBar: '#b87e2c',
+      bg: '#010511',
+      card: '#09183a',
+      topbar: '#0c2151',
+      sidebar: '#040a18',
+      accent: '#5bd8ff',
+      text: '#f6fbff',
+      muted: '#93afd8',
+      write: '#63b0ff',
+      vocab: '#31edcf',
+      coach: '#c19eff',
+      rewards: '#ffd65b',
+      xpBar: '#4bc7ff',
     },
   },
-} as const;
+  'midnight-bloom': {
+    name: 'midnight-bloom',
+    label: 'Midnight Bloom',
+    description: 'Dark plum with neon pink and purple glow. Loud, glossy, and dramatic.',
+    bg: 'bg-zinc-950',
+    card: 'bg-zinc-900',
+    text: 'text-zinc-50',
+    accent: 'text-fuchsia-300',
+    border: 'border-fuchsia-500/30',
+    muted: 'text-zinc-300',
+    button: 'bg-fuchsia-500 hover:bg-fuchsia-400',
+    xpBar: 'bg-fuchsia-400',
+    preview: {
+      bg: '#0f0412',
+      card: '#220f33',
+      topbar: '#361652',
+      sidebar: '#08020d',
+      accent: '#ff31d1',
+      text: '#fff6ff',
+      muted: '#c18edf',
+      write: '#9db5ff',
+      vocab: '#5ef2d6',
+      coach: '#ff9bff',
+      rewards: '#ffd85a',
+      xpBar: '#ff31d1',
+    },
+  },
+  'rose-glow': {
+    name: 'rose-glow',
+    label: 'Rose Glow',
+    description: 'Hot rose and pink on a crisp paper-white canvas. Soft, lively, and bold.',
+    bg: 'bg-rose-100',
+    card: 'bg-white',
+    text: 'text-rose-950',
+    accent: 'text-rose-800',
+    border: 'border-rose-300',
+    muted: 'text-rose-700',
+    button: 'bg-rose-800 hover:bg-rose-700',
+    xpBar: 'bg-rose-700',
+    preview: {
+      bg: '#ffe9f3',
+      card: '#ffffff',
+      topbar: '#ffcfe1',
+      sidebar: '#ffe1ee',
+      accent: '#ff006f',
+      text: '#36081f',
+      muted: '#b14d7d',
+      write: '#5a6dff',
+      vocab: '#0fb48e',
+      coach: '#d826ea',
+      rewards: '#ff7f1f',
+      xpBar: '#ff006f',
+    },
+  },
+  'forest-moss': {
+    name: 'forest-moss',
+    label: 'Forest Moss',
+    description: 'Deep forest sidebar, soft sage-green body, rich moss and pine accents.',
+    bg: 'bg-green-100',
+    card: 'bg-green-50',
+    text: 'text-green-950',
+    accent: 'text-green-800',
+    border: 'border-green-300',
+    muted: 'text-green-700',
+    button: 'bg-green-800 hover:bg-green-700',
+    xpBar: 'bg-green-700',
+    preview: {
+      bg: '#c8dbb8',
+      card: '#e8f2e0',
+      topbar: '#d4e6c4',
+      sidebar: '#1a2e14',
+      accent: '#2d6a1e',
+      text: '#0c1e08',
+      muted: '#4a7a38',
+      write: '#6858ff',
+      vocab: '#08b8c0',
+      coach: '#a838f8',
+      rewards: '#c07808',
+      xpBar: '#2d6a1e',
+    },
+  },
+  'sunset-glow': {
+    name: 'sunset-glow',
+    label: 'Sunset Glow',
+    description: 'Golden-to-crimson sunset glow with bold warm contrast and ember-red depth.',
+    bg: 'bg-orange-200',
+    card: 'bg-amber-50',
+    text: 'text-rose-950',
+    accent: 'text-rose-700',
+    border: 'border-orange-300',
+    muted: 'text-rose-700',
+    button: 'bg-rose-700 hover:bg-rose-600',
+    xpBar: 'bg-rose-600',
+    preview: {
+      bg: '#ffe2b8',
+      card: '#fff1d8',
+      topbar: '#ffe1b8',
+      sidebar: '#8b1d30',
+      accent: '#d7263d',
+      text: '#341118',
+      muted: '#9a4350',
+      write: '#ff8c42',
+      vocab: '#08b8a8',
+      coach: '#9459ff',
+      rewards: '#d7263d',
+      xpBar: '#ff5e5b',
+    },
+  },
+} as const satisfies Record<ThemeName, ThemeConfig>;
 
 export const UNLOCK_REQUIREMENTS: Record<ThemeName, string> = {
-  default:  'Free for all users',
-  lavender: 'Free for all users',
-  sunrise:  'Free for all users',
-  bubbles:  'Free for all users',
-  golden:   'Free for all users',
+  'cloud-atlas': 'Free for all users',
+  'midnight-blue': 'Free for all users',
+  'midnight-bloom': 'Free for all users',
+  'rose-glow': 'Free for all users',
+  'forest-moss': 'Free for all users',
+  'sunset-glow': 'Free for all users',
 };
 
 type ThemeState = {
   theme: ThemeName;
-  themeConfig: typeof THEMES[ThemeName];
+  themeConfig: (typeof THEMES)[ThemeName];
   setTheme: (t: ThemeName) => void;
 };
 
 const ThemeContext = createContext<ThemeState>({
-  theme: 'default',
-  themeConfig: THEMES.default,
+  theme: 'cloud-atlas',
+  themeConfig: THEMES['cloud-atlas'],
   setTheme: () => {},
 });
 
-const STORAGE_KEY = 'draftly-theme';
+const STORAGE_KEY = 'draftora-theme';
+
+const LEGACY_THEME_ALIASES: Record<string, ThemeName> = {
+  default: 'cloud-atlas',
+  lavender: 'midnight-bloom',
+  sunrise: 'sunset-glow',
+  bubbles: 'cloud-atlas',
+  golden: 'forest-moss',
+};
+
+function normalizeThemeName(theme: string | null | undefined): ThemeName | null {
+  if (!theme) return null;
+  const remapped = LEGACY_THEME_ALIASES[theme] ?? theme;
+  return Object.prototype.hasOwnProperty.call(THEMES, remapped) ? (remapped as ThemeName) : null;
+}
+
+function readStoredTheme(): ThemeName | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return normalizeThemeName(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function persistTheme(theme: ThemeName) {
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // ignore storage failures
+  }
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
 
   // Read from localStorage synchronously on first render for instant theme
   const [theme, setThemeState] = useState<ThemeName>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEY) as ThemeName | null;
-      if (stored && THEMES[stored]) return stored;
-    }
-    return 'default';
+    return readStoredTheme() ?? 'cloud-atlas';
   });
 
   const applyThemeAttr = (t: ThemeName) => {
     document.documentElement.setAttribute('data-theme', t);
+    document.body.setAttribute('data-theme', t);
   };
 
-  // Apply stored theme instantly on mount (avoids flash)
-  useEffect(() => {
+  useLayoutEffect(() => {
     applyThemeAttr(theme);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [theme]);
 
   // When profile loads from Supabase, use the DB value as the source of truth
   useEffect(() => {
-    if (profile?.active_theme) {
-      const t = profile.active_theme as ThemeName;
-      if (THEMES[t]) {
-        setThemeState(t);
-        applyThemeAttr(t);
-        localStorage.setItem(STORAGE_KEY, t);
-      }
+    const nextTheme = normalizeThemeName(profile?.active_theme);
+    if (nextTheme) {
+      setThemeState(nextTheme);
+      persistTheme(nextTheme);
     }
   }, [profile?.active_theme]);
 
   const setTheme = (t: ThemeName) => {
     setThemeState(t);
     applyThemeAttr(t);
-    localStorage.setItem(STORAGE_KEY, t);
+    persistTheme(t);
   };
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      const nextTheme = normalizeThemeName(event.newValue);
+      if (!nextTheme) return;
+      setThemeState(nextTheme);
+      applyThemeAttr(nextTheme);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, themeConfig: THEMES[theme], setTheme }}>

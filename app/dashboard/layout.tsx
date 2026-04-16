@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Bot,
+  ChevronRight,
   Flame,
   GraduationCap,
   Home,
@@ -16,56 +17,128 @@ import {
   Trophy,
   X,
   Zap,
-  Target,
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
-import { supabase } from '@/app/lib/supabase';
+import { hardSignOut } from '@/app/lib/supabase';
 import { getXPProgress } from '@/app/types/database';
 import OnboardingModal from '@/app/components/OnboardingModal';
-import UpgradeModal from '@/app/components/UpgradeModal';
-import { getTrialStatus } from '@/app/lib/trial';
+import LevelUpPopup from '@/app/components/LevelUpPopup';
+import { clearAccountTypeOverride } from '@/app/lib/account-type';
+import { getAccountHomePath } from '@/app/lib/account-type';
 
-const NAV_LINKS = [
-  { href: '/dashboard',          icon: Home,          label: 'Dashboard', color: 'var(--t-acc)',  iconBg: 'var(--t-acc-a)'         },
-  { href: '/dashboard/writings', icon: PenLine,       label: 'Write',     color: 'var(--t-mod-write)',   iconBg: 'color-mix(in srgb, var(--t-mod-write) 14%, transparent)'  },
-  { href: '/dashboard/vocab',    icon: GraduationCap, label: 'Vocab',     color: 'var(--t-mod-vocab)',   iconBg: 'color-mix(in srgb, var(--t-mod-vocab) 14%, transparent)'  },
-  { href: '/dashboard/coach',    icon: Bot,           label: 'Coach',     color: 'var(--t-mod-coach)',   iconBg: 'color-mix(in srgb, var(--t-mod-coach) 14%, transparent)' },
-  { href: '/dashboard/rewards',  icon: Trophy,        label: 'Rewards',   color: 'var(--t-mod-rewards)', iconBg: 'color-mix(in srgb, var(--t-mod-rewards) 14%, transparent)'  },
-  { href: '/dashboard/settings', icon: Settings,      label: 'Settings',  color: 'var(--t-tx2)', iconBg: 'var(--t-bg)'            },
-];
-
-function getPageMeta(pathname: string) {
-  if (pathname === '/dashboard/journal') return 'Write';
-  const match = NAV_LINKS.find((item) => item.href === pathname);
-  return match?.label ?? 'Workspace';
+function createNavLinks() {
+  return [
+    { href: '/dashboard',         icon: Home,          label: 'Dashboard',   color: 'var(--t-acc)',         description: 'Your dashboard overview' },
+    { href: '/dashboard/writings', icon: PenLine,       label: 'Write',       color: 'var(--t-mod-write)',   description: 'My writings and progress' },
+    { href: '/dashboard/vocab',    icon: GraduationCap, label: 'Vocab',       color: 'var(--t-mod-vocab)',   description: 'Daily words and saves' },
+    { href: '/dashboard/coach',    icon: Bot,           label: 'Coach',       color: 'var(--t-mod-coach)',   description: 'Feedback and guidance' },
+    { href: '/dashboard/rewards',  icon: Trophy,        label: 'Rewards',     color: 'var(--t-mod-rewards)', description: 'XP and milestones' },
+    { href: '/dashboard/settings', icon: Settings,      label: 'Settings',    color: '#ffffff',              description: 'Account and theme' },
+  ];
 }
+
+function getPageMeta(pathname: string, accountType?: string) {
+  if (pathname === '/dashboard') return 'Dashboard';
+  if (pathname === '/dashboard/journal') return 'Write';
+  return 'Workspace';
+}
+
+function isNavActive(pathname: string, href: string, homeHref: string) {
+  if (href === homeHref) return pathname === homeHref;
+  if (href === '/dashboard/writings') return pathname === '/dashboard/writings' || pathname === '/dashboard/journal';
+  if (href === '/dashboard/settings') return pathname === '/dashboard/settings';
+  return pathname.startsWith(href);
+}
+
+const SIDEBAR_W  = 264;
+const COLLAPSED_W = 72;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   const router   = useRouter();
   const pathname = usePathname();
+  const hasAuthContext = Boolean(user || profile);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('draftora-sidebar-collapsed') === '1';
+  });
+  const homeHref = '/dashboard';
+  const navLinks = useMemo(() => createNavLinks(), []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('draftora-sidebar-collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
 
   useEffect(() => {
-    if (!loading && !user) router.replace('/login');
-  }, [loading, router, user]);
+    if (!loading && !hasAuthContext) router.replace('/login');
+  }, [hasAuthContext, loading, router]);
+
+  useEffect(() => {
+    if (loading || !profile?.account_type) return;
+    if (profile.account_type === 'teacher' || profile.account_type === 'parent') {
+      const accountHomePath = getAccountHomePath(profile.account_type);
+      if (pathname !== accountHomePath) {
+        router.replace(accountHomePath);
+      }
+      return;
+    }
+  }, [loading, pathname, profile?.account_type, router]);
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
+    try { localStorage.removeItem('draftora-profile-v1'); } catch {}
+    if (profile?.id) {
+      clearAccountTypeOverride(profile.id);
+    }
+    router.replace('/login');
+    window.location.replace('/login');
+    void hardSignOut();
   };
 
   const xp          = profile ? getXPProgress(profile.xp) : null;
   const initial     = profile?.username?.[0]?.toUpperCase() ?? '?';
+  const displayName = profile?.username
+    ? profile.username[0].toUpperCase() + profile.username.slice(1)
+    : '';
   const pageTitle   = useMemo(() => getPageMeta(pathname), [pathname]);
-  const trialStatus = profile ? getTrialStatus(profile) : null;
+  const activeNav   = useMemo(
+    () => navLinks.find((item) => isNavActive(pathname, item.href, homeHref)) ?? navLinks[0],
+    [homeHref, navLinks, pathname],
+  );
+  const themeAccent = 'var(--t-acc)';
+  const isSunsetTheme = profile?.active_theme === 'sunset-glow';
 
-  if (loading || !user) {
+  if (loading) {
     return (
-      <div className="app-frame flex min-h-screen items-center justify-center">
-        <div className="h-10 w-10 animate-pulse rounded-2xl" style={{ background: 'var(--t-btn)' }} />
+      <div className="app-frame min-h-screen" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--t-acc) 10%, transparent) 0%, transparent 34%), var(--t-bg)' }}>
+        <div className="flex min-h-screen items-center justify-center px-6">
+          <div className="w-full max-w-3xl overflow-hidden rounded-[32px] border"
+            style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 96%, var(--t-acc) 4%) 0%, color-mix(in srgb, var(--t-card) 98%, black) 100%)', borderColor: 'color-mix(in srgb, var(--t-brd) 58%, transparent)', boxShadow: '0 30px 80px rgba(0,0,0,0.28)' }}>
+            <div className="flex items-center gap-4 border-b px-6 py-5" style={{ borderColor: 'color-mix(in srgb, var(--t-brd) 40%, transparent)' }}>
+              <div className="h-12 w-12 rounded-2xl" style={{ background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))' }} />
+              <div className="min-w-0">
+                <div className="h-4 w-40 rounded-full" style={{ background: 'color-mix(in srgb, var(--t-tx) 18%, transparent)' }} />
+                <div className="mt-2 h-3 w-56 rounded-full" style={{ background: 'color-mix(in srgb, var(--t-tx3) 18%, transparent)' }} />
+              </div>
+            </div>
+            <div className="grid gap-4 p-6 md:grid-cols-3">
+              {[1, 2, 3].map((n) => (
+                <div key={n} className="h-28 rounded-3xl"
+                  style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 88%, var(--t-acc) 12%) 0%, color-mix(in srgb, var(--t-card) 96%, transparent) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 38%, transparent)' }} />
+              ))}
+            </div>
+            <div className="border-t px-6 py-5" style={{ borderColor: 'color-mix(in srgb, var(--t-brd) 40%, transparent)' }}>
+              <div className="h-4 w-48 rounded-full" style={{ background: 'color-mix(in srgb, var(--t-tx) 18%, transparent)' }} />
+              <div className="mt-3 h-3 w-72 rounded-full" style={{ background: 'color-mix(in srgb, var(--t-tx3) 18%, transparent)' }} />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -73,276 +146,289 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="app-frame">
       <OnboardingModal />
+
+      {/* Mobile overlay */}
       {sidebarOpen && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 md:hidden"
+        <button type="button" className="fixed inset-0 z-40 md:hidden"
           style={{ background: 'var(--t-overlay)' }}
           onClick={() => setSidebarOpen(false)}
-          aria-label="Close navigation"
-        />
+          aria-label="Close navigation" />
       )}
 
       <div className="flex min-h-screen gap-0">
+
         {/* ─── SIDEBAR ─── */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[280px] transform transition-transform duration-200 md:translate-x-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`fixed inset-y-0 left-0 z-50 transform transition-all duration-300 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          style={{ width: collapsed ? COLLAPSED_W : SIDEBAR_W }}
         >
-          <div
-            className="m-3 flex h-[calc(100vh-1.5rem)] flex-col overflow-hidden"
-            style={{
-              borderRadius: 24,
-              background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, var(--t-card) 100%)',
-              border: '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)',
-            }}
-          >
-            {/* ── Brand ── */}
-            <div className="flex items-center justify-between px-5 py-4">
-              <Link href="/dashboard" className="flex items-center gap-3 no-underline">
-                <div
-                  className="flex h-10 w-10 items-center justify-center"
-                  style={{
-                    borderRadius: 14,
-                    background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
-                    color: 'var(--t-acc)',
-                    border: '1px solid var(--t-brd-a)',
-                  }}
-                >
-                  <PenLine className="h-5 w-5" />
+          <div style={{
+            margin: 8,
+            height: 'calc(100dvh - 16px)',
+            borderRadius: 24,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            background: 'var(--t-sb, var(--t-card))',
+            border: '1px solid color-mix(in srgb, var(--t-sb-brd, var(--t-brd)) 70%, transparent)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}>
+
+            {/* ── BRAND ── */}
+            <div style={{
+              padding: collapsed ? '14px 0 12px' : '15px 16px',
+              borderBottom: '1px solid color-mix(in srgb, var(--t-brd) 40%, transparent)',
+              flexShrink: 0,
+            }}>
+              {collapsed ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 13,
+                      background: 'linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 6px 20px color-mix(in srgb, var(--t-acc) 30%, transparent)',
+                    }}>
+                      <PenLine style={{ width: 18, height: 18, color: '#fff' }} />
+                    </div>
+                  </Link>
+                  <button type="button" onClick={toggleCollapsed} title="Expand" style={{
+                    width: 28, height: 28, borderRadius: 9,
+                    background: 'color-mix(in srgb, var(--t-acc) 8%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)',
+                    color: 'var(--t-tx3)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <ChevronRight style={{ width: 13, height: 13 }} />
+                  </button>
                 </div>
-                <div>
-                  <p className="text-[15px] font-black leading-tight" style={{ color: 'var(--t-tx)' }}>Draftly</p>
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--t-tx3)' }}>Writing Studio</p>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <Link href="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 12, flexShrink: 0,
+                      background: 'linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 6px 20px color-mix(in srgb, var(--t-acc) 28%, transparent)',
+                    }}>
+                      <PenLine style={{ width: 16, height: 16, color: '#fff' }} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--t-sb-tx)', letterSpacing: '-0.02em', lineHeight: 1 }}>Draftora</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--t-sb-mu)', letterSpacing: '0.22em', textTransform: 'uppercase', marginTop: 1.5 }}>Writing Studio</p>
+                    </div>
+                  </Link>
+                  <button type="button"
+                    onClick={() => window.innerWidth >= 768 ? toggleCollapsed() : setSidebarOpen(false)}
+                    style={{
+                      width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                      background: 'color-mix(in srgb, var(--t-tx3) 8%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--t-brd) 40%, transparent)',
+                      color: 'var(--t-tx3)', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    aria-label="Collapse sidebar">
+                    <X style={{ width: 14, height: 14 }} />
+                  </button>
                 </div>
-              </Link>
-              <button type="button" className="dashboard-topbar__menu md:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
-                <X className="h-4 w-4" />
-              </button>
+              )}
             </div>
 
-            {/* ── User card ── */}
-            {profile && (
-              <div className="mx-4 mb-2" style={{ borderRadius: 18, background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', padding: '14px 16px' }}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className="flex h-11 w-11 shrink-0 items-center justify-center text-sm font-black"
-                    style={{
-                      borderRadius: 13,
-                      background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 80%, white), var(--t-acc))',
-                      color: 'var(--t-btn-color)',
-                      fontSize: 16,
-                    }}
-                  >
-                    {initial}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-bold" style={{ color: 'var(--t-tx)' }}>{profile.username}</p>
-                    <p className="truncate text-[11px]" style={{ color: 'var(--t-tx3)' }}>{profile.title}</p>
-                  </div>
-                  <div
-                    className="flex items-center gap-1 px-2.5 py-1"
-                    style={{ background: 'var(--t-acc-b)', borderRadius: 10, border: '1px solid var(--t-brd-a)' }}
-                  >
-                    <Star style={{ width: 10, height: 10, color: 'var(--t-acc)' }} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-acc)' }}>Lv {profile.level}</span>
+            {/* ── USER CARD (expanded only) ── */}
+            {profile && !collapsed && (
+              <div style={{
+                margin: '10px 12px 0',
+                borderRadius: 18,
+                padding: '12px 12px 10px',
+                background: isSunsetTheme
+                  ? 'linear-gradient(135deg, #ffbd7f 0%, #ffa25d 100%)'
+                  : `linear-gradient(135deg, color-mix(in srgb, ${themeAccent} 8%, var(--t-card2)) 0%, color-mix(in srgb, ${themeAccent} 4%, var(--t-card2)) 100%)`,
+                border: isSunsetTheme
+                  ? '1px solid rgba(255, 122, 52, 0.48)'
+                  : `1px solid color-mix(in srgb, ${themeAccent} 12%, var(--t-brd))`,
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Avatar */}
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 14, flexShrink: 0,
+                    background: isSunsetTheme
+                      ? 'linear-gradient(135deg, #ff8c42, #ff6a2a)'
+                      : `linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 17, fontWeight: 900, color: '#fff',
+                    boxShadow: isSunsetTheme
+                      ? '0 8px 20px rgba(255, 122, 52, 0.34)'
+                      : '0 8px 20px color-mix(in srgb, var(--t-acc) 24%, transparent)',
+                  }}>{initial}</div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <p style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--t-tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
+                      {/* Level badge */}
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 3,
+                        background: 'color-mix(in srgb, var(--t-acc) 14%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--t-acc) 25%, transparent)',
+                        borderRadius: 99, padding: '2px 7px', flexShrink: 0,
+                      }}>
+                        <Star style={{ width: 9, height: 9, color: 'var(--t-acc)' }} />
+                        <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--t-acc)' }}>Lv {profile.level}</span>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: 10.5, color: 'var(--t-tx3)', fontWeight: 500, marginTop: 1 }}>{profile.title}</p>
                   </div>
                 </div>
+
+                {/* Streak + XP inline */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--t-tx3) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-tx3) 20%, transparent)', borderRadius: 99, padding: '4px 9px' }}>
+                    <Flame style={{ width: 10, height: 10, color: 'var(--t-tx3)' }} />
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--t-tx3)' }}>{profile.streak} day streak</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--t-tx3) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-tx3) 20%, transparent)', borderRadius: 99, padding: '4px 9px' }}>
+                    <Zap style={{ width: 10, height: 10, color: 'var(--t-tx3)' }} />
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--t-tx3)' }}>{profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp} XP</span>
+                  </div>
+                </div>
+
+                {/* XP bar */}
                 {xp && (
-                  <div>
-                    <div className="flex justify-between mb-1.5">
-                      <span style={{ fontSize: 10, color: 'var(--t-tx3)' }}>
-                        <span style={{ color: 'var(--t-acc)', fontWeight: 700 }}>{xp.current}</span> / {xp.needed} XP
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--t-tx3)' }}>Level {profile.level} → {profile.level + 1}</span>
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 10, color: 'var(--t-tx3)', fontWeight: 500 }}>Level {profile.level} → {profile.level + 1}</span>
+                      <span style={{ fontSize: 10, color: 'var(--t-acc)', fontWeight: 700 }}>{Math.round(xp.percent)}%</span>
                     </div>
-                    <div className="h-[6px] overflow-hidden rounded-full" style={{ background: 'var(--t-xp-track)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${xp.percent}%`, background: 'var(--t-xp)', transition: 'width 0.5s' }} />
+                    <div style={{ height: 5, background: 'color-mix(in srgb, var(--t-tx3) 14%, transparent)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 70%, white))', borderRadius: 99, transition: 'width 0.5s cubic-bezier(0.4,0,0.2,1)' }} />
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* ── Streak + XP strip ── */}
-            {profile && (
-            <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
-              {/* Streak card */}
+            {/* ── NAV ── */}
+            <nav style={{
+              flex: '0 0 auto',
+              overflow: 'hidden',
+              padding: collapsed ? '8px 0 0' : '8px 10px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: collapsed ? 'center' : 'stretch',
+            }}>
+              {!collapsed && (
+                <p style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--t-sb-mu)', letterSpacing: '0.24em', textTransform: 'uppercase', padding: '4px 8px 8px' }}>Navigate</p>
+              )}
               <div style={{
-                borderRadius: 16,
-                padding: '12px 14px',
-                background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-warning) 18%, transparent) 0%, color-mix(in srgb, var(--t-warning) 7%, transparent) 100%)',
-                border: '1px solid color-mix(in srgb, var(--t-warning) 30%, transparent)',
-                boxShadow: '0 4px 16px color-mix(in srgb, var(--t-warning) 12%, transparent)',
-                position: 'relative',
-                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                width: '100%',
+                alignItems: collapsed ? 'center' : 'stretch',
               }}>
-                {/* Subtle glow blob */}
-                <div style={{
-                  position: 'absolute', bottom: -8, right: -8,
-                  width: 48, height: 48, borderRadius: '50%',
-                  background: 'color-mix(in srgb, var(--t-warning) 20%, transparent)',
-                  filter: 'blur(14px)',
-                  pointerEvents: 'none',
-                }} />
-                <div className="flex items-center gap-1.5 mb-2">
-                  <div style={{
-                    width: 22, height: 22, borderRadius: 7, flexShrink: 0,
-                    background: 'color-mix(in srgb, var(--t-warning) 22%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--t-warning) 35%, transparent)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Flame style={{ width: 12, height: 12, color: 'var(--t-warning)' }} />
-                  </div>
-                  <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--t-warning)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.85 }}>Streak</span>
-                </div>
-                <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t-warning)', lineHeight: 1, letterSpacing: '-0.02em' }}>
-                  {profile.streak}
-                </p>
-                <p style={{ fontSize: 10, color: 'var(--t-warning)', marginTop: 3, opacity: 0.6, fontWeight: 600 }}>
-                  day{profile.streak !== 1 ? 's' : ''} in a row
-                </p>
-              </div>
+                {navLinks.map(({ href, icon: Icon, label, color, description }) => {
+                  const active = isNavActive(pathname, href, homeHref);
 
-              {/* XP card */}
-              <div style={{
-                borderRadius: 16,
-                padding: '12px 14px',
-                background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-mod-rewards) 18%, transparent) 0%, color-mix(in srgb, var(--t-mod-rewards) 7%, transparent) 100%)',
-                border: '1px solid color-mix(in srgb, var(--t-mod-rewards) 30%, transparent)',
-                boxShadow: '0 4px 16px color-mix(in srgb, var(--t-mod-rewards) 12%, transparent)',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  position: 'absolute', bottom: -8, right: -8,
-                  width: 48, height: 48, borderRadius: '50%',
-                  background: 'color-mix(in srgb, var(--t-mod-rewards) 20%, transparent)',
-                  filter: 'blur(14px)',
-                  pointerEvents: 'none',
-                }} />
-                <div className="flex items-center gap-1.5 mb-2">
-                  <div style={{
-                    width: 22, height: 22, borderRadius: 7, flexShrink: 0,
-                    background: 'color-mix(in srgb, var(--t-mod-rewards) 22%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--t-mod-rewards) 35%, transparent)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Zap style={{ width: 12, height: 12, color: 'var(--t-mod-rewards)' }} />
-                  </div>
-                  <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--t-mod-rewards)', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.85 }}>Total XP</span>
-                </div>
-                <p style={{ fontSize: 28, fontWeight: 900, color: 'var(--t-mod-rewards)', lineHeight: 1, letterSpacing: '-0.02em' }}>
-                  {profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp}
-                </p>
-                <p style={{ fontSize: 10, color: 'var(--t-mod-rewards)', marginTop: 3, opacity: 0.6, fontWeight: 600 }}>
-                  points earned
-                </p>
-              </div>
-            </div>
-            )}
+                  if (collapsed) {
+                    return (
+                      <Link key={href} href={href} title={label}
+                        style={{
+                          width: 48, height: 48, borderRadius: 14, margin: '0 auto',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          textDecoration: 'none',
+                          background: active ? 'var(--t-sb-act)' : 'transparent',
+                          border: active ? '1px solid var(--t-sb-act-brd)' : '1px solid transparent',
+                          boxShadow: active ? `0 4px 16px color-mix(in srgb, ${color} 30%, transparent)` : 'none',
+                          transition: 'all 0.18s',
+                        }}>
+                        <Icon style={{ width: 20, height: 20, color: active ? color : 'var(--t-sb-mu)' }} />
+                      </Link>
+                    );
+                  }
 
-            {/* ── Nav links ── */}
-            <nav className="flex-1 overflow-y-auto px-3 pb-2">
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', letterSpacing: '0.15em', textTransform: 'uppercase', padding: '4px 12px 8px' }}>Navigate</p>
-              <div className="flex flex-col gap-[2px]">
-                {NAV_LINKS.map(({ href, icon: Icon, label, color, iconBg }) => {
-                  const active = pathname === href;
                   return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className="flex items-center gap-3 no-underline transition-all duration-150"
+                    <Link key={href} href={href}
                       style={{
-                        borderRadius: 14,
-                        padding: '7px 10px',
+                        display: 'flex', alignItems: 'center', gap: 11,
+                        padding: '8px 10px',
+                        borderRadius: 13,
+                        textDecoration: 'none',
                         background: active
-                          ? 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))'
+                          ? 'var(--t-sb-act)'
                           : 'transparent',
-                        border: active ? '1px solid var(--t-brd-a)' : '1px solid transparent',
+                        border: active
+                          ? '1px solid var(--t-sb-act-brd)'
+                          : '1px solid transparent',
+                        boxShadow: active ? `0 2px 12px color-mix(in srgb, ${color} 20%, transparent)` : 'none',
+                        transition: 'all 0.18s',
+                        position: 'relative',
                       }}
+                      onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'var(--t-sb-hov)'; (e.currentTarget as HTMLElement).style.border = '1px solid var(--t-sb-hov-brd)'; } }}
+                      onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.border = '1px solid transparent'; } }}
                     >
+                      {/* Icon box */}
                       <div style={{
-                        width: 36, height: 36, borderRadius: 11, flexShrink: 0,
+                        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                        background: active
+                          ? `color-mix(in srgb, ${color} 22%, transparent)`
+                          : 'color-mix(in srgb, var(--t-sb-mu) 16%, transparent)',
+                        border: `1px solid ${active ? `color-mix(in srgb, ${color} 40%, transparent)` : 'color-mix(in srgb, var(--t-sb-mu) 20%, transparent)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: active ? color : iconBg,
-                        border: active ? 'none' : '1px solid var(--t-brd)',
-                        transition: 'background 0.15s',
+                        transition: 'all 0.18s',
+                        boxShadow: active ? `0 0 10px color-mix(in srgb, ${color} 25%, transparent)` : 'none',
                       }}>
-                        <Icon style={{ width: 17, height: 17, color: active ? '#fff' : color }} />
+                        <Icon style={{ width: 16, height: 16, color: active ? color : 'var(--t-sb-mu)', transition: 'color 0.18s' }} />
                       </div>
-                      <span style={{ fontSize: 14, fontWeight: active ? 700 : 500, color: active ? 'var(--t-acc)' : 'var(--t-tx2)' }}>
-                        {label}
-                      </span>
+
+                      {/* Label + description */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? 'var(--t-sb-tx)' : 'var(--t-sb-mu)', lineHeight: 1.1, transition: 'color 0.18s' }}>{label}</p>
+                        <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--t-sb-mu) 72%, transparent)', marginTop: 2, lineHeight: 1.2 }}>{description}</p>
+                      </div>
+
+                      {/* Active indicator */}
                       {active && (
-                        <div style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: 99, background: 'var(--t-acc)' }} />
+                        <div style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}, 0 0 12px ${color}` }} />
                       )}
                     </Link>
                   );
                 })}
               </div>
-
-              {/* ── Quick actions ── */}
-              <div className="mt-4">
-                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--t-tx3)', letterSpacing: '0.15em', textTransform: 'uppercase', padding: '4px 12px 8px' }}>Quick Actions</p>
-                <div className="flex flex-col gap-[3px]">
-                  <Link
-                    href="/dashboard/writings"
-                    className="no-underline flex items-center gap-3 transition-all duration-150"
-                    style={{ borderRadius: 16, padding: '11px 16px', color: 'var(--t-tx3)', fontSize: 13, fontWeight: 500 }}
-                  >
-                    <div style={{ width: 28, height: 28, borderRadius: 9, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <PenLine style={{ width: 13, height: 13, color: 'var(--t-acc)' }} />
-                    </div>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-tx2)', lineHeight: 1 }}>Write today&apos;s piece</p>
-                      <p style={{ fontSize: 10, color: 'var(--t-tx3)', marginTop: 2 }}>Daily prompt waiting</p>
-                    </div>
-                  </Link>
-                  <Link
-                    href="/dashboard/vocab"
-                    className="no-underline flex items-center gap-3 transition-all duration-150"
-                    style={{ borderRadius: 16, padding: '11px 16px', color: 'var(--t-tx3)', fontSize: 13, fontWeight: 500 }}
-                  >
-                    <div style={{ width: 28, height: 28, borderRadius: 9, background: 'color-mix(in srgb, var(--t-mod-vocab) 14%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Target style={{ width: 13, height: 13, color: 'var(--t-mod-vocab)' }} />
-                    </div>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-tx2)', lineHeight: 1 }}>Practise vocab</p>
-                      <p style={{ fontSize: 10, color: 'var(--t-tx3)', marginTop: 2 }}>3 words to learn today</p>
-                    </div>
-                  </Link>
-                </div>
-              </div>
             </nav>
 
-            {/* ── Sign out ── */}
-            <div className="px-4 pb-4 pt-2">
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center justify-center gap-2 transition"
+            {/* ── SIGN OUT ── */}
+            <div style={{
+              padding: collapsed ? '8px 10px 10px' : '8px 10px 10px',
+              borderTop: '1px solid color-mix(in srgb, var(--t-brd) 40%, transparent)',
+              marginTop: 'auto',
+              marginBottom: 'auto',
+              flexShrink: 0,
+            }}>
+              <button type="button" onClick={handleLogout}
                 style={{
+                  width: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
+                  gap: 10,
+                  padding: collapsed ? '12px' : '12px 14px',
                   borderRadius: 14,
-                  padding: '10px 14px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: 'color-mix(in srgb, var(--t-danger) 10%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--t-danger) 22%, transparent)',
-                  color: 'var(--t-danger)',
+                  background: 'color-mix(in srgb, var(--t-danger) 18%, rgba(0,0,0,0.10))',
+                  border: '1px solid color-mix(in srgb, var(--t-danger) 34%, rgba(255,255,255,0.20))',
+                  color: 'var(--t-sb-tx)', cursor: 'pointer',
+                  fontSize: 16, fontWeight: 700,
+                  boxShadow: '0 0 0 1px color-mix(in srgb, var(--t-danger) 12%, transparent), 0 6px 14px color-mix(in srgb, var(--t-danger) 14%, transparent)',
+                  transition: 'all 0.15s',
                 }}
-              >
-                <LogOut style={{ width: 14, height: 14 }} />
-                Sign out
+                title="Sign out">
+                <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
+                {!collapsed && <span>Sign out</span>}
               </button>
             </div>
+
           </div>
         </aside>
 
         {/* ─── MAIN CONTENT ─── */}
-        <div className="min-w-0 flex-1 sidebar-offset">
+        <div className={`min-w-0 flex-1 ${collapsed ? 'sidebar-offset-collapsed' : 'sidebar-offset'}`}>
           <div className="dashboard-main">
             <div className="dashboard-content app-surface">
               <div className="dashboard-topbar">
@@ -363,18 +449,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
               </div>
               <main className="theme-main">{children}</main>
+              <LevelUpPopup />
             </div>
           </div>
         </div>
       </div>
-      {/* ── Full-app block when trial expired or all limits hit ── */}
-      {trialStatus?.fullBlocked && (
-        <UpgradeModal
-          reason={trialStatus.expired ? 'expired' : 'all'}
-          status={trialStatus}
-          /* no onClose → non-dismissible */
-        />
-      )}
     </div>
   );
 }

@@ -2,10 +2,9 @@
 // Pulls interesting/advanced words from a writing submission and adds them to the user's Word Bank
 
 import { NextResponse } from 'next/server';
-import { chat } from '@/app/lib/ai-provider';
+import { chat, extractJSON } from '@/app/lib/ai-provider';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/app/types/database';
-import { TRIAL_LIMITS } from '@/app/lib/trial';
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,29 +21,35 @@ export async function POST(req: Request) {
 
     const raw = await chat({
       tier: 'nano',
-      maxTokens: 400,
+      maxTokens: 200,
       messages: [
         {
           role: 'user',
-          content: `Extract up to 5 interesting, advanced, or useful vocabulary words from this student writing. Only pick words that are genuinely worth learning. Respond with ONLY a valid JSON array, no markdown.
+          content: `You are a vocabulary tutor. From the writing below, extract up to 3 words that the STUDENT THEMSELVES used that are advanced, sophisticated, or above average for their apparent age level — words worth reinforcing because the student already knows and used them well.
+
+Rules:
+- Only pick words the student actually wrote (not words you would suggest)
+- Only pick genuinely advanced or impressive vocabulary (NOT common words like "beautiful", "important", "describe")
+- If there are fewer than 2 strong words, return an empty array
+- Respond with ONLY a valid JSON array, no markdown
 
 Writing: "${content}"
 
 Return this structure:
 [
   {
-    "word": "the word",
+    "word": "the word the student used",
     "meaning": "simple, student-friendly definition",
     "example_sentence": "a new example sentence using the word in context"
   }
 ]
 
-If there are no notable words, return an empty array: []`,
+If there are no notably advanced words, return: []`,
         },
       ],
     });
 
-    const words: Array<{ word: string; meaning: string; example_sentence: string }> = JSON.parse(raw);
+    const words: Array<{ word: string; meaning: string; example_sentence: string }> = JSON.parse(extractJSON(raw));
 
     if (!Array.isArray(words) || words.length === 0) {
       return NextResponse.json({ added: 0 });
@@ -73,28 +78,18 @@ If there are no notable words, return an empty array: []`,
       }));
 
     if (toInsert.length > 0) {
-      // ── Free-trial vocab cap ──
+      // Increment vocab counter on profile
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('plan, vocab_words_saved')
+        .select('vocab_words_saved')
         .eq('id', userId)
         .single();
 
-      const plan       = (profileRow as { plan: string; vocab_words_saved: number } | null)?.plan ?? 'free';
-      const vocabUsed  = (profileRow as { plan: string; vocab_words_saved: number } | null)?.vocab_words_saved ?? 0;
-      const slotsLeft  = plan === 'plus' ? Infinity : Math.max(0, TRIAL_LIMITS.VOCAB_WORDS - vocabUsed);
-
-      const allowed = toInsert.slice(0, slotsLeft);
-      if (allowed.length > 0) {
-        await supabase.from('vocab_words').insert(allowed as any);
-        // Increment vocab_words_saved counter
-        if (plan !== 'plus') {
-          await supabase.from('profiles')
-            .update({ vocab_words_saved: vocabUsed + allowed.length })
-            .eq('id', userId);
-        }
-      }
-      return NextResponse.json({ added: allowed.length, blocked: toInsert.length - allowed.length });
+      await supabase.from('vocab_words').insert(toInsert as any);
+      await supabase.from('profiles')
+        .update({ vocab_words_saved: (profileRow?.vocab_words_saved ?? 0) + toInsert.length })
+        .eq('id', userId);
+      return NextResponse.json({ added: toInsert.length, blocked: 0 });
     }
 
     return NextResponse.json({ added: 0 });

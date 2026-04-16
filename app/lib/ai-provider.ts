@@ -1,6 +1,7 @@
 // Universal AI provider adapter
 // Switch providers with: AI_PROVIDER=openai | anthropic  (defaults to openai)
-// Switch models with:    AI_FAST_MODEL / AI_SMART_MODEL  (optional overrides)
+// OpenAI stays on gpt-4o-mini because it is the cheapest good OpenAI chat model.
+// Anthropic defaults to Haiku 4.5 across tiers for cost control; override via AI_*_MODEL.
 //
 // Fast tier  → cheap / quick tasks (feedback, vocab, sentence check, progress)
 // Smart tier → richer reasoning    (coach chat)
@@ -14,12 +15,14 @@ export interface ChatOptions {
   system?: string;
   messages: AIMessage[];
   maxTokens?: number;
+  /** Force JSON output (OpenAI json_object mode / Anthropic reminder) */
+  jsonMode?: boolean;
 }
 
 // Default model names per provider — override via env vars if needed
 const DEFAULT_MODELS = {
   openai:    { nano: 'gpt-4o-mini', fast: 'gpt-4o-mini', smart: 'gpt-4o-mini' },
-  anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-sonnet-4-6' },
+  anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-haiku-4-5-20251001' },
 };
 
 function getModel(provider: string, tier: 'nano' | 'fast' | 'smart'): string {
@@ -29,7 +32,22 @@ function getModel(provider: string, tier: 'nano' | 'fast' | 'smart'): string {
     ?? DEFAULT_MODELS.openai[tier];
 }
 
-export async function chat({ tier, system, messages, maxTokens = 600 }: ChatOptions): Promise<string> {
+/**
+ * Strips markdown code fences that AI models sometimes add despite instructions.
+ * Handles ```json ... ```, ``` ... ```, and bare JSON.
+ */
+export function extractJSON(raw: string): string {
+  const trimmed = raw.trim();
+  // Match ```json ... ``` or ``` ... ```
+  const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
+  if (fenced) return fenced[1].trim();
+  // Single backtick wrappers
+  const ticked = trimmed.match(/^`([\s\S]*)`$/);
+  if (ticked) return ticked[1].trim();
+  return trimmed;
+}
+
+export async function chat({ tier, system, messages, maxTokens = 500, jsonMode = false }: ChatOptions): Promise<string> {
   const provider = (process.env.AI_PROVIDER ?? 'openai').toLowerCase();
   const model    = getModel(provider, tier);
 
@@ -61,6 +79,7 @@ export async function chat({ tier, system, messages, maxTokens = 600 }: ChatOpti
     model,
     max_tokens: maxTokens,
     messages: openaiMessages,
+    ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
   });
 
   return res.choices[0]?.message?.content ?? '';

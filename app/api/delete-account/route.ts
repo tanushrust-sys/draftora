@@ -1,14 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const adminSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+import { requireRouteAuth } from '@/app/lib/server-auth';
 
 export async function POST(req: NextRequest) {
-  const { userId } = await req.json();
-  if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+  const auth = await requireRouteAuth(req);
+  if ('error' in auth) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const { userId, profile } = auth.auth;
+  const { adminSupabase } = auth;
+
+  const { error: tombstoneError } = await adminSupabase.from('deleted_accounts').insert({
+    user_id: userId,
+    email: profile.email,
+    username: profile.username,
+    account_type: profile.account_type,
+  });
+
+  if (tombstoneError) {
+    return NextResponse.json({ error: tombstoneError.message }, { status: 500 });
+  }
+
+  if (profile.account_type === 'teacher') {
+    const { data: classes } = await adminSupabase.from('teacher_classes').select('id').eq('teacher_id', userId);
+    const classIds = (classes ?? []).map((row: { id: string }) => row.id);
+    if (classIds.length) {
+      await adminSupabase.from('teacher_class_students').delete().in('class_id', classIds);
+    }
+    await adminSupabase.from('teacher_classes').delete().eq('teacher_id', userId);
+  }
+
+  if (profile.account_type === 'parent') {
+    await adminSupabase.from('parent_student_links').delete().eq('parent_id', userId);
+  }
 
   // Delete all user data (cascade handled by DB, but belt-and-suspenders)
   await adminSupabase.from('writings').delete().eq('user_id', userId);

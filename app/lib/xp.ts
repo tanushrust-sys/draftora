@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getLevelFromXP, getTitleForLevel } from '@/app/types/database';
+import { setProfileOverride } from '@/app/lib/profile-overrides';
 
 // How much XP each action earns
 // Balanced for 30-level system (50 base + 25/level increase, 11 600 XP total)
@@ -32,29 +33,46 @@ export const XP_REWARDS = {
   STREAK_100:          800,   // 100-day streak — legendary!
 } as const;
 
+export function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function msUntilNextLocalMidnight() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return next.getTime() - now.getTime();
+}
+
 // Give the user XP and update their level
 export async function awardXP(userId: string, amount: number, reason: string) {
-  // Record the XP in the log
-  await supabase.from('xp_log').insert({ user_id: userId, amount, reason });
+  try {
+    const { data: profileSnapshot } = await supabase
+      .from('profiles')
+      .select('xp')
+      .eq('id', userId)
+      .single()
+      .then(res => res, () => ({ data: null }));
 
-  // Get current totals
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('xp, level')
-    .eq('id', userId)
-    .single();
+    const nextXP = (profileSnapshot?.xp ?? 0) + amount;
+    setProfileOverride(userId, 'xp', nextXP);
 
-  if (!profile) return;
+    await supabase.from('xp_log').insert({ user_id: userId, amount, reason }).then(() => null, () => null);
 
-  const newXP = profile.xp + amount;
-  const newLevel = getLevelFromXP(newXP);
-  const newTitle = getTitleForLevel(newLevel);
+    const newLevel = getLevelFromXP(nextXP);
+    const newTitle = getTitleForLevel(newLevel);
 
-  // Update the profile
-  await supabase
-    .from('profiles')
-    .update({ xp: newXP, level: newLevel, title: newTitle })
-    .eq('id', userId);
+    await supabase
+      .from('profiles')
+      .update({ xp: nextXP, level: newLevel, title: newTitle })
+      .eq('id', userId)
+      .then(() => null, () => null);
+  } catch (error) {
+    console.error('awardXP error:', error);
+  }
 }
 
 // Track what the user did today (words written, vocab used, etc.)
@@ -69,7 +87,7 @@ export async function updateDailyStats(
     custom_goal_completed?: boolean;
   }
 ) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateKey();
 
   const { data: existing } = await supabase
     .from('daily_stats')
@@ -104,8 +122,8 @@ export async function updateStreak(userId: string) {
 
   if (!profile) return;
 
-  const today     = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const today = getLocalDateKey();
+  const yesterday = getLocalDateKey(new Date(Date.now() - 86400000));
 
   // Already counted today
   if (profile.last_writing_date === today) return;
