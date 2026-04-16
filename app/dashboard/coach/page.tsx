@@ -280,20 +280,23 @@ export default function CoachPage() {
       const payload = conversations
         .filter((conversation) => !deletedConversationIdsRef.current.has(conversation.id))
         .map((conversation) => ({
-        id: conversation.id,
-        user_id: profile.id,
-        mode: conversation.mode,
-        trainer_type: conversation.trainer_type,
-        messages: conversation.messages,
-        updated_at: conversation.updated_at,
-      }));
+          id: conversation.id,
+          user_id: profile.id,
+          mode: conversation.mode,
+          trainer_type: conversation.trainer_type,
+          messages: conversation.messages,
+          updated_at: conversation.updated_at,
+        }));
 
-      void supabase
-        .from('coach_conversations')
-        .upsert(payload, { onConflict: 'id' })
-        .catch((error) => {
+      void (async () => {
+        const { error } = await supabase
+          .from('coach_conversations')
+          .upsert(payload, { onConflict: 'id' });
+
+        if (error) {
           console.error('coach conversations autosync error:', error);
-        });
+        }
+      })();
     }, 600);
 
     return () => window.clearTimeout(syncTimer);
