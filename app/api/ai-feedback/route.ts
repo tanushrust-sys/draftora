@@ -82,6 +82,25 @@ function ageLanguageGuide(ageGroup: string) {
   }
 }
 
+function getRewriteTargetWordCount(ageGroup?: string) {
+  switch (ageGroup) {
+    case '5-7':
+      return 75;
+    case '8-10':
+      return 200;
+    case '11-13':
+      return 450;
+    case '14-17':
+      return 800;
+    case '18-21':
+      return 1000;
+    case '22+':
+      return 1300;
+    default:
+      return 800;
+  }
+}
+
 function feedbackUnavailableResponse() {
   return NextResponse.json(
     { error: AI_FEEDBACK_UNAVAILABLE_MESSAGE },
@@ -386,6 +405,7 @@ export async function POST(req: Request) {
     const mappedWritingType = mapWritingType(category);
     const experienceLabel = getWritingExperienceLabel(writingExperienceScore);
     const safeWordCount = typeof wordCount === 'number' ? wordCount : splitWords(content).length;
+    const rewriteTargetWordCount = getRewriteTargetWordCount(ageGroup);
     const trimmedContent = buildCompactExcerpt(content);
 
     const system = `You are an expert writing coach giving feedback to a ${mappedAgeGroup} writer.
@@ -405,7 +425,7 @@ Return ONLY a valid JSON object with exactly these 8 keys. No extra keys. No tex
   "beginning": "2 sentences coaching the opening of the piece — what works, what to improve.",
   "middle": "2 sentences coaching the middle section — what works, what to improve.",
   "end": "2 sentences coaching the ending — what works, what to improve.",
-  "rewritten_version": "Rewrite the opening 2-3 paragraphs at a higher craft level. Same ideas and voice. Multiple short paragraphs separated by blank lines. Never empty — if the draft is weak, write a strong model example. No preamble."
+  "rewritten_version": "Rewrite the full piece at a higher craft level while preserving the same core ideas and voice. Target about ${rewriteTargetWordCount} words (roughly plus or minus 10%). Use multiple short paragraphs separated by blank lines. Never empty — if the draft is weak, write a strong model example. No preamble."
 }
 
 Rules:
@@ -420,6 +440,7 @@ Category: ${category}
 ${prompt ? `Writing prompt: "${prompt}"` : ''}
 Approximate word count: ${safeWordCount}
 Writer experience: ${Math.max(0, Math.min(100, Math.round(writingExperienceScore || 0)))}/100
+Rewrite target length: about ${rewriteTargetWordCount} words (roughly plus or minus 10%)
 
 Writing:
 """
