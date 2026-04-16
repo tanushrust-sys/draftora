@@ -12,9 +12,14 @@ export type StoredCoachConversation = {
 };
 
 const COACH_CONVERSATIONS_PREFIX = 'draftora:coach-conversations:';
+const COACH_CONVERSATION_TITLES_PREFIX = 'draftora:coach-conversation-titles:';
 
 function getCoachConversationsKey(userId: string) {
   return `${COACH_CONVERSATIONS_PREFIX}${userId}`;
+}
+
+function getCoachConversationTitlesKey(userId: string) {
+  return `${COACH_CONVERSATION_TITLES_PREFIX}${userId}`;
 }
 
 function sortByMostRecent<T extends { updated_at: string }>(items: T[]) {
@@ -74,4 +79,48 @@ export function mergeStoredCoachConversations(userId: string, incoming: StoredCo
 
 export function upsertStoredCoachConversation(userId: string, conversation: StoredCoachConversation) {
   return mergeStoredCoachConversations(userId, [conversation]);
+}
+
+export function deleteStoredCoachConversation(userId: string, conversationId: string) {
+  const next = readStoredCoachConversations(userId).filter((conversation) => conversation.id !== conversationId);
+  writeStoredCoachConversations(userId, next);
+  return next;
+}
+
+export function readStoredCoachConversationTitles(userId: string): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const raw = localStorage.getItem(getCoachConversationTitlesKey(userId));
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredCoachConversationTitles(userId: string, titles: Record<string, string>) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(getCoachConversationTitlesKey(userId), JSON.stringify(titles));
+}
+
+export function setStoredCoachConversationTitle(userId: string, conversationId: string, title: string) {
+  const titles = readStoredCoachConversationTitles(userId);
+  const next = {
+    ...titles,
+    [conversationId]: title,
+  };
+  writeStoredCoachConversationTitles(userId, next);
+  return next;
+}
+
+export function deleteStoredCoachConversationTitle(userId: string, conversationId: string) {
+  const titles = readStoredCoachConversationTitles(userId);
+  if (!(conversationId in titles)) return titles;
+
+  delete titles[conversationId];
+  writeStoredCoachConversationTitles(userId, titles);
+  return titles;
 }

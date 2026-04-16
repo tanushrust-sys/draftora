@@ -4,8 +4,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { FetchTimeoutError, fetchWithTimeout } from '@/app/lib/fetch-with-timeout';
 import {
+  deleteStoredCoachConversation,
+  deleteStoredCoachConversationTitle,
   mergeStoredCoachConversations,
   readStoredCoachConversations,
+  readStoredCoachConversationTitles,
+  setStoredCoachConversationTitle,
   type StoredCoachConversation,
 } from '@/app/lib/coach-conversation-storage';
 import { withPromiseTimeout } from '@/app/lib/promise-with-timeout';
@@ -16,7 +20,7 @@ import {
   Bot, Send, Brain, Sparkles, RotateCcw,
   Plus, MessageSquare, Clock, Target, PenLine, BookOpen,
   Flame, Zap, Trophy, Star, type LucideIcon,
-  Hash, Mail, FileText, Feather, ChevronRight,
+  Hash, Mail, FileText, Feather, ChevronRight, Pencil, Trash2,
 } from 'lucide-react';
 
 type Message      = { role: 'user' | 'assistant'; content: string };
@@ -74,6 +78,10 @@ function timeAgo(dateStr: string) {
 
 function getTrainer(value: string) {
   return TRAINERS.find(t => t.value === value) ?? TRAINERS[0];
+}
+
+function getConversationPreview(conversation: Conversation) {
+  return conversation.messages.find((message) => message.role === 'user')?.content.slice(0, 42) || 'New conversation';
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -205,6 +213,7 @@ export default function CoachPage() {
   const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
   const [coachError, setCoachError]       = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationTitles, setConversationTitles] = useState<Record<string, string>>({});
   const [activeId, setActiveId]           = useState<string | null>(null);
   const [goalData, setGoalData]           = useState<GoalData | null>(null);
 
@@ -234,6 +243,8 @@ export default function CoachPage() {
   const loadConversations = useCallback(async () => {
     if (!profile) return;
     const stored = readStoredCoachConversations(profile.id);
+    const storedTitles = readStoredCoachConversationTitles(profile.id);
+    setConversationTitles(storedTitles);
 
     try {
       const { data, error } = await supabase
@@ -435,6 +446,49 @@ export default function CoachPage() {
     inputRef.current?.focus();
   };
 
+  const renameConversation = useCallback((conversation: Conversation) => {
+    if (!profile) return;
+    const defaultTitle = getConversationPreview(conversation);
+    const currentTitle = conversationTitles[conversation.id] ?? defaultTitle;
+    const nextTitleRaw = window.prompt('Rename this chat', currentTitle);
+    if (nextTitleRaw === null) return;
+
+    const nextTitle = nextTitleRaw.trim();
+    if (!nextTitle) return;
+
+    const updatedTitles = setStoredCoachConversationTitle(profile.id, conversation.id, nextTitle);
+    setConversationTitles(updatedTitles);
+  }, [conversationTitles, profile]);
+
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    if (!profile) return;
+    const confirmed = window.confirm('Delete this chat permanently?');
+    if (!confirmed) return;
+
+    const nextConversations = deleteStoredCoachConversation(profile.id, conversationId);
+    const nextTitles = deleteStoredCoachConversationTitle(profile.id, conversationId);
+    setConversations(nextConversations);
+    setConversationTitles(nextTitles);
+
+    if (activeId === conversationId) {
+      if (nextConversations.length > 0) {
+        loadSession(nextConversations[0]);
+      } else {
+        startNewChat();
+      }
+    }
+
+    const { error } = await supabase
+      .from('coach_conversations')
+      .delete()
+      .eq('id', conversationId)
+      .eq('user_id', profile.id);
+
+    if (error) {
+      console.error('deleteConversation error:', error);
+    }
+  }, [activeId, loadSession, profile]);
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
@@ -522,34 +576,72 @@ export default function CoachPage() {
               const isActive = conv.id === activeId;
               const t = getTrainer(conv.trainer_type);
               const TIcon = t.icon as LucideIcon;
-              const preview = conv.messages.find(m => m.role === 'user')?.content.slice(0, 42) || 'New conversation';
+              const preview = getConversationPreview(conv);
+              const title = conversationTitles[conv.id] ?? preview;
               return (
-                <button
+                <div
                   key={conv.id}
-                  onClick={() => loadSession(conv)}
                   style={{
-                    width: '100%', textAlign: 'left', display: 'block',
+                    width: '100%', textAlign: 'left',
                     padding: '10px 11px', borderRadius: 14, marginBottom: 3,
                     background: isActive ? t.bg : 'transparent',
                     border: isActive ? `1px solid ${t.color}28` : '1px solid transparent',
-                    cursor: 'pointer', transition: 'all 0.12s',
+                    transition: 'all 0.12s',
                   }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--t-bg)'; }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                    <div style={{ width: 20, height: 20, borderRadius: 7, background: `${t.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <TIcon style={{ width: 11, height: 11, color: t.color }} />
+                  <button
+                    onClick={() => loadSession(conv)}
+                    style={{
+                      width: '100%', textAlign: 'left', display: 'block',
+                      background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                    }}
+                    onMouseEnter={e => {
+                      const row = e.currentTarget.parentElement;
+                      if (!isActive && row) row.style.background = 'var(--t-bg)';
+                    }}
+                    onMouseLeave={e => {
+                      const row = e.currentTarget.parentElement;
+                      if (!isActive && row) row.style.background = 'transparent';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <div style={{ width: 20, height: 20, borderRadius: 7, background: `${t.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <TIcon style={{ width: 11, height: 11, color: t.color }} />
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? t.color : 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.label}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--t-tx3)', flexShrink: 0 }}>{timeAgo(conv.updated_at)}</span>
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? t.color : 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {t.label}
-                    </span>
-                    <span style={{ fontSize: 10, color: 'var(--t-tx3)', flexShrink: 0 }}>{timeAgo(conv.updated_at)}</span>
+                    <p style={{ fontSize: 12, color: isActive ? 'var(--t-tx)' : 'var(--t-tx2)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {title}
+                    </p>
+                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+                    <button
+                      onClick={() => renameConversation(conv)}
+                      title="Rename chat"
+                      style={{
+                        width: 26, height: 26, borderRadius: 8, border: '1px solid var(--t-brd)',
+                        background: 'var(--t-card)', color: 'var(--t-tx3)', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      <Pencil style={{ width: 12, height: 12 }} />
+                    </button>
+                    <button
+                      onClick={() => void deleteConversation(conv.id)}
+                      title="Delete chat"
+                      style={{
+                        width: 26, height: 26, borderRadius: 8, border: '1px solid color-mix(in srgb, var(--t-danger, #f87171) 45%, var(--t-brd))',
+                        background: 'var(--t-card)', color: 'var(--t-danger, #f87171)', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      <Trash2 style={{ width: 12, height: 12 }} />
+                    </button>
                   </div>
-                  <p style={{ fontSize: 12, color: isActive ? 'var(--t-tx)' : 'var(--t-tx2)', fontWeight: isActive ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {preview}
-                  </p>
-                </button>
+                </div>
               );
             })
           )}
