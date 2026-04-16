@@ -171,6 +171,7 @@ function normalizeProfile(profile: Partial<Profile> & Pick<Profile, 'id'>): Prof
     unlocked_themes: normalizeUnlockedThemes(profile.unlocked_themes),
     plan: normalizeTeacherSubscriptionPlan(profile.plan),
     student_id: profile.student_id ?? null,
+    teacher_id: profile.teacher_id ?? null,
     account_type: profile.account_type ?? 'student',
     age_group: profile.age_group ?? '',
     writing_goal: profile.writing_goal ?? '',
