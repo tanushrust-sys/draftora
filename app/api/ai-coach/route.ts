@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { chat } from '@/app/lib/ai-provider';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getWritingExperienceLabel, getWritingExperiencePromptContext } from '@/app/lib/writing-experience';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
 
@@ -46,8 +46,6 @@ function truncate(text: string, max = 220) {
   return `${clean.slice(0, max - 1)}…`;
 }
 
-type SupabaseClient = ReturnType<typeof createClient>;
-
 function buildUserClient(accessToken: string) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,7 +60,7 @@ function buildUserClient(accessToken: string) {
   );
 }
 
-async function fetchStudentContext(userId: string, client: SupabaseClient) {
+async function fetchStudentContext(userId: string, client: SupabaseClient<any, any, any>) {
   const today = new Date().toISOString().split('T')[0];
 
   const [todayRes, latestRes, reviewedRes, vocabRes] = await Promise.all([
