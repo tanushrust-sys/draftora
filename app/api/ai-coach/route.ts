@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { chat } from '@/app/lib/ai-provider';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { getWritingExperienceLabel, getWritingExperiencePromptContext } from '@/app/lib/writing-experience';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
 
@@ -60,7 +60,7 @@ function buildUserClient(accessToken: string) {
   );
 }
 
-async function fetchStudentContext(userId: string, client: SupabaseClient<any, any, any>) {
+async function fetchStudentContext(userId: string, client: any) {
   const today = new Date().toISOString().split('T')[0];
 
   const [todayRes, latestRes, reviewedRes, vocabRes] = await Promise.all([
