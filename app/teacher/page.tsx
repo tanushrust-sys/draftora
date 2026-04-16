@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, BarChart3, ChevronRight, Copy, LayoutGrid, MoonStar, Plus, RefreshCcw, School, Settings, SunMedium, Trash2, Users, UserCircle2 } from 'lucide-react';
 import { RoleAppShell } from '@/app/components/role-app-shell';
@@ -80,6 +80,8 @@ export default function TeacherPage() {
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [bulkError, setBulkError] = useState('');
   const [bulkResult, setBulkResult] = useState<Array<{ name: string; username: string; email: string; password: string; studentCode: string }>>([]);
+  const [copiedDetailsKey, setCopiedDetailsKey] = useState('');
+  const copiedDetailsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'class'; classId: string; name: string } | { type: 'student'; classId: string; studentId: string; name: string } | null>(null);
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => readPrefs());
   const palette = useMemo(() => getWorkspacePalette(mode), [mode]);
@@ -92,6 +94,16 @@ export default function TeacherPage() {
   } as const;
   const authToken = session?.access_token ?? '';
 
+  const handleCopyDetails = useCallback((key: string, text: string) => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedDetailsKey(key);
+      if (copiedDetailsTimerRef.current) clearTimeout(copiedDetailsTimerRef.current);
+      copiedDetailsTimerRef.current = setTimeout(() => {
+        setCopiedDetailsKey((current) => (current === key ? '' : current));
+      }, 1800);
+    });
+  }, []);
+
   useEffect(() => { const stored = readWorkspaceMode('teacher'); if (stored) setMode(stored); }, []);
   useEffect(() => { writeWorkspaceMode('teacher', mode); }, [mode]);
   useEffect(() => { localStorage.setItem(TAB_KEY, activeTab); }, [activeTab]);
@@ -99,6 +111,9 @@ export default function TeacherPage() {
   useEffect(() => { setStudentDetailMode('report'); }, [selectedStudentId]);
   useEffect(() => { setExpandedStudentId(''); }, [students]);
   useEffect(() => { savePrefs(prefs); }, [prefs]);
+  useEffect(() => () => {
+    if (copiedDetailsTimerRef.current) clearTimeout(copiedDetailsTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!authToken) return;
@@ -436,11 +451,14 @@ export default function TeacherPage() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => navigator.clipboard.writeText(`Username: ${student.username}\nEmail: ${student.email || `${student.username}@draftora.school`}\nPassword: ${student.password || ''}`)}
+                    onClick={() => handleCopyDetails(
+                      `student-${student.id}`,
+                      `Username: ${student.username}\nEmail: ${student.email || `${student.username}@draftora.school`}\nPassword: ${student.password || ''}`,
+                    )}
                     style={{ border: `1px solid ${palette.border}`, borderRadius: 12, padding: '8px 14px', background: palette.surface2, color: palette.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 850, width: 'fit-content' }}
                   >
                     <Copy style={{ width: 13, height: 13 }} />
-                    Copy details
+                    {copiedDetailsKey === `student-${student.id}` ? 'Details copied' : 'Copy details'}
                   </button>
                 </div>
               ) : (
@@ -828,11 +846,14 @@ export default function TeacherPage() {
                   <div style={{ fontSize: 15, fontWeight: 950, color: palette.text }}>Name: {student.name}</div>
                   <button
                     type="button"
-                    onClick={() => navigator.clipboard.writeText(`Username: ${student.username}\nEmail: ${student.email}\nPassword: ${student.password}`)}
+                    onClick={() => handleCopyDetails(
+                      `bulk-${student.username}`,
+                      `Username: ${student.username}\nEmail: ${student.email}\nPassword: ${student.password}`,
+                    )}
                     style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: '9px 12px', background: 'transparent', color: palette.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
                   >
                     <Copy style={{ width: 14, height: 14 }} />
-                    Copy details
+                    {copiedDetailsKey === `bulk-${student.username}` ? 'Details copied' : 'Copy details'}
                   </button>
                 </div>
                 <div style={{ display: 'grid', gap: 10 }}>
