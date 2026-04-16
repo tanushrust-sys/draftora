@@ -36,7 +36,6 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const redirectingRef = useRef(false);
 
   useEffect(() => {
@@ -95,24 +94,6 @@ export default function LoginPage() {
     );
     redirectingRef.current = true;
     window.location.assign(homePath);
-  };
-
-  const handleGoogle = async () => {
-    setError('');
-    setGoogleLoading(true);
-    clearSupabaseClientSession();
-
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-      },
-    });
-
-    if (oauthError) {
-      setError(oauthError.message || 'Could not open Google sign-in.');
-      setGoogleLoading(false);
-    }
   };
 
   return (
@@ -240,29 +221,6 @@ export default function LoginPage() {
           {loading ? 'Signing in...' : 'Log in'}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', color: 'rgba(193, 240, 255, 0.42)', fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.18em' }}>
-          <span style={{ height: 1, flex: 1, background: 'rgba(56, 189, 248, 0.18)' }} />
-          <span>or continue with</span>
-          <span style={{ height: 1, flex: 1, background: 'rgba(56, 189, 248, 0.18)' }} />
-        </div>
-
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={googleLoading}
-          style={{
-            width: '100%',
-            minHeight: '3.4rem',
-            borderRadius: '1rem',
-            border: '1px solid rgba(125, 211, 252, 0.22)',
-            background: 'rgba(3, 23, 38, 0.6)',
-            color: 'rgba(224, 251, 255, 0.92)',
-            fontWeight: 600,
-            cursor: googleLoading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {googleLoading ? 'Opening Google...' : 'Continue with Google'}
-        </button>
       </form>
     </AuthShell>
   );
