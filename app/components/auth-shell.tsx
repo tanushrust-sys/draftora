@@ -26,7 +26,7 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
     body.style.backgroundColor = '#01040b';
     body.style.margin = '0';
     body.style.overflowX = 'hidden';
-    body.style.overflowY = 'hidden';
+    body.style.overflowY = 'auto';
 
     return () => {
       html.style.backgroundColor = previousHtmlBg;
@@ -46,7 +46,7 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
         width: '100%',
         height: '100dvh',
         overflowX: 'hidden',
-        overflowY: 'hidden',
+        overflowY: 'auto',
         background: 'radial-gradient(ellipse 85% 60% at 50% 0%, #03131f 0%, #020814 55%, #01040b 100%)',
         color: '#e8fbff',
       }}
@@ -84,7 +84,7 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
           width: 'min(440px, calc(100vw - 1.5rem))',
           marginInline: 'auto',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           minHeight: '100dvh',
           paddingTop: 'clamp(1.1rem, 4vh, 2rem)',
           paddingBottom: 'clamp(1.1rem, 4vh, 2rem)',
