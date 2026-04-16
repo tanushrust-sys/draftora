@@ -132,7 +132,7 @@ function isAbortLikeError(error: unknown) {
   return false;
 }
 
-function isExpectedUserFacingError(error: unknown) {
+function isExpectedUserFacingError(error: unknown): error is Error {
   if (!(error instanceof Error)) return false;
   const message = error.message.toLowerCase();
   return (
