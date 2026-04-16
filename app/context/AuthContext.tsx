@@ -102,17 +102,18 @@ function readCachedProfile(): Profile | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY);
-    return raw
-      ? normalizeStoredProfile(
-          applyProfileOverrides(
-            applyAccountTypeOverride(
-              applyWritingExperienceOverride(
-                applyAgeGroupOverride(JSON.parse(raw) as Profile),
-              ),
-            ),
-          ),
-        )
-      : null;
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Profile | null;
+    const nextProfile = applyProfileOverrides(
+      applyAccountTypeOverride(
+        applyWritingExperienceOverride(
+          applyAgeGroupOverride(parsed),
+        ),
+      ),
+    );
+
+    return nextProfile ? normalizeStoredProfile(nextProfile) : null;
   } catch {
     return null;
   }
@@ -120,18 +121,19 @@ function readCachedProfile(): Profile | null {
 
 function writeCachedProfile(profile: Profile) {
   try {
+    const nextProfile = applyProfileOverrides(
+      applyAccountTypeOverride(
+        applyWritingExperienceOverride(
+          applyAgeGroupOverride(profile),
+        ),
+      ),
+    );
+    if (!nextProfile) return;
+
     localStorage.setItem(
       PROFILE_CACHE_KEY,
       JSON.stringify(
-        normalizeStoredProfile(
-          applyProfileOverrides(
-            applyAccountTypeOverride(
-              applyWritingExperienceOverride(
-                applyAgeGroupOverride(profile),
-              ),
-            ),
-          ),
-        ),
+        normalizeStoredProfile(nextProfile),
       ),
     );
   } catch {
