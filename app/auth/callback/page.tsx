@@ -33,12 +33,15 @@ function AuthCallbackContent() {
   useEffect(() => {
     const run = async () => {
       const code = searchParams.get('code');
-      const next = searchParams.get('next') || '/dashboard';
+      const rawNext = searchParams.get('next');
+      const recoveryType = searchParams.get('type');
       const hash = typeof window !== 'undefined' ? window.location.hash : '';
       const hasRecoveryHash =
         hash.includes('access_token=') ||
         hash.includes('refresh_token=') ||
         hash.includes('type=recovery');
+      const isRecoveryFlow = hasRecoveryHash || recoveryType === 'recovery';
+      const next = rawNext || (isRecoveryFlow ? '/reset-password' : '/dashboard');
 
       try {
         if (code) {

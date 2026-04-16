@@ -44,8 +44,12 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    const appBaseUrl =
+      (process.env.NEXT_PUBLIC_SITE_URL || '').trim().replace(/\/$/, '') ||
+      window.location.origin;
+
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      redirectTo: `${appBaseUrl}/auth/callback?next=/reset-password`,
     });
 
     if (resetError) {
