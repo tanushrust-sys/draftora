@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
   PenLine,
@@ -104,6 +104,7 @@ function getRoleCopy(choice: AccountTypeChoice) {
 
 export default function OnboardingModal() {
   const { profile, refreshProfile } = useAuth();
+  const initializedUserIdRef = useRef<string | null>(null);
 
   const [ready, setReady] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -119,17 +120,23 @@ export default function OnboardingModal() {
     if (!profile?.id) {
       setReady(false);
       setComplete(false);
+      initializedUserIdRef.current = null;
       return;
     }
 
     const alreadyConfigured = hasStudentSetupCompleted(profile);
-    setStep(profile.account_type === 'student' ? 2 : 1);
-    setSaving(false);
-    setBusyChoice(null);
-    setError('');
-    setSelectedAgeGroup((current) => current || profile.age_group || AGE_GROUP_OPTIONS[0].value);
-    setSelectedDailyGoal((current) => current ?? profile.daily_word_goal ?? 300);
-    setSelectedExperience((current) => current ?? normalizeWritingExperienceScore(profile.writing_experience_score));
+    const isNewUserContext = initializedUserIdRef.current !== profile.id;
+    if (isNewUserContext) {
+      initializedUserIdRef.current = profile.id;
+      setStep(profile.account_type === 'student' ? 2 : 1);
+      setSaving(false);
+      setBusyChoice(null);
+      setError('');
+      setSelectedAgeGroup(profile.age_group || AGE_GROUP_OPTIONS[0].value);
+      setSelectedDailyGoal(profile.daily_word_goal ?? 300);
+      setSelectedExperience(normalizeWritingExperienceScore(profile.writing_experience_score));
+    }
+
     const locallyCompleted = readOnboardingComplete(profile.id);
     const nextComplete = locallyCompleted || alreadyConfigured;
     if (nextComplete && !locallyCompleted) {
@@ -137,7 +144,13 @@ export default function OnboardingModal() {
     }
     setComplete(nextComplete);
     setReady(true);
-  }, [profile]);
+  }, [
+    profile?.id,
+    profile?.account_type,
+    profile?.age_group,
+    profile?.daily_word_goal,
+    profile?.writing_experience_score,
+  ]);
 
   if (!profile || !ready || complete) return null;
 
