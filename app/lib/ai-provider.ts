@@ -54,7 +54,11 @@ export async function chat({ tier, system, messages, maxTokens = 500, jsonMode =
   // ── Anthropic ──────────────────────────────────────────────────
   if (provider === 'anthropic') {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) {
+      throw new Error('Missing ANTHROPIC_API_KEY in environment.');
+    }
+    const client = new Anthropic({ apiKey: anthropicKey });
 
     const res = await client.messages.create({
       model,
@@ -68,7 +72,11 @@ export async function chat({ tier, system, messages, maxTokens = 500, jsonMode =
 
   // ── OpenAI (default) ───────────────────────────────────────────
   const { default: OpenAI } = await import('openai');
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) {
+    throw new Error('Missing OPENAI_API_KEY in environment.');
+  }
+  const client = new OpenAI({ apiKey: openaiKey });
 
   const openaiMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     ...(system ? [{ role: 'system' as const, content: system }] : []),
