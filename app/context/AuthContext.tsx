@@ -104,11 +104,13 @@ function readCachedProfile(): Profile | null {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY);
     if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as Profile | null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+
     const nextProfile = applyProfileOverrides(
       applyAccountTypeOverride(
         applyWritingExperienceOverride(
-          applyAgeGroupOverride(parsed),
+          applyAgeGroupOverride(parsed as Profile),
         ),
       ),
     );
