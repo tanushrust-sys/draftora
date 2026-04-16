@@ -15,19 +15,22 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
     const html = document.documentElement;
     const body = document.body;
     const previousHtmlBg = html.style.backgroundColor;
+    const previousHtmlOverflow = html.style.overflow;
     const previousBodyBg = body.style.backgroundColor;
     const previousBodyMargin = body.style.margin;
     const previousBodyOverflowX = body.style.overflowX;
     const previousBodyOverflowY = body.style.overflowY;
 
     html.style.backgroundColor = '#01040b';
+    html.style.overflow = 'hidden';
     body.style.backgroundColor = '#01040b';
     body.style.margin = '0';
     body.style.overflowX = 'hidden';
-    body.style.overflowY = 'auto';
+    body.style.overflowY = 'hidden';
 
     return () => {
       html.style.backgroundColor = previousHtmlBg;
+      html.style.overflow = previousHtmlOverflow;
       body.style.backgroundColor = previousBodyBg;
       body.style.margin = previousBodyMargin;
       body.style.overflowX = previousBodyOverflowX;
@@ -41,9 +44,9 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
         position: 'fixed',
         inset: 0,
         width: '100%',
-        height: '100vh',
+        height: '100dvh',
         overflowX: 'hidden',
-        overflowY: 'auto',
+        overflowY: 'hidden',
         background: 'radial-gradient(ellipse 85% 60% at 50% 0%, #03131f 0%, #020814 55%, #01040b 100%)',
         color: '#e8fbff',
       }}
@@ -81,9 +84,10 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
           width: 'min(440px, calc(100vw - 1.5rem))',
           marginInline: 'auto',
           display: 'flex',
-          alignItems: 'flex-start',
-          paddingTop: 'clamp(2rem, 8vh, 5.5rem)',
-          paddingBottom: '2rem',
+          alignItems: 'center',
+          minHeight: '100dvh',
+          paddingTop: 'clamp(1.1rem, 4vh, 2rem)',
+          paddingBottom: 'clamp(1.1rem, 4vh, 2rem)',
           position: 'relative',
           zIndex: 1,
         }}
