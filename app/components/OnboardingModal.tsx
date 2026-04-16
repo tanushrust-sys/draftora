@@ -43,10 +43,12 @@ const AGE_GROUP_OPTIONS = [
 ] as const;
 
 const DAILY_GOAL_OPTIONS = [
-  { value: 100, label: '100 words', sub: 'A quick daily warm-up' },
-  { value: 200, label: '200 words', sub: 'A steady practice target' },
-  { value: 300, label: '300 words', sub: 'The balanced default' },
-  { value: 500, label: '500 words', sub: 'A bigger daily stretch' },
+  { value: 'habit', label: 'Build a daily writing habit', sub: 'Show up and write every day', dailyWordGoal: 150 },
+  { value: 'vocab', label: 'Grow my vocabulary', sub: 'Use stronger words naturally', dailyWordGoal: 200 },
+  { value: 'story', label: 'Write better stories', sub: 'Stronger plot, pacing, and scenes', dailyWordGoal: 300 },
+  { value: 'essay', label: 'Improve essays and structure', sub: 'Clear arguments and flow', dailyWordGoal: 300 },
+  { value: 'confidence', label: 'Write with more confidence', sub: 'Reduce hesitation and overthinking', dailyWordGoal: 250 },
+  { value: 'finish', label: 'Finish more drafts', sub: 'Complete pieces consistently', dailyWordGoal: 400 },
 ] as const;
 
 const ONBOARDING_COMPLETE_PREFIX = 'draftora-onboarding-complete-v1';
@@ -71,10 +73,6 @@ function markOnboardingComplete(userId: string) {
   } catch {
     // ignore storage failures
   }
-}
-
-function getDailyGoalLabel(value: number) {
-  return `${value.toLocaleString()} words`;
 }
 
 function isValidAgeGroup(value?: string | null) {
@@ -113,7 +111,8 @@ export default function OnboardingModal() {
   const [busyChoice, setBusyChoice] = useState<AccountTypeChoice | null>(null);
   const [error, setError] = useState('');
   const [selectedAgeGroup, setSelectedAgeGroup] = useState('');
-  const [selectedDailyGoal, setSelectedDailyGoal] = useState<number | null>(null);
+  const [selectedDailyGoal, setSelectedDailyGoal] = useState<(typeof DAILY_GOAL_OPTIONS)[number]['value'] | null>(null);
+  const [customGoalInput, setCustomGoalInput] = useState('');
   const [selectedExperience, setSelectedExperience] = useState<number | null>(null);
 
   useEffect(() => {
@@ -133,7 +132,12 @@ export default function OnboardingModal() {
       setBusyChoice(null);
       setError('');
       setSelectedAgeGroup(profile.age_group || AGE_GROUP_OPTIONS[0].value);
-      setSelectedDailyGoal(profile.daily_word_goal ?? 300);
+      setSelectedDailyGoal(DAILY_GOAL_OPTIONS[0].value);
+      setCustomGoalInput(
+        profile.custom_daily_goal && !/^Write .+ each day$/i.test(profile.custom_daily_goal)
+          ? profile.custom_daily_goal
+          : '',
+      );
       setSelectedExperience(normalizeWritingExperienceScore(profile.writing_experience_score));
     }
 
@@ -159,7 +163,7 @@ export default function OnboardingModal() {
   const stepTitle =
     step === 1 ? 'Choose your app' :
     step === 2 ? 'Age group' :
-    step === 3 ? 'Daily goal' :
+    step === 3 ? 'Goal focus' :
     'Writing level';
 
   const stepDescription =
@@ -168,7 +172,7 @@ export default function OnboardingModal() {
       : step === 2
         ? 'This shapes prompts, vocabulary, and feedback.'
         : step === 3
-          ? 'This sets the target shown on your dashboard.'
+          ? 'Pick one focus or write your own custom goal.'
           : 'This tunes the depth of coaching and feedback.';
 
   const stepCounter = step === 1 ? 'Start here' : `Step ${step - 1} of 3`;
@@ -199,7 +203,9 @@ export default function OnboardingModal() {
     if (!profile) return;
 
     const nextAgeGroup = selectedAgeGroup || AGE_GROUP_OPTIONS[0].value;
-    const nextDailyGoal = Number.isFinite(selectedDailyGoal ?? NaN) ? (selectedDailyGoal as number) : 300;
+    const selectedGoalOption = DAILY_GOAL_OPTIONS.find((option) => option.value === selectedDailyGoal) ?? DAILY_GOAL_OPTIONS[0];
+    const nextDailyGoal = selectedGoalOption.dailyWordGoal;
+    const nextGoalText = customGoalInput.trim() || selectedGoalOption.label;
     const nextExperience = normalizeWritingExperienceScore(selectedExperience ?? profile.writing_experience_score);
 
     setSaving(true);
@@ -224,7 +230,7 @@ export default function OnboardingModal() {
       student_id: profile.student_id ?? generateStudentCode(),
       age_group: nextAgeGroup,
       daily_word_goal: nextDailyGoal,
-      custom_daily_goal: `Write ${getDailyGoalLabel(nextDailyGoal)} each day`,
+      custom_daily_goal: nextGoalText,
       writing_experience_score: nextExperience,
     }).catch((caught) => caught);
 
@@ -530,33 +536,73 @@ export default function OnboardingModal() {
           )}
 
           {step === 3 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-              {DAILY_GOAL_OPTIONS.map((option) => {
-                const selected = selectedDailyGoal === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setSelectedDailyGoal(option.value)}
-                    style={{
-                      borderRadius: 18,
-                      padding: '1rem 1rem 0.95rem',
-                      border: selected ? '1px solid rgba(45, 212, 191, 0.5)' : '1px solid rgba(125, 211, 252, 0.14)',
-                      background: selected
-                        ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.28), rgba(3, 23, 38, 0.94))'
-                        : 'rgba(3, 23, 38, 0.72)',
-                      color: '#e8fbff',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{option.label}</p>
-                    <p style={{ margin: '0.45rem 0 0', color: 'rgba(199, 249, 255, 0.72)', fontSize: 13.5, lineHeight: 1.5 }}>
-                      {option.sub}
-                    </p>
-                  </button>
-                );
-              })}
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                {DAILY_GOAL_OPTIONS.map((option) => {
+                  const selected = selectedDailyGoal === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setSelectedDailyGoal(option.value)}
+                      style={{
+                        borderRadius: 18,
+                        padding: '1rem 1rem 0.95rem',
+                        border: selected ? '1px solid rgba(45, 212, 191, 0.5)' : '1px solid rgba(125, 211, 252, 0.14)',
+                        background: selected
+                          ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.28), rgba(3, 23, 38, 0.94))'
+                          : 'rgba(3, 23, 38, 0.72)',
+                        color: '#e8fbff',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 17, fontWeight: 900, letterSpacing: '-0.01em' }}>{option.label}</p>
+                      <p style={{ margin: '0.45rem 0 0', color: 'rgba(199, 249, 255, 0.72)', fontSize: 13.5, lineHeight: 1.5 }}>
+                        {option.sub}
+                      </p>
+                      <p style={{ margin: '0.55rem 0 0', color: '#67e8f9', fontSize: 11.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        Suggested pace: ~{option.dailyWordGoal} words/day
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 18,
+                  padding: '0.95rem 1rem 1rem',
+                  border: '1px solid rgba(125, 211, 252, 0.2)',
+                  background: 'linear-gradient(180deg, rgba(4, 31, 48, 0.88) 0%, rgba(3, 23, 38, 0.84) 100%)',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 12, color: '#67e8f9', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  Or write your own goal
+                </p>
+                <input
+                  type="text"
+                  value={customGoalInput}
+                  onChange={(event) => setCustomGoalInput(event.target.value)}
+                  placeholder="Example: Finish one strong persuasive paragraph daily"
+                  maxLength={120}
+                  style={{
+                    width: '100%',
+                    marginTop: 10,
+                    minHeight: 46,
+                    borderRadius: 14,
+                    border: '1px solid rgba(103, 232, 249, 0.26)',
+                    background: 'rgba(2, 16, 29, 0.85)',
+                    color: '#ecfeff',
+                    padding: '0 0.9rem',
+                    fontSize: 14,
+                    outline: 'none',
+                  }}
+                />
+                <p style={{ margin: '0.55rem 0 0', color: 'rgba(199, 249, 255, 0.68)', fontSize: 12.5 }}>
+                  If you type your own, we will save that as your main goal.
+                </p>
+              </div>
             </div>
           )}
 
