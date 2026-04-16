@@ -10,16 +10,6 @@ const USER_AGE_GROUP_INDEX = new Map(USER_AGE_GROUP_ORDER.map((age, index) => [a
 export const DAILY_VOCAB_COUNT = 3;
 export const AGE_VOCAB_POOL_SIZE = 1000;
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-let VOCAB_POOL_EXT: VocabEntry[] = [];
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require('@/app/data/vocab-pool');
-  VOCAB_POOL_EXT = mod.VOCAB_POOL;
-} catch {
-  // falls through to the fallback list below
-}
-
 export const VOCAB_FALLBACK: VocabEntry[] = [
   { word: 'Eloquent', meaning: 'Fluent or persuasive in speaking or writing', example: 'She gave an eloquent speech that moved the audience to tears.' },
   { word: 'Persevere', meaning: 'Continue in a course of action despite difficulty', example: 'He chose to persevere with his studies despite the challenges.' },
@@ -62,8 +52,6 @@ export const VOCAB_FALLBACK: VocabEntry[] = [
   { word: 'Jargon', meaning: 'Specialised vocabulary of a particular group', example: 'Avoid technical jargon when writing for a general audience.' },
   { word: 'Keen', meaning: 'Enthusiastic; sharp or perceptive', example: 'A keen eye for detail separates good writing from great writing.' },
 ];
-
-export const VOCAB_POOL = VOCAB_POOL_EXT.length > 0 ? VOCAB_POOL_EXT : VOCAB_FALLBACK;
 
 export function simplifyMeaning(meaning: string) {
   const cleaned = meaning
@@ -152,7 +140,7 @@ export function getVocabPool(ageGroup?: string): VocabEntry[] {
   if (isKnownAgeGroup(normalizedAgeGroup)) {
     pool = dedupeEntries(VOCAB_BY_AGE[normalizedAgeGroup] ?? []).slice(0, AGE_VOCAB_POOL_SIZE);
   } else {
-    pool = dedupeEntries(VOCAB_POOL.length > 0 ? VOCAB_POOL : VOCAB_FALLBACK).slice(0, AGE_VOCAB_POOL_SIZE);
+    pool = dedupeEntries(VOCAB_BY_AGE['11-13'] ?? VOCAB_FALLBACK).slice(0, AGE_VOCAB_POOL_SIZE);
   }
 
   if (pool.length === 0) {

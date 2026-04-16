@@ -16,7 +16,16 @@ export function isMissingAgeGroupColumnError(message?: string | null) {
 
 export function normalizeAgeGroupValue(ageGroup?: string | null) {
   if (!ageGroup) return '';
-  return SUPPORTED_AGE_GROUP_SET.has(ageGroup as (typeof SUPPORTED_AGE_GROUPS)[number]) ? ageGroup : '';
+  const trimmed = ageGroup.trim();
+  if (SUPPORTED_AGE_GROUP_SET.has(trimmed as (typeof SUPPORTED_AGE_GROUPS)[number])) return trimmed;
+
+  const compact = trimmed
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, '')
+    .replace(/^22\+?$/, '22+');
+
+  if (SUPPORTED_AGE_GROUP_SET.has(compact as (typeof SUPPORTED_AGE_GROUPS)[number])) return compact;
+  return '';
 }
 
 export function readAgeGroupOverride(userId?: string | null) {
