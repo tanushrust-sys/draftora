@@ -77,6 +77,25 @@ function getDailyGoalLabel(value: number) {
   return `${value.toLocaleString()} words`;
 }
 
+function isValidAgeGroup(value?: string | null) {
+  return AGE_GROUP_OPTIONS.some((option) => option.value === value);
+}
+
+function hasStudentSetupCompleted(profile: {
+  account_type?: string | null;
+  age_group?: string | null;
+  daily_word_goal?: number | null;
+  writing_experience_score?: number | null;
+}) {
+  if (profile.account_type === 'teacher' || profile.account_type === 'parent') return true;
+  if (profile.account_type !== 'student') return false;
+
+  const hasAgeGroup = isValidAgeGroup(profile.age_group);
+  const hasDailyGoal = Number.isFinite(profile.daily_word_goal) && Number(profile.daily_word_goal) > 0;
+  const hasExperience = Number.isFinite(profile.writing_experience_score);
+  return hasAgeGroup && hasDailyGoal && hasExperience;
+}
+
 function getRoleCopy(choice: AccountTypeChoice) {
   if (choice === 'teacher') return 'Open teacher app';
   if (choice === 'parent') return 'Open parent app';
@@ -103,16 +122,22 @@ export default function OnboardingModal() {
       return;
     }
 
-    setStep(1);
+    const alreadyConfigured = hasStudentSetupCompleted(profile);
+    setStep(profile.account_type === 'student' ? 2 : 1);
     setSaving(false);
     setBusyChoice(null);
     setError('');
     setSelectedAgeGroup((current) => current || profile.age_group || AGE_GROUP_OPTIONS[0].value);
     setSelectedDailyGoal((current) => current ?? profile.daily_word_goal ?? 300);
     setSelectedExperience((current) => current ?? normalizeWritingExperienceScore(profile.writing_experience_score));
-    setComplete(readOnboardingComplete(profile.id));
+    const locallyCompleted = readOnboardingComplete(profile.id);
+    const nextComplete = locallyCompleted || alreadyConfigured;
+    if (nextComplete && !locallyCompleted) {
+      markOnboardingComplete(profile.id);
+    }
+    setComplete(nextComplete);
     setReady(true);
-  }, [profile?.id, profile?.age_group, profile?.daily_word_goal, profile?.writing_experience_score]);
+  }, [profile]);
 
   if (!profile || !ready || complete) return null;
 
