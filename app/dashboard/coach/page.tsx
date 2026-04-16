@@ -220,6 +220,7 @@ export default function CoachPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
   const initialConversationHydrated = useRef(false);
+  const deletedConversationIdsRef = useRef<Set<string>>(new Set());
 
   const trainer = getTrainer(trainerType);
 
@@ -257,14 +258,46 @@ export default function CoachPage() {
       if (error) throw error;
 
       const merged = mergeStoredCoachConversations(profile.id, (data ?? []) as Conversation[]);
-      setConversations(merged);
+      const visibleConversations = merged.filter(
+        (conversation) => !deletedConversationIdsRef.current.has(conversation.id),
+      );
+      setConversations(visibleConversations);
     } catch (error) {
       console.warn('loadConversations warning:', error);
-      setConversations(stored);
+      const visibleStored = stored.filter(
+        (conversation) => !deletedConversationIdsRef.current.has(conversation.id),
+      );
+      setConversations(visibleStored);
     }
   }, [profile]);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  useEffect(() => {
+    if (!profile || conversations.length === 0) return;
+
+    const syncTimer = window.setTimeout(() => {
+      const payload = conversations
+        .filter((conversation) => !deletedConversationIdsRef.current.has(conversation.id))
+        .map((conversation) => ({
+        id: conversation.id,
+        user_id: profile.id,
+        mode: conversation.mode,
+        trainer_type: conversation.trainer_type,
+        messages: conversation.messages,
+        updated_at: conversation.updated_at,
+      }));
+
+      void supabase
+        .from('coach_conversations')
+        .upsert(payload, { onConflict: 'id' })
+        .catch((error) => {
+          console.error('coach conversations autosync error:', error);
+        });
+    }, 600);
+
+    return () => window.clearTimeout(syncTimer);
+  }, [conversations, profile]);
 
   const saveConversation = useCallback(async (
     msgs: Message[],
@@ -465,6 +498,7 @@ export default function CoachPage() {
     const confirmed = window.confirm('Delete this chat permanently?');
     if (!confirmed) return;
 
+    deletedConversationIdsRef.current.add(conversationId);
     const nextConversations = deleteStoredCoachConversation(profile.id, conversationId);
     const nextTitles = deleteStoredCoachConversationTitle(profile.id, conversationId);
     setConversations(nextConversations);
@@ -486,8 +520,10 @@ export default function CoachPage() {
 
     if (error) {
       console.error('deleteConversation error:', error);
+      deletedConversationIdsRef.current.delete(conversationId);
+      void loadConversations();
     }
-  }, [activeId, loadSession, profile]);
+  }, [activeId, loadConversations, loadSession, profile]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
