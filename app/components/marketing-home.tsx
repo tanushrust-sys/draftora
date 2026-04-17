@@ -95,20 +95,73 @@ const OUTCOMES = [
   {
     title: 'Improve Writing Faster',
     description: 'Turn every draft into a learning loop with precise next steps.',
+    audience: 'Student',
+    scenario: 'Students get instant coaching after each paragraph instead of waiting for end-of-week feedback.',
   },
   {
     title: 'Make Writing Enjoyable',
     description: 'A clear workflow keeps students engaged, focused, and motivated.',
+    audience: 'Parent',
+    scenario: 'Parents can review progress snapshots and coach at home without guessing what to focus on.',
   },
   {
     title: 'Personalised Suggestions',
     description: 'Feedback adapts to writing level, style, and goals.',
+    audience: 'Teacher',
+    scenario: 'Teachers see targeted suggestions by student level so support stays differentiated and practical.',
   },
   {
     title: 'Build Confidence',
     description: 'Students see progress they can feel across every week.',
+    audience: 'All roles',
+    scenario: 'Students improve, parents see momentum, and teachers track growth with one shared language.',
   },
 ];
+
+const APP_PREVIEWS = [
+  {
+    label: 'Writing Screen',
+    title: 'Focused editor that keeps students in flow',
+    lines: [
+      'Live word count and progress signals',
+      'Prompt-aware writing workspace',
+      'One-click draft save and review',
+    ],
+    scenarios: [
+      { role: 'Student', text: 'Starts a draft and gets clear writing momentum in minutes.' },
+      { role: 'Parent', text: 'Sees exactly what was written today and where to encourage.' },
+      { role: 'Teacher', text: 'Reviews submitted drafts quickly without workflow clutter.' },
+    ],
+  },
+  {
+    label: 'Feedback Mode',
+    title: 'Coaching that is specific and encouraging',
+    lines: [
+      'Clear strengths and improvements',
+      'Sentence-level rewrite suggestions',
+      'Actionable next-step guidance',
+    ],
+    scenarios: [
+      { role: 'Student', text: 'Gets instant “what to fix next” instead of vague advice.' },
+      { role: 'Parent', text: 'Understands feedback language and supports revision at home.' },
+      { role: 'Teacher', text: 'Uses AI notes to speed up marking while staying instructional.' },
+    ],
+  },
+  {
+    label: 'Vocabulary',
+    title: 'Daily words with usage checks',
+    lines: [
+      'Practice words in real sentences',
+      'Unlock extra words with consistency',
+      'Track mastery over time',
+    ],
+    scenarios: [
+      { role: 'Student', text: 'Learns richer words and uses them correctly in context.' },
+      { role: 'Parent', text: 'Can spot mastered words and celebrate visible progress.' },
+      { role: 'Teacher', text: 'Monitors class vocabulary growth with less manual tracking.' },
+    ],
+  },
+] as const;
 
 const TESTIMONIALS = [
   {
@@ -129,10 +182,12 @@ function AppPreviewCard({
   label,
   title,
   lines,
+  scenarios,
 }: {
   label: string;
   title: string;
-  lines: string[];
+  lines: readonly string[];
+  scenarios: readonly { role: string; text: string }[];
 }) {
   return (
     <article className={styles.previewCard}>
@@ -143,6 +198,14 @@ function AppPreviewCard({
           <div key={line} className={styles.previewLine}>
             <CheckCircle2 size={14} />
             <span>{line}</span>
+          </div>
+        ))}
+      </div>
+      <div className={styles.scenarioStack}>
+        {scenarios.map((item) => (
+          <div key={item.role} className={styles.scenarioItem}>
+            <span className={styles.scenarioRole}>{item.role}</span>
+            <span className={styles.scenarioText}>{item.text}</span>
           </div>
         ))}
       </div>
@@ -184,7 +247,7 @@ export default function MarketingHome() {
 
       <header className={styles.header}>
         <div className={styles.brandWrap}>
-          <BrandLogo size={34} />
+          <BrandLogo size={44} />
           <span>Draftora</span>
         </div>
         <nav className={styles.navActions}>
@@ -200,14 +263,15 @@ export default function MarketingHome() {
       <main className={styles.main}>
         <section className={`${styles.hero} ${styles.reveal}`} data-reveal>
           <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>AI Writing App for Students</p>
-            <h1 className={styles.heroTypeTitle} aria-label="Write better with AI coaching made for students.">
+            <p className={styles.eyebrow}>AI Writing App for Students, Parents, and Teachers</p>
+            <h1 className={styles.heroTypeTitle} aria-label="Write better with AI coaching for students, parents, and teachers.">
               <span className={`${styles.typeLine} ${styles.typeLineSky}`}>Write better with</span>
-              <span className={`${styles.typeLine} ${styles.typeLineLake}`}>AI coaching made</span>
-              <span className={`${styles.typeLine} ${styles.typeLineDark}`}>for students.</span>
+              <span className={`${styles.typeLine} ${styles.typeLineLake}`}>AI coaching for</span>
+              <span className={`${styles.typeLine} ${styles.typeLineDark}`}>students, parents,</span>
+              <span className={`${styles.typeLine} ${styles.typeLineDeep}`}>and teachers.</span>
             </h1>
             <p className={styles.subhead}>
-              Draftora helps students improve faster with instant feedback, smart rewrites, and daily vocabulary practice.
+              Draftora helps students write stronger drafts, gives parents clear progress visibility, and helps teachers deliver faster feedback at scale.
             </p>
             <div className={styles.heroActions}>
               <Link href="/signup" className={styles.primaryCta}>
@@ -228,31 +292,98 @@ export default function MarketingHome() {
               <span />
               <span />
             </div>
-            <div className={styles.heroGrid}>
-              <article className={styles.editorPane}>
-                <p className={styles.miniLabel}>Writing Editor</p>
-                <h3>The storm rolled in by sunset...</h3>
-                <p>
-                  I started writing quickly, but then I slowed down and described how the wind rattled every window in the street.
+            <div className={styles.feedbackDemo}>
+              <article className={styles.draftTop}>
+                <div className={styles.topRow}>
+                  <p className={styles.miniLabel}>Prompt</p>
+                  <span className={styles.exampleBadge}>Input</span>
+                </div>
+                <p className={styles.promptText}>Describe a stormy evening in your neighborhood.</p>
+
+                <div className={styles.topRow}>
+                  <p className={styles.miniLabel}>Writing Piece</p>
+                  <span className={styles.exampleBadgeStrong}>Draft</span>
+                </div>
+                <p className={styles.draftText}>
+                  The storm rolled in by sunset. I started writing quickly, but then I slowed down and described how the wind rattled every window in the street.
                 </p>
-                <p className={styles.highlightLine}>Suggestion: add one sensory detail for stronger imagery.</p>
               </article>
-              <article className={styles.feedbackPane}>
-                <p className={styles.miniLabel}>AI Feedback</p>
-                <div className={styles.feedbackItem}>
-                  <MessageSquareText size={15} />
-                  <span>Strong opening hook and clear tone.</span>
-                </div>
-                <div className={styles.feedbackItem}>
-                  <Lightbulb size={15} />
-                  <span>Try shorter sentences in the middle section.</span>
-                </div>
-                <div className={styles.feedbackItem}>
-                  <Sparkles size={15} />
-                  <span>Upgrade 2 words for more impact.</span>
-                </div>
-              </article>
+
+              <div className={styles.feedbackBottom}>
+                <article className={styles.feedbackCardMini}>
+                  <p className={styles.feedbackMiniTitle}>Overall Feedback</p>
+                  <div className={styles.feedbackItem}>
+                    <MessageSquareText size={15} />
+                    <span>
+                      Clear opening and strong mood.
+                      <br />
+                      <br />
+                      Your scene is easy to imagine, and the sentence flow mostly works.
+                      <br />
+                      <br />
+                      To level up, add one emotional reaction and one concrete sensory detail so the reader feels the storm, not just the summary.
+                    </span>
+                  </div>
+                </article>
+                <article className={styles.feedbackCardMini}>
+                  <p className={styles.feedbackMiniTitle}>Section by Section</p>
+                  <div className={styles.feedbackItem}>
+                    <Lightbulb size={15} />
+                    <span>
+                      Opening: direct and effective.
+                      <br />
+                      <br />
+                      Middle: vivid, but one long clause should be split for rhythm.
+                      <br />
+                      <br />
+                      Ending: stops too quickly. Add one reflective closing line about sound or feeling so the paragraph lands with stronger control and completion.
+                    </span>
+                  </div>
+                </article>
+                <article className={styles.feedbackCardMini}>
+                  <p className={styles.feedbackMiniTitle}>Rewrite</p>
+                  <div className={styles.feedbackItem}>
+                    <Sparkles size={15} />
+                    <span>
+                      The storm rolled in by sunset, and restless wind pushed along our street. I slowed my writing as the noise grew louder, describing shutters rattling and panes trembling. By the end, the weather felt close and threatening.
+                    </span>
+                  </div>
+                </article>
+              </div>
             </div>
+          </div>
+        </section>
+
+        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
+          <div className={styles.sectionHead}>
+            <h2>Why Draftora</h2>
+          </div>
+          <div className={styles.outcomeGrid}>
+            {OUTCOMES.map((item) => (
+              <article key={item.title} className={styles.outcomeCard}>
+                <span className={styles.audiencePill}>{item.audience}</span>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+                <p className={styles.outcomeScenario}>{item.scenario}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
+          <div className={styles.sectionHead}>
+            <h2>See the app in action</h2>
+          </div>
+          <div className={styles.previewGrid}>
+            {APP_PREVIEWS.map((preview) => (
+              <AppPreviewCard
+                key={preview.label}
+                label={preview.label}
+                title={preview.title}
+                lines={preview.lines}
+                scenarios={preview.scenarios}
+              />
+            ))}
           </div>
         </section>
 
@@ -345,55 +476,6 @@ export default function MarketingHome() {
                 </div>
               </article>
             ))}
-          </div>
-        </section>
-
-        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
-          <div className={styles.sectionHead}>
-            <h2>Why Draftora</h2>
-          </div>
-          <div className={styles.outcomeGrid}>
-            {OUTCOMES.map((item) => (
-              <article key={item.title} className={styles.outcomeCard}>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
-          <div className={styles.sectionHead}>
-            <h2>See the app in action</h2>
-          </div>
-          <div className={styles.previewGrid}>
-            <AppPreviewCard
-              label="Writing Screen"
-              title="Focused editor that keeps students in flow"
-              lines={[
-                'Live word count and progress signals',
-                'Prompt-aware writing workspace',
-                'One-click draft save and review',
-              ]}
-            />
-            <AppPreviewCard
-              label="Feedback Mode"
-              title="Coaching that is specific and encouraging"
-              lines={[
-                'Clear strengths and improvements',
-                'Sentence-level rewrite suggestions',
-                'Actionable next-step guidance',
-              ]}
-            />
-            <AppPreviewCard
-              label="Vocabulary"
-              title="Daily words with usage checks"
-              lines={[
-                'Practice words in real sentences',
-                'Unlock extra words with consistency',
-                'Track mastery over time',
-              ]}
-            />
           </div>
         </section>
 
