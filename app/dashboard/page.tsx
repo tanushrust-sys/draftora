@@ -173,7 +173,7 @@ export default function DashboardPage() {
 
   return (
     <div style={{ minHeight: '100vh', padding: '2.8rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2.2rem' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── HERO ── */}
         <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 28, padding: '1.4rem 2rem' }}>
@@ -209,7 +209,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── 4 STAT CARDS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.75rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.45rem' }}>
           {([
             { tone: streakTone, Icon: Flame,    label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
             { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${profile.level}` },
@@ -217,33 +217,33 @@ export default function DashboardPage() {
             { tone: vocabTone,  Icon: BookOpen, label: 'Word Bank', value: vocabTotal,           sub: `${vocabMastered} mastered` },
           ] as const).map(({ tone, Icon, label, value, sub }) => (
             <div key={label} style={{
-              background: `linear-gradient(165deg, color-mix(in srgb, var(--t-card) 94%, ${tone} 6%) 0%, var(--t-card) 100%)`,
-              border: `1px solid color-mix(in srgb, var(--t-brd) 80%, ${tone} 20%)`,
-              borderRadius: 20,
-              padding: '1.15rem 1.25rem',
+              background: `linear-gradient(175deg, color-mix(in srgb, var(--t-card) 86%, ${tone} 14%) 0%, var(--t-card) 65%)`,
+              border: `1px solid color-mix(in srgb, var(--t-brd) 65%, ${tone} 35%)`,
+              borderRadius: 16,
+              padding: '0.95rem 1.05rem',
               display: 'flex',
               alignItems: 'center',
-              gap: 13,
-              minHeight: 124,
-              boxShadow: '0 10px 24px rgba(8, 20, 40, 0.06)',
+              gap: 10,
+              minHeight: 106,
+              boxShadow: '0 12px 28px rgba(10, 28, 56, 0.10), inset 0 1px 0 rgba(255,255,255,0.45)',
             }}>
               <div style={{
-                width: 44,
-                height: 44,
-                borderRadius: 13,
-                background: `linear-gradient(180deg, color-mix(in srgb, ${tone} 16%, white) 0%, color-mix(in srgb, ${tone} 12%, transparent) 100%)`,
-                border: `1px solid color-mix(in srgb, ${tone} 28%, transparent)`,
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                background: `linear-gradient(180deg, color-mix(in srgb, ${tone} 22%, white) 0%, color-mix(in srgb, ${tone} 14%, transparent) 100%)`,
+                border: `1px solid color-mix(in srgb, ${tone} 36%, transparent)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <Icon style={{ color: tone, width: 19, height: 19 }} />
+                <Icon style={{ color: tone, width: 18, height: 18 }} />
               </div>
               <div>
-                <p style={{ fontSize: 34, fontWeight: 900, letterSpacing: '-0.045em', color: 'var(--t-tx)', lineHeight: 0.95, marginBottom: 5 }}>{value.toLocaleString()}</p>
-                <p style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{label}</p>
-                <p style={{ color: wordsTone, fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{sub}</p>
+                <p style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-0.03em', color: 'var(--t-tx)', lineHeight: 1, marginBottom: 3 }}>{value.toLocaleString()}</p>
+                <p style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 700, marginBottom: 1 }}>{label}</p>
+                <p style={{ color: wordsTone, fontSize: 12, fontWeight: 700, opacity: 0.9 }}>{sub}</p>
               </div>
             </div>
           ))}
