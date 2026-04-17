@@ -41,17 +41,17 @@ export default function LoginPage() {
     fontSize: '0.76rem',
     textTransform: 'uppercase',
     letterSpacing: '0.16em',
-    color: '#8befff',
+    color: '#0f6fbf',
     fontWeight: 800,
   };
   const fieldWrapStyle: React.CSSProperties = {
     position: 'relative',
-    borderRadius: '1rem',
-    background: 'linear-gradient(180deg, rgba(6, 34, 52, 0.64) 0%, rgba(4, 22, 36, 0.72) 100%)',
-    border: '1px solid rgba(74, 201, 242, 0.3)',
-    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.22)',
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
+    borderRadius: '1.06rem',
+    background: 'linear-gradient(176deg, rgba(255, 255, 255, 0.93) 0%, rgba(244, 251, 255, 0.84) 100%)',
+    border: '1px solid rgba(76, 147, 214, 0.38)',
+    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 14px 28px rgba(88, 142, 191, 0.22)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
   };
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -59,11 +59,11 @@ export default function LoginPage() {
     borderRadius: '1rem',
     border: 'none',
     background: 'transparent',
-    color: '#effcff',
+    color: '#0d2b4a',
     outline: 'none',
     boxSizing: 'border-box',
     fontSize: '1.03rem',
-    fontWeight: 520,
+    fontWeight: 600,
   };
 
   useEffect(() => {
@@ -130,9 +130,9 @@ export default function LoginPage() {
       title="Log in to your writing studio"
       description="Pick up your streak, revisit saved drafts, and keep your progress moving."
       footer={
-        <p style={{ margin: 0, fontSize: '0.95rem', color: 'rgba(204, 244, 255, 0.8)' }}>
+        <p style={{ margin: 0, fontSize: '0.95rem', color: '#3d6489' }}>
           Don&apos;t have an account?{' '}
-          <Link href="/signup" style={{ color: '#7cecff', textDecoration: 'none', fontWeight: 800 }}>
+          <Link href="/signup" style={{ color: '#0f78d4', textDecoration: 'none', fontWeight: 800 }}>
             Create one free
           </Link>
         </p>
@@ -144,7 +144,7 @@ export default function LoginPage() {
             Username
           </label>
           <div style={fieldWrapStyle}>
-            <AtSign size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
+            <AtSign size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(21, 109, 188, 0.82)' }} />
             <input
               id="username"
               type="text"
@@ -165,7 +165,7 @@ export default function LoginPage() {
             Password
           </label>
           <div style={fieldWrapStyle}>
-            <LockKeyhole size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
+            <LockKeyhole size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(21, 109, 188, 0.82)' }} />
             <input
               id="password"
               type={showPass ? 'text' : 'password'}
@@ -192,7 +192,7 @@ export default function LoginPage() {
                 justifyContent: 'center',
                 border: 'none',
                 background: 'transparent',
-                color: 'rgba(140, 223, 248, 0.86)',
+                color: 'rgba(22, 112, 190, 0.86)',
                 cursor: 'pointer',
               }}
             >
@@ -202,17 +202,17 @@ export default function LoginPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginTop: '-0.1rem' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: 'rgba(227, 248, 255, 0.84)', fontSize: '0.92rem', fontWeight: 520 }}>
-            <input type="checkbox" checked={remember} onChange={() => setRemember((value) => !value)} style={{ accentColor: '#54d7f6' }} />
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: '#3b6389', fontSize: '0.92rem', fontWeight: 600 }}>
+            <input type="checkbox" checked={remember} onChange={() => setRemember((value) => !value)} style={{ accentColor: '#2491e8' }} />
             Remember me
           </label>
-          <Link href="/forgot-password" style={{ color: '#7cecff', textDecoration: 'none', fontWeight: 800 }}>
+          <Link href="/forgot-password" style={{ color: '#0f79d4', textDecoration: 'none', fontWeight: 800 }}>
             Forgot password?
           </Link>
         </div>
 
         {error ? (
-          <div style={{ padding: '0.95rem 1rem', borderRadius: '1rem', fontSize: '0.92rem', lineHeight: 1.55, border: '1px solid rgba(248, 113, 113, 0.28)', background: 'rgba(127, 29, 29, 0.22)', color: '#fecaca' }}>
+          <div style={{ padding: '0.95rem 1rem', borderRadius: '1rem', fontSize: '0.92rem', lineHeight: 1.55, border: '1px solid rgba(230, 110, 110, 0.4)', background: 'rgba(255, 239, 241, 0.82)', color: '#9f1d2d' }}>
             {error}
           </div>
         ) : null}
@@ -222,16 +222,16 @@ export default function LoginPage() {
           disabled={loading}
           style={{
             width: '100%',
-            minHeight: '3.45rem',
-            borderRadius: '1.08rem',
-            border: '1px solid rgba(122, 230, 255, 0.24)',
-            background: 'linear-gradient(135deg, #0c3b4f 0%, #165f78 45%, #58d0e8 100%)',
-            color: '#ecfeff',
+            minHeight: '3.65rem',
+            borderRadius: '1.14rem',
+            border: '1px solid rgba(31, 116, 192, 0.32)',
+            background: 'linear-gradient(135deg, #0b4fae 0%, #1f7fdd 36%, #42a8ef 72%, #5ad2e7 100%)',
+            color: '#f4fbff',
             fontWeight: 850,
-            fontSize: '1.05rem',
+            fontSize: '1.08rem',
             letterSpacing: '0.01em',
             cursor: loading ? 'not-allowed' : 'pointer',
-            boxShadow: '0 18px 36px rgba(34, 211, 238, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 24px 40px rgba(38, 126, 204, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.42)',
             transition: 'transform 0.15s ease, filter 0.15s ease',
           }}
         >

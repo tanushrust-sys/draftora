@@ -1,0 +1,127 @@
+.page {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 500px at 12% -6%, rgba(46, 133, 243, 0.2), transparent 64%),
+    radial-gradient(880px 460px at 92% 0%, rgba(31, 186, 174, 0.2), transparent 62%),
+    linear-gradient(180deg, #f7fbff 0%, #f8fcff 100%);
+  color: #0a1a2b;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  font-family: var(--font-dm-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+.panel {
+  width: min(760px, 100%);
+  border: 1px solid rgba(41, 112, 175, 0.2);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 28px 60px rgba(27, 100, 163, 0.18);
+  padding: 1.1rem 1.1rem 1.4rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.62rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #133251;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nav a {
+  text-decoration: none;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: #2d5a84;
+}
+
+.nav a:hover {
+  color: #1974c7;
+}
+
+.main {
+  margin-top: 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #1477c8;
+  font-weight: 800;
+  font-size: 0.76rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.main h1 {
+  margin: 0.7rem 0 0;
+  font-size: clamp(1.7rem, 3.5vw, 2.45rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.main p {
+  margin: 0.9rem 0 0;
+  color: #345776;
+  font-size: 0.97rem;
+  line-height: 1.72;
+}
+
+.actions {
+  margin-top: 1.3rem;
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  text-decoration: none;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.primaryBtn {
+  color: #fff;
+  padding: 0.72rem 1.2rem;
+  background: linear-gradient(130deg, #0f5fc6, #1684e8, #1dc6bb);
+  box-shadow: 0 12px 24px rgba(23, 111, 191, 0.25);
+}
+
+.primaryBtn:hover,
+.secondaryBtn:hover {
+  transform: translateY(-1px);
+}
+
+.secondaryBtn {
+  color: #275682;
+  border: 1px solid rgba(42, 107, 167, 0.24);
+  padding: 0.7rem 1.1rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+@media (max-width: 600px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .panel {
+    padding-inline: 0.95rem;
+  }
+}

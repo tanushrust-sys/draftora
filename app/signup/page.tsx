@@ -114,9 +114,9 @@ export default function SignupPage() {
       title="Create your Draftora account"
       description="Set up your workspace once, then keep all your writing, vocabulary, and progress in one place."
       footer={
-        <p style={{ margin: 0, fontSize: '0.95rem', color: 'rgba(199, 249, 255, 0.72)' }}>
+        <p style={{ margin: 0, fontSize: '0.95rem', color: '#3d6489' }}>
           Already have an account?{' '}
-          <Link href="/login" style={{ color: '#67e8f9', textDecoration: 'none', fontWeight: 700 }}>
+          <Link href="/login" style={{ color: '#0f79d4', textDecoration: 'none', fontWeight: 700 }}>
             Log in instead
           </Link>
         </p>
@@ -124,7 +124,7 @@ export default function SignupPage() {
     >
       <form onSubmit={handleSignup} style={{ display: 'grid', gap: '1rem' }}>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#8befff', fontWeight: 700 }}>
+          <label style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#0f6fbf', fontWeight: 800 }}>
             I am a
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
@@ -134,15 +134,18 @@ export default function SignupPage() {
                 type="button"
                 onClick={() => setAccountType(role)}
                 style={{
-                  minHeight: '2.8rem',
-                  borderRadius: '0.75rem',
-                  border: accountType === role ? '1.5px solid #67e8f9' : '1px solid rgba(56, 189, 248, 0.24)',
-                  background: accountType === role ? 'rgba(34, 211, 238, 0.12)' : 'rgba(3, 23, 38, 0.58)',
-                  color: accountType === role ? '#67e8f9' : 'rgba(199, 249, 255, 0.6)',
-                  fontWeight: accountType === role ? 700 : 500,
+                  minHeight: '2.95rem',
+                  borderRadius: '0.88rem',
+                  border: accountType === role ? '1.6px solid #2793e8' : '1px solid rgba(84, 154, 221, 0.32)',
+                  background: accountType === role
+                    ? 'linear-gradient(142deg, rgba(24, 125, 217, 0.24), rgba(82, 201, 227, 0.2))'
+                    : 'linear-gradient(178deg, rgba(255, 255, 255, 0.86), rgba(239, 249, 255, 0.76))',
+                  color: accountType === role ? '#0f69b9' : '#4b7093',
+                  fontWeight: accountType === role ? 800 : 650,
                   fontSize: '0.9rem',
                   cursor: 'pointer',
                   textTransform: 'capitalize',
+                  boxShadow: accountType === role ? '0 10px 24px rgba(47, 136, 211, 0.22)' : 'none',
                 }}
               >
                 {role}
@@ -152,11 +155,11 @@ export default function SignupPage() {
         </div>
 
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <label htmlFor="username" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#8befff', fontWeight: 700 }}>
+          <label htmlFor="username" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#0f6fbf', fontWeight: 800 }}>
             Username
           </label>
           <div style={{ position: 'relative' }}>
-            <UserRound size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
+            <UserRound size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(37, 122, 197, 0.78)' }} />
             <input
               id="username"
               type="text"
@@ -169,22 +172,24 @@ export default function SignupPage() {
                 minHeight: '3.4rem',
                 padding: '0.95rem 1rem 0.95rem 2.95rem',
                 borderRadius: '1rem',
-                border: '1px solid rgba(56, 189, 248, 0.24)',
-                background: 'rgba(3, 23, 38, 0.58)',
-                color: '#effcff',
+                border: '1px solid rgba(84, 154, 221, 0.36)',
+                background: 'linear-gradient(176deg, rgba(255, 255, 255, 0.93) 0%, rgba(244, 251, 255, 0.84) 100%)',
+                color: '#0d2b4a',
                 outline: 'none',
                 boxSizing: 'border-box',
+                fontWeight: 600,
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 14px 28px rgba(88, 142, 191, 0.22)',
               }}
             />
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <label htmlFor="email" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#8befff', fontWeight: 700 }}>
+          <label htmlFor="email" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#0f6fbf', fontWeight: 800 }}>
             Email
           </label>
           <div style={{ position: 'relative' }}>
-            <AtSign size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
+            <AtSign size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(37, 122, 197, 0.78)' }} />
             <input
               id="email"
               type="email"
@@ -197,22 +202,24 @@ export default function SignupPage() {
                 minHeight: '3.4rem',
                 padding: '0.95rem 1rem 0.95rem 2.95rem',
                 borderRadius: '1rem',
-                border: '1px solid rgba(56, 189, 248, 0.24)',
-                background: 'rgba(3, 23, 38, 0.58)',
-                color: '#effcff',
+                border: '1px solid rgba(84, 154, 221, 0.36)',
+                background: 'linear-gradient(176deg, rgba(255, 255, 255, 0.93) 0%, rgba(244, 251, 255, 0.84) 100%)',
+                color: '#0d2b4a',
                 outline: 'none',
                 boxSizing: 'border-box',
+                fontWeight: 600,
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 14px 28px rgba(88, 142, 191, 0.22)',
               }}
             />
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <label htmlFor="password" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#8befff', fontWeight: 700 }}>
+          <label htmlFor="password" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#0f6fbf', fontWeight: 800 }}>
             Password
           </label>
           <div style={{ position: 'relative' }}>
-            <LockKeyhole size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
+            <LockKeyhole size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(37, 122, 197, 0.78)' }} />
             <input
               id="password"
               type={showPass ? 'text' : 'password'}
@@ -225,11 +232,13 @@ export default function SignupPage() {
                 minHeight: '3.4rem',
                 padding: '0.95rem 3rem 0.95rem 2.95rem',
                 borderRadius: '1rem',
-                border: '1px solid rgba(56, 189, 248, 0.24)',
-                background: 'rgba(3, 23, 38, 0.58)',
-                color: '#effcff',
+                border: '1px solid rgba(84, 154, 221, 0.36)',
+                background: 'linear-gradient(176deg, rgba(255, 255, 255, 0.93) 0%, rgba(244, 251, 255, 0.84) 100%)',
+                color: '#0d2b4a',
                 outline: 'none',
                 boxSizing: 'border-box',
+                fontWeight: 600,
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 14px 28px rgba(88, 142, 191, 0.22)',
               }}
             />
             <button
@@ -246,7 +255,7 @@ export default function SignupPage() {
                 justifyContent: 'center',
                 border: 'none',
                 background: 'transparent',
-                color: 'rgba(125, 211, 252, 0.75)',
+                color: 'rgba(37, 122, 197, 0.82)',
                 cursor: 'pointer',
               }}
             >
@@ -256,7 +265,7 @@ export default function SignupPage() {
         </div>
 
         {error ? (
-          <div style={{ padding: '0.95rem 1rem', borderRadius: '1rem', fontSize: '0.92rem', lineHeight: 1.55, border: '1px solid rgba(248, 113, 113, 0.28)', background: 'rgba(127, 29, 29, 0.22)', color: '#fecaca' }}>
+          <div style={{ padding: '0.95rem 1rem', borderRadius: '1rem', fontSize: '0.92rem', lineHeight: 1.55, border: '1px solid rgba(230, 110, 110, 0.4)', background: 'rgba(255, 239, 241, 0.82)', color: '#9f1d2d' }}>
             {error}
           </div>
         ) : null}
@@ -266,14 +275,14 @@ export default function SignupPage() {
           disabled={loading}
           style={{
             width: '100%',
-            minHeight: '3.4rem',
-            borderRadius: '1rem',
-            border: 'none',
-            background: 'linear-gradient(135deg, #083344, #155e75 48%, #67e8f9 100%)',
-            color: '#ecfeff',
+            minHeight: '3.65rem',
+            borderRadius: '1.08rem',
+            border: '1px solid rgba(31, 116, 192, 0.32)',
+            background: 'linear-gradient(135deg, #0b4fae 0%, #1f7fdd 36%, #42a8ef 72%, #5ad2e7 100%)',
+            color: '#f4fbff',
             fontWeight: 800,
             cursor: loading ? 'not-allowed' : 'pointer',
-            boxShadow: '0 18px 36px rgba(34, 211, 238, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+            boxShadow: '0 24px 40px rgba(38, 126, 204, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.42)',
           }}
         >
           {loading ? 'Creating account...' : 'Create account'}

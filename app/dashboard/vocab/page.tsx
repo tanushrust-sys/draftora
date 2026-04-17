@@ -115,6 +115,96 @@ function getSentenceFeedbackStyle(feedback?: SentenceFeedback | null) {
   return SENTENCE_FEEDBACK_STYLE[getSentenceFeedbackGrade(feedback)];
 }
 
+function extractFeedbackPoints(text: string) {
+  return text
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((part) => part.replace(/^[-•\d.)\s]+/, '').trim())
+    .filter(Boolean);
+}
+
+function getOverallFeedbackText(feedback: SentenceFeedback) {
+  if (feedback.summary) return feedback.summary;
+  if (feedback.strengths) return feedback.strengths;
+  if (feedback.improvements) return feedback.improvements;
+  return 'Feedback is ready.';
+}
+
+function StructuredSentenceFeedback({
+  feedback,
+  feedbackStyle,
+  feedbackGrade,
+  showPolishingHint = false,
+}: {
+  feedback: SentenceFeedback;
+  feedbackStyle?: { accent: string; background: string; border: string; icon: string; label: string } | null;
+  feedbackGrade: SentenceFeedbackGrade;
+  showPolishingHint?: boolean;
+}) {
+  const strengths = extractFeedbackPoints(feedback.strengths);
+  const improvements = extractFeedbackPoints(feedback.improvements);
+  const overall = getOverallFeedbackText(feedback);
+  const hasImproveContent = improvements.length > 0 || Boolean(feedback.suggestion);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: feedbackStyle?.background ?? 'var(--t-acc-a)', border: `1px solid ${feedbackStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 16, padding: '12px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ width: 20, height: 20, borderRadius: 6, background: feedbackStyle?.icon ?? tone('var(--t-acc)', 16), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {feedbackGrade === 'incorrect'
+            ? <XCircle style={{ width: 12, height: 12, color: feedbackStyle?.accent ?? 'var(--t-danger)' }} />
+            : feedbackGrade === 'mostly incorrect' || feedbackGrade === 'mostly correct'
+              ? <Sparkles style={{ width: 12, height: 12, color: feedbackStyle?.accent ?? 'var(--t-acc)' }} />
+              : <CheckCircle style={{ width: 12, height: 12, color: feedbackStyle?.accent ?? 'var(--t-success)' }} />
+          }
+        </div>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)' }}>Draftora AI Feedback</p>
+        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)', background: tone(feedbackStyle?.accent ?? 'var(--t-acc)', 10), border: `1px solid ${feedbackStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 999, padding: '3px 8px' }}>
+          Detailed
+        </span>
+      </div>
+
+      {showPolishingHint && (
+        <p style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 600, paddingLeft: 2 }}>
+          Quick feedback is ready. AI is polishing it now...
+        </p>
+      )}
+
+      <div style={{ maxHeight: 240, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: tone(feedbackStyle?.accent ?? 'var(--t-acc)', 7), border: `1px solid ${tone(feedbackStyle?.accent ?? 'var(--t-acc)', 18)}`, borderRadius: 12, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)', marginBottom: 4 }}>Overall</p>
+          <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{overall}</p>
+        </div>
+
+        {strengths.length > 0 && (
+          <div style={{ background: tone(feedbackStyle?.accent ?? 'var(--t-success)', 8), border: `1px solid ${tone(feedbackStyle?.accent ?? 'var(--t-success)', 20)}`, borderRadius: 12, padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-success)', marginBottom: 4 }}>What&apos;s Working</p>
+            <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4 }}>
+              {strengths.map((item) => (
+                <li key={item} style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {hasImproveContent && (
+          <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 12, padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 4 }}>Improve Next</p>
+            {improvements.length > 0 && (
+              <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4 }}>
+                {improvements.map((item) => (
+                  <li key={item} style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{item}</li>
+                ))}
+              </ul>
+            )}
+            {feedback.suggestion && (
+              <p style={{ marginTop: improvements.length ? 8 : 0, fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic' }}>Try: &ldquo;{feedback.suggestion}&rdquo;</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function normalizeSentenceFeedback(value: unknown): SentenceFeedback | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -1861,45 +1951,12 @@ export default function VocabPage() {
                       style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 12, padding: '10px 12px', fontSize: 13, color: 'var(--t-tx)', resize: 'none', outline: 'none', lineHeight: 1.5, opacity: vocabBusy ? 0.7 : 1 }}
                     />
                     {fb && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: fbStyle?.background ?? 'var(--t-acc-a)', border: `1px solid ${fbStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 16, padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ width: 20, height: 20, borderRadius: 6, background: fbStyle?.icon ?? tone('var(--t-acc)', 16), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {fbGrade === 'incorrect'
-                              ? <XCircle style={{ width: 12, height: 12, color: fbStyle?.accent ?? 'var(--t-danger)' }} />
-                              : fbGrade === 'mostly incorrect' || fbGrade === 'mostly correct'
-                                ? <Sparkles style={{ width: 12, height: 12, color: fbStyle?.accent ?? 'var(--t-acc)' }} />
-                                : <CheckCircle style={{ width: 12, height: 12, color: fbStyle?.accent ?? 'var(--t-success)' }} />
-                            }
-                          </div>
-                          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: fbStyle?.accent ?? 'var(--t-acc)' }}>AI Feedback</p>
-                          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: fbStyle?.accent ?? 'var(--t-acc)', background: tone(fbStyle?.accent ?? 'var(--t-acc)', 10), border: `1px solid ${fbStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 999, padding: '3px 8px' }}>
-                            {fbStyle?.label ?? 'Feedback'}
-                          </span>
-                        </div>
-                        {checking === i && (
-                          <p style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 600, paddingLeft: 2 }}>
-                            Quick feedback is ready. AI is polishing it now...
-                          </p>
-                        )}
-                        {fb.strengths && (
-                          <div style={{ background: tone(fbStyle?.accent ?? 'var(--t-success)', 8), border: `1px solid ${tone(fbStyle?.accent ?? 'var(--t-success)', 20)}`, borderRadius: 12, padding: '10px 12px' }}>
-                            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: fbStyle?.accent ?? 'var(--t-success)', marginBottom: 4 }}>What&apos;s good</p>
-                            <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{fb.strengths}</p>
-                          </div>
-                        )}
-                        {fb.improvements && (
-                          <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 12, padding: '10px 12px' }}>
-                            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 4 }}>Improve</p>
-                            <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{fb.improvements}</p>
-                          </div>
-                        )}
-                        {fb.suggestion && (
-                          <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic', paddingLeft: 4 }}>Try: &ldquo;{fb.suggestion}&rdquo;</p>
-                        )}
-                        {fb.summary && (
-                          <p style={{ fontSize: 12, color: fbStyle?.accent ?? 'var(--t-tx3)', fontWeight: 600, paddingLeft: 4 }}>{fb.summary}</p>
-                        )}
-                      </div>
+                      <StructuredSentenceFeedback
+                        feedback={fb}
+                        feedbackStyle={fbStyle}
+                        feedbackGrade={fbGrade}
+                        showPolishingHint={checking === i}
+                      />
                     )}
                     {/* Single Submit button — disabled until sentence written */}
                     <button
@@ -2055,42 +2112,11 @@ export default function VocabPage() {
 
                         {/* AI feedback if present */}
                         {fb && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: fbStyle?.background ?? 'var(--t-acc-a)', border: `1px solid ${fbStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 16, padding: '12px 14px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ width: 20, height: 20, borderRadius: 6, background: fbStyle?.icon ?? tone('var(--t-acc)', 16), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {fbGrade === 'incorrect'
-                                  ? <XCircle style={{ width: 12, height: 12, color: fbStyle?.accent ?? 'var(--t-danger)' }} />
-                                  : fbGrade === 'mostly incorrect' || fbGrade === 'mostly correct'
-                                    ? <Sparkles style={{ width: 12, height: 12, color: fbStyle?.accent ?? 'var(--t-acc)' }} />
-                                    : <CheckCircle style={{ width: 12, height: 12, color: fbStyle?.accent ?? 'var(--t-success)' }} />
-                                }
-                              </div>
-                              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: fbStyle?.accent ?? 'var(--t-acc)' }}>
-                                AI Feedback
-                              </p>
-                              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: fbStyle?.accent ?? 'var(--t-acc)', background: tone(fbStyle?.accent ?? 'var(--t-acc)', 10), border: `1px solid ${fbStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 999, padding: '3px 8px' }}>
-                                {fbStyle?.label ?? 'Feedback'}
-                              </span>
-                            </div>
-                            {fb.strengths && (
-                              <div style={{ background: tone(fbStyle?.accent ?? 'var(--t-success)', 7), border: `1px solid ${tone(fbStyle?.accent ?? 'var(--t-success)', 18)}`, borderRadius: 10, padding: '9px 12px' }}>
-                                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: fbStyle?.accent ?? 'var(--t-success)', marginBottom: 3 }}>What&apos;s good</p>
-                                <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{fb.strengths}</p>
-                              </div>
-                            )}
-                            {fb.improvements && (
-                              <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 10, padding: '9px 12px' }}>
-                                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 3 }}>To improve</p>
-                                <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{fb.improvements}</p>
-                              </div>
-                            )}
-                            {fb.suggestion && (
-                              <p style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic', paddingLeft: 4 }}>💡 Try: &ldquo;{fb.suggestion}&rdquo;</p>
-                            )}
-                            {fb.summary && (
-                              <p style={{ fontSize: 12, color: fbStyle?.accent ?? 'var(--t-tx3)', fontWeight: 600, paddingLeft: 4 }}>{fb.summary}</p>
-                            )}
-                          </div>
+                          <StructuredSentenceFeedback
+                            feedback={fb}
+                            feedbackStyle={fbStyle}
+                            feedbackGrade={fbGrade}
+                          />
                         )}
                       </div>
                     )}

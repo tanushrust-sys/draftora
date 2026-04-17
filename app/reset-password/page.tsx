@@ -23,6 +23,28 @@ export default function ResetPasswordPage() {
     password.length >= 10 ? '#34d399' : password.length >= 6 ? '#67e8f9' : 'rgba(125, 211, 252, 0.72)';
 
   useEffect(() => {
+    const bootstrapRecoverySession = async () => {
+      if (typeof window === 'undefined') return false;
+      const rawHash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+      if (!rawHash) return false;
+
+      const params = new URLSearchParams(rawHash);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      if (!accessToken || !refreshToken) return false;
+
+      const { error: setSessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (setSessionError) return false;
+
+      // Clean tokens from URL after session is established.
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      return true;
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
@@ -31,9 +53,16 @@ export default function ResetPasswordPage() {
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    void (async () => {
+      const recovered = await bootstrapRecoverySession();
+      if (recovered) {
+        setReady(true);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) setReady(true);
-    });
+    })();
 
     return () => subscription.unsubscribe();
   }, []);
