@@ -172,7 +172,7 @@ export default function DashboardPage() {
       : greetingLine;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '2.8rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
+    <div style={{ minHeight: '100vh', padding: '0.35rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── HERO ── */}
@@ -220,11 +220,11 @@ export default function DashboardPage() {
               background: `linear-gradient(175deg, color-mix(in srgb, var(--t-card) 86%, ${tone} 14%) 0%, var(--t-card) 65%)`,
               border: `1px solid color-mix(in srgb, var(--t-brd) 65%, ${tone} 35%)`,
               borderRadius: 16,
-              padding: '0.95rem 1.05rem',
+              padding: '1.05rem 1.05rem',
               display: 'flex',
               alignItems: 'center',
               gap: 10,
-              minHeight: 106,
+              minHeight: 114,
               boxShadow: '0 12px 28px rgba(10, 28, 56, 0.10), inset 0 1px 0 rgba(255,255,255,0.45)',
             }}>
               <div style={{
