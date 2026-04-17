@@ -2016,7 +2016,11 @@ export default function VocabPage() {
                       <span style={{ fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic' }}>{w.example_sentence}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                         {w.mastered
-                          ? <CheckCircle style={{ width: 16, height: 16, color: 'var(--t-success)' }} />
+                          ? (
+                            <span title="this word has been mastered" aria-label="this word has been mastered" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                              <CheckCircle style={{ width: 16, height: 16, color: 'var(--t-success)' }} />
+                            </span>
+                          )
                           : <span style={{ fontSize: 12, color: 'var(--t-tx3)' }}>{w.times_used}/{w.times_to_master}</span>
                         }
                         {hasSentence && (
