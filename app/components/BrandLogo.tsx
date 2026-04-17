@@ -23,8 +23,8 @@ export default function BrandLogo({ size = 36 }: BrandLogoProps) {
       <path d="M21.2 29.1H28.2" stroke="white" strokeWidth="2.35" strokeLinecap="round" />
       <defs>
         <linearGradient id="draftoraLogoBg" x1="4" y1="4" x2="37" y2="38" gradientUnits="userSpaceOnUse">
-          <stop stopColor="var(--t-acc, #ff5d79)" />
-          <stop offset="1" stopColor="var(--t-acc-light, #ff7f50)" />
+          <stop stopColor="#4f8bff" />
+          <stop offset="1" stopColor="#6ecbff" />
         </linearGradient>
       </defs>
     </svg>
