@@ -190,12 +190,12 @@ export default function DashboardPage() {
           padding: '1.7rem 2.05rem',
           position: 'relative',
           overflow: 'hidden',
-          background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-card) 84%, var(--t-acc) 16%) 0%, color-mix(in srgb, var(--t-card) 70%, var(--t-mod-write) 30%) 100%)',
+          background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-card) 84%, var(--t-acc) 16%) 0%, color-mix(in srgb, var(--t-card) 70%, var(--t-acc-light) 30%) 100%)',
           border: '1px solid color-mix(in srgb, var(--t-acc) 30%, var(--t-brd))',
           boxShadow: '0 18px 40px color-mix(in srgb, var(--t-shadow) 24%, transparent)',
         }}>
           <div style={{ position: 'absolute', top: -90, right: -60, width: 260, height: 260, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-acc) 26%, transparent)', filter: 'blur(26px)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -95, left: -20, width: 220, height: 220, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-mod-write) 18%, transparent)', filter: 'blur(24px)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -95, left: -20, width: 220, height: 220, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-acc-light) 18%, transparent)', filter: 'blur(24px)', pointerEvents: 'none' }} />
 
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.7rem' }}>
             {profile.streak > 0 && (
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                 <span style={{ color: 'var(--t-acc)', fontSize: 12, fontWeight: 700 }}>{xp.current} / {xp.needed} XP</span>
               </div>
               <div style={{ height: 10, background: 'color-mix(in srgb, var(--t-xp-track) 84%, white 16%)', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 75%, #0e5ad7) 0%, color-mix(in srgb, var(--t-mod-write) 55%, #67d0ff) 100%)', borderRadius: 99, transition: 'width 0.6s ease' }} />
+                <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 80%, #ffffff) 0%, color-mix(in srgb, var(--t-acc-light) 70%, #ffffff) 100%)', borderRadius: 99, transition: 'width 0.6s ease' }} />
               </div>
             </div>
           )}
