@@ -223,7 +223,7 @@ export default function DashboardPage() {
               <div>
                 <p style={{ fontSize: 30, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--t-tx)', lineHeight: 1, marginBottom: 4 }}>{value.toLocaleString()}</p>
                 <p style={{ color: 'var(--t-tx3)', fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{label}</p>
-                <p style={{ color: tone, fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{sub}</p>
+                <p style={{ color: wordsTone, fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{sub}</p>
               </div>
             </div>
           ))}
