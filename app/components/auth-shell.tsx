@@ -84,7 +84,7 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
           width: 'min(440px, calc(100vw - 1.5rem))',
           marginInline: 'auto',
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'stretch',
           minHeight: '100dvh',
           paddingTop: 'clamp(1.1rem, 4vh, 2rem)',
           paddingBottom: 'clamp(1.1rem, 4vh, 2rem)',
@@ -96,6 +96,7 @@ export function AuthShell({ eyebrow, title, description, footer, children }: Aut
           style={{
             width: '100%',
             flex: '1',
+            minHeight: 'calc(100dvh - clamp(2.2rem, 8vh, 4rem))',
             borderRadius: '22px',
             padding: '0.5rem',
             background: 'linear-gradient(160deg, rgba(3, 23, 38, 0.96) 0%, rgba(2, 12, 24, 0.96) 100%)',

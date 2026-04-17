@@ -37,6 +37,34 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const redirectingRef = useRef(false);
+  const labelStyle: React.CSSProperties = {
+    fontSize: '0.76rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.16em',
+    color: '#8befff',
+    fontWeight: 800,
+  };
+  const fieldWrapStyle: React.CSSProperties = {
+    position: 'relative',
+    borderRadius: '1rem',
+    background: 'linear-gradient(180deg, rgba(6, 34, 52, 0.64) 0%, rgba(4, 22, 36, 0.72) 100%)',
+    border: '1px solid rgba(74, 201, 242, 0.3)',
+    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.22)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+  };
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    minHeight: '3.4rem',
+    borderRadius: '1rem',
+    border: 'none',
+    background: 'transparent',
+    color: '#effcff',
+    outline: 'none',
+    boxSizing: 'border-box',
+    fontSize: '1.03rem',
+    fontWeight: 520,
+  };
 
   useEffect(() => {
     if (!authLoading && user && !redirectingRef.current) {
@@ -102,20 +130,20 @@ export default function LoginPage() {
       title="Log in to your writing studio"
       description="Pick up your streak, revisit saved drafts, and keep your progress moving."
       footer={
-        <p style={{ margin: 0, fontSize: '0.95rem', color: 'rgba(199, 249, 255, 0.72)' }}>
+        <p style={{ margin: 0, fontSize: '0.95rem', color: 'rgba(204, 244, 255, 0.8)' }}>
           Don&apos;t have an account?{' '}
-          <Link href="/signup" style={{ color: '#67e8f9', textDecoration: 'none', fontWeight: 700 }}>
+          <Link href="/signup" style={{ color: '#7cecff', textDecoration: 'none', fontWeight: 800 }}>
             Create one free
           </Link>
         </p>
       }
     >
-      <form onSubmit={handleLogin} style={{ display: 'grid', gap: '1rem' }}>
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <label htmlFor="username" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#8befff', fontWeight: 700 }}>
+      <form onSubmit={handleLogin} style={{ display: 'grid', gap: '1.1rem' }}>
+        <div style={{ display: 'grid', gap: '0.52rem' }}>
+          <label htmlFor="username" style={labelStyle}>
             Username
           </label>
-          <div style={{ position: 'relative' }}>
+          <div style={fieldWrapStyle}>
             <AtSign size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
             <input
               id="username"
@@ -125,25 +153,18 @@ export default function LoginPage() {
               placeholder="yourname"
               autoComplete="username"
               style={{
-                width: '100%',
-                minHeight: '3.4rem',
+                ...inputStyle,
                 padding: '0.95rem 1rem 0.95rem 2.95rem',
-                borderRadius: '1rem',
-                border: '1px solid rgba(56, 189, 248, 0.24)',
-                background: 'rgba(3, 23, 38, 0.58)',
-                color: '#effcff',
-                outline: 'none',
-                boxSizing: 'border-box',
               }}
             />
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <label htmlFor="password" style={{ fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#8befff', fontWeight: 700 }}>
+        <div style={{ display: 'grid', gap: '0.52rem' }}>
+          <label htmlFor="password" style={labelStyle}>
             Password
           </label>
-          <div style={{ position: 'relative' }}>
+          <div style={fieldWrapStyle}>
             <LockKeyhole size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(125, 211, 252, 0.75)' }} />
             <input
               id="password"
@@ -153,15 +174,8 @@ export default function LoginPage() {
               placeholder="Enter your password"
               autoComplete="current-password"
               style={{
-                width: '100%',
-                minHeight: '3.4rem',
+                ...inputStyle,
                 padding: '0.95rem 3rem 0.95rem 2.95rem',
-                borderRadius: '1rem',
-                border: '1px solid rgba(56, 189, 248, 0.24)',
-                background: 'rgba(3, 23, 38, 0.58)',
-                color: '#effcff',
-                outline: 'none',
-                boxSizing: 'border-box',
               }}
             />
             <button
@@ -178,7 +192,7 @@ export default function LoginPage() {
                 justifyContent: 'center',
                 border: 'none',
                 background: 'transparent',
-                color: 'rgba(125, 211, 252, 0.75)',
+                color: 'rgba(140, 223, 248, 0.86)',
                 cursor: 'pointer',
               }}
             >
@@ -187,12 +201,12 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: 'rgba(223, 247, 255, 0.76)', fontSize: '0.92rem' }}>
-            <input type="checkbox" checked={remember} onChange={() => setRemember((value) => !value)} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginTop: '-0.1rem' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: 'rgba(227, 248, 255, 0.84)', fontSize: '0.92rem', fontWeight: 520 }}>
+            <input type="checkbox" checked={remember} onChange={() => setRemember((value) => !value)} style={{ accentColor: '#54d7f6' }} />
             Remember me
           </label>
-          <Link href="/forgot-password" style={{ color: '#67e8f9', textDecoration: 'none', fontWeight: 700 }}>
+          <Link href="/forgot-password" style={{ color: '#7cecff', textDecoration: 'none', fontWeight: 800 }}>
             Forgot password?
           </Link>
         </div>
@@ -208,14 +222,17 @@ export default function LoginPage() {
           disabled={loading}
           style={{
             width: '100%',
-            minHeight: '3.4rem',
-            borderRadius: '1rem',
-            border: 'none',
-            background: 'linear-gradient(135deg, #083344, #155e75 48%, #67e8f9 100%)',
+            minHeight: '3.45rem',
+            borderRadius: '1.08rem',
+            border: '1px solid rgba(122, 230, 255, 0.24)',
+            background: 'linear-gradient(135deg, #0c3b4f 0%, #165f78 45%, #58d0e8 100%)',
             color: '#ecfeff',
-            fontWeight: 800,
+            fontWeight: 850,
+            fontSize: '1.05rem',
+            letterSpacing: '0.01em',
             cursor: loading ? 'not-allowed' : 'pointer',
-            boxShadow: '0 18px 36px rgba(34, 211, 238, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+            boxShadow: '0 18px 36px rgba(34, 211, 238, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            transition: 'transform 0.15s ease, filter 0.15s ease',
           }}
         >
           {loading ? 'Signing in...' : 'Log in'}
