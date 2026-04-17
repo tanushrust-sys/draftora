@@ -25,6 +25,7 @@ import OnboardingModal from '@/app/components/OnboardingModal';
 import LevelUpPopup from '@/app/components/LevelUpPopup';
 import { clearAccountTypeOverride } from '@/app/lib/account-type';
 import { getAccountHomePath } from '@/app/lib/account-type';
+import BrandLogo from '@/app/components/BrandLogo';
 
 function createNavLinks() {
   return [
@@ -191,11 +192,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link href="/dashboard" style={{ textDecoration: 'none' }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: 13,
-                      background: 'linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 6px 20px color-mix(in srgb, var(--t-acc) 30%, transparent)',
+                      boxShadow: '0 8px 22px color-mix(in srgb, var(--t-acc) 34%, transparent)',
                     }}>
-                      <PenLine style={{ width: 18, height: 18, color: '#fff' }} />
+                      <BrandLogo size={40} />
                     </div>
                   </Link>
                   <button type="button" onClick={toggleCollapsed} title="Expand" style={{
@@ -213,11 +213,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link href="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{
                       width: 36, height: 36, borderRadius: 12, flexShrink: 0,
-                      background: 'linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 6px 20px color-mix(in srgb, var(--t-acc) 28%, transparent)',
+                      boxShadow: '0 8px 20px color-mix(in srgb, var(--t-acc) 30%, transparent)',
                     }}>
-                      <PenLine style={{ width: 16, height: 16, color: '#fff' }} />
+                      <BrandLogo size={36} />
                     </div>
                     <div>
                       <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--t-sb-tx)', letterSpacing: '-0.02em', lineHeight: 1 }}>Draftora</p>
