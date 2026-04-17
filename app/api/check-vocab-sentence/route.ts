@@ -36,6 +36,24 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function buildWordVariantRegex(word: string) {
+  const base = word.trim().toLowerCase();
+  if (!base) return null;
+
+  const stems = new Set<string>([base]);
+  if (base.endsWith('y') && base.length > 2) stems.add(`${base.slice(0, -1)}i`);
+  if (base.endsWith('e') && base.length > 2) stems.add(base.slice(0, -1));
+
+  const suffixes = '(?:s|es|ed|d|ing|er|est|ly|ness|ment|ful|less|able|ible|tion|sion|al)?';
+  const stemPattern = Array.from(stems).map(escapeRegExp).join('|');
+  return new RegExp(`\\b(?:${stemPattern})${suffixes}\\b`, 'i');
+}
+
+function sentenceUsesTargetWord(sentence: string, word: string) {
+  const matcher = buildWordVariantRegex(word);
+  return matcher ? matcher.test(sentence) : false;
+}
+
 function tokenize(text: string) {
   return text.toLowerCase().match(/[a-z']+/g)?.filter(Boolean) ?? [];
 }
@@ -80,7 +98,7 @@ function normalizeGrade(value: unknown): SentenceFeedbackGrade | null {
 function buildHeuristicFeedback(word: string, meaning: string, sentence: string, ageGroup?: string): SentenceFeedback {
   const trimmed = sentence.trim();
   const tokens = trimmed.split(/\s+/).filter(Boolean);
-  const includesWord = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i').test(trimmed);
+  const includesWord = sentenceUsesTargetWord(trimmed, word);
   const hasEndingPunctuation = /[.!?]$/.test(trimmed);
   const uniqueRatio = tokens.length ? new Set(tokens.map(token => token.toLowerCase())).size / tokens.length : 1;
   const repeatedChunk = /(.)\1{4,}/i.test(trimmed);
@@ -131,7 +149,7 @@ function buildHeuristicFeedback(word: string, meaning: string, sentence: string,
 function buildPositiveStrength(word: string, sentence: string) {
   const trimmed = sentence.trim();
   const tokens = trimmed.split(/\s+/).filter(Boolean);
-  const includesWord = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i').test(trimmed);
+  const includesWord = sentenceUsesTargetWord(trimmed, word);
 
   if (tokens.length >= 10) {
     return includesWord

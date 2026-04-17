@@ -168,6 +168,24 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function buildWordVariantRegex(word: string) {
+  const base = word.trim().toLowerCase();
+  if (!base) return null;
+
+  const stems = new Set<string>([base]);
+  if (base.endsWith('y') && base.length > 2) stems.add(`${base.slice(0, -1)}i`);
+  if (base.endsWith('e') && base.length > 2) stems.add(base.slice(0, -1));
+
+  const suffixes = '(?:s|es|ed|d|ing|er|est|ly|ness|ment|ful|less|able|ible|tion|sion|al)?';
+  const stemPattern = Array.from(stems).map(escapeRegExp).join('|');
+  return new RegExp(`\\b(?:${stemPattern})${suffixes}\\b`, 'i');
+}
+
+function sentenceUsesTargetWord(sentence: string, word: string) {
+  const matcher = buildWordVariantRegex(word);
+  return matcher ? matcher.test(sentence) : false;
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -190,7 +208,7 @@ function extractMeaningKeywords(text: string) {
 function buildQuickSentenceFeedback(word: string, meaning: string, sentence: string): SentenceFeedback {
   const trimmed = sentence.trim();
   const words = trimmed.split(/\s+/).filter(Boolean);
-  const includesWord = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i').test(trimmed);
+  const includesWord = sentenceUsesTargetWord(trimmed, word);
   const hasEndingPunctuation = /[.!?]$/.test(trimmed);
   const meaningKeywords = extractMeaningKeywords(meaning);
   const meaningHits = meaningKeywords.filter(keyword => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(trimmed));
@@ -213,7 +231,7 @@ function buildQuickSentenceFeedback(word: string, meaning: string, sentence: str
       grade: 'incorrect',
       correct: false,
       strengths: 'Your sentence is saved and ready for feedback.',
-      improvements: `Make sure the exact word "${word}" appears in your sentence so the checker can judge how you used it.`,
+      improvements: `Make sure the target word "${word}" (or a natural form like "${word}s" or "${word}ed") appears in your sentence so the checker can judge how you used it.`,
       summary: 'Add the target word and try again.',
       suggestion: `Try: "${word}" can be used in a clear sentence that shows its meaning.`,
     };
@@ -1778,6 +1796,9 @@ export default function VocabPage() {
             <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--t-tx)' }}>Today&apos;s Words</h2>
             <span style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 600 }}>{dailyWords.length} words today</span>
           </div>
+          <p style={{ fontSize: 12, color: 'var(--t-tx3)', marginTop: -6, marginBottom: 14 }}>
+            Submit a sentence for all 3 words to unlock extra words.
+          </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
             {dailyWords.map((dw, i) => {
