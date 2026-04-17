@@ -54,6 +54,7 @@ type SentenceFeedback = {
   improvements: string;
   summary: string;
   suggestion: string;
+  vocabularySuggestions?: string[];
 };
 
 const SENTENCE_FEEDBACK_STYLE: Record<SentenceFeedbackGrade, { accent: string; background: string; border: string; icon: string; label: string }> = {
@@ -122,6 +123,59 @@ function extractFeedbackPoints(text: string) {
     .filter(Boolean);
 }
 
+function normalizeSuggestionWord(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z-]/g, '');
+}
+
+function extractVocabularyChipWords(parts: string[], sentence: string, targetWord: string, limit = 4) {
+  const stopwords = new Set([
+    'the', 'and', 'for', 'with', 'that', 'this', 'your', 'you', 'from', 'into', 'more', 'make',
+    'sentence', 'word', 'words', 'using', 'used', 'use', 'clear', 'strong', 'well', 'good', 'great',
+    'add', 'one', 'two', 'three', 'next', 'overall', 'improvement', 'improve', 'working', 'vocabulary',
+    'suggestions', 'replace', 'simple', 'detail', 'details', 'context', 'reader', 'meaning',
+  ]);
+
+  const sentenceWords = new Set(
+    tokenizeSentence(sentence).map(normalizeSuggestionWord).filter(Boolean),
+  );
+  const normalizedTarget = normalizeSuggestionWord(targetWord);
+  const counts = new Map<string, number>();
+  for (const part of parts) {
+    const tokens = part
+      .toLowerCase()
+      .replace(/[^a-z\s-]/g, ' ')
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) =>
+        token.length >= 4 &&
+        !stopwords.has(token) &&
+        token !== normalizedTarget &&
+        !sentenceWords.has(token),
+      );
+    for (const token of tokens) {
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  }
+
+  const words = Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([word]) => word)
+    .slice(0, limit)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
+
+  if (words.length >= limit) return words;
+
+  const fallback = ['Precise', 'Vivid', 'Descriptive', 'Compelling', 'Dynamic', 'Evocative'];
+  const filled = [...words];
+  for (const item of fallback) {
+    if (filled.length >= limit) break;
+    const normalized = normalizeSuggestionWord(item);
+    if (normalized === normalizedTarget || sentenceWords.has(normalized)) continue;
+    if (!filled.some((word) => word.toLowerCase() === item.toLowerCase())) filled.push(item);
+  }
+  return filled;
+}
+
 function getOverallFeedbackText(feedback: SentenceFeedback) {
   if (feedback.summary) return feedback.summary;
   if (feedback.strengths) return feedback.strengths;
@@ -129,21 +183,90 @@ function getOverallFeedbackText(feedback: SentenceFeedback) {
   return 'Feedback is ready.';
 }
 
+function buildSpecificImprovement(sentenceText: string, targetWord: string) {
+  const sentence = sentenceText.trim();
+  const tokens = tokenizeSentence(sentence);
+  const hasTarget = targetWord ? sentenceUsesTargetWord(sentence, targetWord) : false;
+  const hasPunctuation = /[.!?]$/.test(sentence);
+  const genericWord = /\b(good|nice|bad|thing|stuff|very|really)\b/i.test(sentence);
+
+  if (!sentence) {
+    return targetWord
+      ? `Use "${targetWord}" in a full sentence with a subject, action, and one concrete detail.`
+      : 'Write a full sentence with a subject, action, and one concrete detail.';
+  }
+
+  if (targetWord && !hasTarget) {
+    return `Use "${targetWord}" directly in your sentence so the meaning is clearly demonstrated in context.`;
+  }
+
+  if (tokens.length < 8) {
+    return 'Add one specific image, action, or feeling so your sentence sounds complete and more convincing.';
+  }
+
+  if (!hasPunctuation) {
+    return 'Finish the sentence with proper punctuation so your final idea feels complete and polished.';
+  }
+
+  if (tokens.length > 24) {
+    return 'Split this into two shorter sentences to improve rhythm and make your key idea easier to follow.';
+  }
+
+  if (genericWord) {
+    return 'Replace one generic word with a more precise choice to make your meaning stronger and more vivid.';
+  }
+
+  return targetWord
+    ? `Keep "${targetWord}" in this sentence, and add one clearer context clue so the reader understands the meaning instantly.`
+    : 'Add one clearer context clue so the reader understands your meaning instantly.';
+}
+
 function StructuredSentenceFeedback({
   feedback,
   feedbackStyle,
   feedbackGrade,
   showPolishingHint = false,
+  sentenceText = '',
+  targetWord = '',
 }: {
   feedback: SentenceFeedback;
   feedbackStyle?: { accent: string; background: string; border: string; icon: string; label: string } | null;
   feedbackGrade: SentenceFeedbackGrade;
   showPolishingHint?: boolean;
+  sentenceText?: string;
+  targetWord?: string;
 }) {
   const strengths = extractFeedbackPoints(feedback.strengths);
   const improvements = extractFeedbackPoints(feedback.improvements);
+  const vocabularySuggestions = (
+    feedback.vocabularySuggestions && feedback.vocabularySuggestions.length > 0
+      ? feedback.vocabularySuggestions
+      : extractFeedbackPoints(feedback.suggestion)
+  ).filter(Boolean);
   const overall = getOverallFeedbackText(feedback);
-  const hasImproveContent = improvements.length > 0 || Boolean(feedback.suggestion);
+  const strengthsList = strengths.length > 0
+    ? strengths
+    : ['You made a clear attempt to use the target word in context.'];
+  const improvementsList = improvements.length > 0
+    ? improvements
+    : [buildSpecificImprovement(sentenceText, targetWord)];
+  const vocabSuggestionsList = vocabularySuggestions.length > 0
+    ? vocabularySuggestions
+    : [
+      'Replace one simple word with a more precise word.',
+      'Add one descriptive adjective to make your sentence more vivid.',
+    ];
+  const vocabularyChipWords = extractVocabularyChipWords(
+    [
+      ...vocabSuggestionsList,
+      feedback.suggestion,
+      feedback.improvements,
+      feedback.strengths,
+    ].filter(Boolean),
+    sentenceText,
+    targetWord,
+    4,
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: feedbackStyle?.background ?? 'var(--t-acc-a)', border: `1px solid ${feedbackStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 16, padding: '12px 14px' }}>
@@ -164,42 +287,58 @@ function StructuredSentenceFeedback({
 
       {showPolishingHint && (
         <p style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 600, paddingLeft: 2 }}>
-          Quick feedback is ready. AI is polishing it now...
+          AI feedback is coming in a moment...
         </p>
       )}
 
-      <div style={{ maxHeight: 240, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ overflowY: 'visible', paddingRight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ background: tone(feedbackStyle?.accent ?? 'var(--t-acc)', 7), border: `1px solid ${tone(feedbackStyle?.accent ?? 'var(--t-acc)', 18)}`, borderRadius: 12, padding: '10px 12px' }}>
-          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)', marginBottom: 4 }}>Overall</p>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)', marginBottom: 4 }}>Overall Feedback</p>
           <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{overall}</p>
         </div>
 
-        {strengths.length > 0 && (
-          <div style={{ background: tone(feedbackStyle?.accent ?? 'var(--t-success)', 8), border: `1px solid ${tone(feedbackStyle?.accent ?? 'var(--t-success)', 20)}`, borderRadius: 12, padding: '10px 12px' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-success)', marginBottom: 4 }}>What&apos;s Working</p>
-            <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4 }}>
-              {strengths.map((item) => (
-                <li key={item} style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div style={{ background: tone(feedbackStyle?.accent ?? 'var(--t-success)', 8), border: `1px solid ${tone(feedbackStyle?.accent ?? 'var(--t-success)', 20)}`, borderRadius: 12, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-success)', marginBottom: 4 }}>What&apos;s Going Well</p>
+          <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4 }}>
+            {strengthsList.map((item) => (
+              <li key={item} style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{item}</li>
+            ))}
+          </ul>
+        </div>
 
-        {hasImproveContent && (
-          <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 12, padding: '10px 12px' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 4 }}>Improve Next</p>
-            {improvements.length > 0 && (
-              <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4 }}>
-                {improvements.map((item) => (
-                  <li key={item} style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{item}</li>
-                ))}
-              </ul>
-            )}
-            {feedback.suggestion && (
-              <p style={{ marginTop: improvements.length ? 8 : 0, fontSize: 12, color: 'var(--t-tx3)', fontStyle: 'italic' }}>Try: &ldquo;{feedback.suggestion}&rdquo;</p>
-            )}
+        <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 12, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 4 }}>Improvement</p>
+          <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4 }}>
+            {improvementsList.map((item) => (
+              <li key={item} style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{item}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div style={{ background: tone('var(--t-mod-vocab)', 9), border: `1px solid ${tone('var(--t-mod-vocab)', 22)}`, borderRadius: 12, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-mod-vocab)', marginBottom: 4 }}>Vocabulary Suggestions</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            {vocabularyChipWords.map((word) => (
+              <span
+                key={word}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 999,
+                  padding: '5px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: 'var(--t-mod-vocab)',
+                  background: tone('var(--t-mod-vocab)', 10),
+                  border: `1px solid ${tone('var(--t-mod-vocab)', 24)}`,
+                }}
+              >
+                {word}
+              </span>
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -223,6 +362,15 @@ function normalizeSentenceFeedback(value: unknown): SentenceFeedback | null {
     improvements: typeof candidate.improvements === 'string' ? candidate.improvements.trim() : '',
     summary: typeof candidate.summary === 'string' ? candidate.summary.trim() : '',
     suggestion: typeof candidate.suggestion === 'string' ? candidate.suggestion.trim() : '',
+    vocabularySuggestions: Array.isArray(candidate.vocabularySuggestions)
+      ? candidate.vocabularySuggestions.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
+      : Array.isArray(candidate.vocabulary_suggestions)
+        ? candidate.vocabulary_suggestions.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
+        : typeof candidate.vocabularySuggestions === 'string'
+          ? extractFeedbackPoints(candidate.vocabularySuggestions)
+          : typeof candidate.vocabulary_suggestions === 'string'
+            ? extractFeedbackPoints(candidate.vocabulary_suggestions)
+            : [],
   };
 }
 
@@ -1956,6 +2104,8 @@ export default function VocabPage() {
                         feedbackStyle={fbStyle}
                         feedbackGrade={fbGrade}
                         showPolishingHint={checking === i}
+                        sentenceText={typedSentence || storedSentence}
+                        targetWord={dw.word}
                       />
                     )}
                     {/* Single Submit button — disabled until sentence written */}
@@ -2116,6 +2266,8 @@ export default function VocabPage() {
                             feedback={fb}
                             feedbackStyle={fbStyle}
                             feedbackGrade={fbGrade}
+                            sentenceText={w.user_sentence || ''}
+                            targetWord={w.word}
                           />
                         )}
                       </div>
