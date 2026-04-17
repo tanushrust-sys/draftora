@@ -33,7 +33,7 @@ function createNavLinks() {
     { href: '/dashboard/vocab',    icon: GraduationCap, label: 'Vocab',       color: 'var(--t-mod-vocab)',   description: 'Daily words and saves' },
     { href: '/dashboard/coach',    icon: Bot,           label: 'Coach',       color: 'var(--t-mod-coach)',   description: 'Feedback and guidance' },
     { href: '/dashboard/rewards',  icon: Trophy,        label: 'Rewards',     color: 'var(--t-mod-rewards)', description: 'XP and milestones' },
-    { href: '/dashboard/settings', icon: Settings,      label: 'Settings',    color: '#ffffff',              description: 'Account and theme' },
+    { href: '/dashboard/settings', icon: Settings,      label: 'Settings',    color: 'var(--t-acc-light)',   description: 'Account and theme' },
   ];
 }
 
@@ -113,6 +113,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
   const themeAccent = 'var(--t-acc)';
   const isSunsetTheme = profile?.active_theme === 'sunset-glow';
+  const inactiveNavLabelColor = isSunsetTheme
+    ? 'rgba(255,255,255,0.94)'
+    : 'color-mix(in srgb, var(--t-sb-mu) 95%, white 5%)';
+  const inactiveNavDescriptionColor = isSunsetTheme
+    ? 'rgba(255,255,255,0.74)'
+    : 'color-mix(in srgb, var(--t-sb-mu) 72%, transparent)';
 
   if (loading) {
     return (
@@ -241,10 +247,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 borderRadius: 18,
                 padding: '12px 12px 10px',
                 background: isSunsetTheme
-                  ? 'linear-gradient(135deg, #ffbd7f 0%, #ffa25d 100%)'
+                  ? 'linear-gradient(135deg, #ffd7a6 0%, #ffb980 45%, #ff9963 100%)'
                   : `linear-gradient(135deg, color-mix(in srgb, ${themeAccent} 8%, var(--t-card2)) 0%, color-mix(in srgb, ${themeAccent} 4%, var(--t-card2)) 100%)`,
                 border: isSunsetTheme
-                  ? '1px solid rgba(255, 122, 52, 0.48)'
+                  ? '1px solid rgba(199, 68, 47, 0.36)'
                   : `1px solid color-mix(in srgb, ${themeAccent} 12%, var(--t-brd))`,
                 flexShrink: 0,
               }}>
@@ -253,12 +259,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <div style={{
                     width: 40, height: 40, borderRadius: 14, flexShrink: 0,
                     background: isSunsetTheme
-                      ? 'linear-gradient(135deg, #ff8c42, #ff6a2a)'
+                      ? 'linear-gradient(135deg, #ff9a4d, #f15b42)'
                       : `linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 17, fontWeight: 900, color: '#fff',
                     boxShadow: isSunsetTheme
-                      ? '0 8px 20px rgba(255, 122, 52, 0.34)'
+                      ? '0 8px 20px rgba(199, 68, 47, 0.30)'
                       : '0 8px 20px color-mix(in srgb, var(--t-acc) 24%, transparent)',
                   }}>{initial}</div>
 
@@ -309,20 +315,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* ── NAV ── */}
             <nav style={{
-              flex: '0 0 auto',
+              flex: '1 1 auto',
               overflow: 'hidden',
-              padding: collapsed ? '8px 0 0' : '8px 10px 0',
+              padding: collapsed ? '10px 0 0' : '10px 10px 0',
               display: 'flex',
               flexDirection: 'column',
+              justifyContent: 'center',
               alignItems: collapsed ? 'center' : 'stretch',
             }}>
               {!collapsed && (
-                <p style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--t-sb-mu)', letterSpacing: '0.24em', textTransform: 'uppercase', padding: '4px 8px 8px' }}>Navigate</p>
+                <p style={{ fontSize: 9.5, fontWeight: 800, color: 'color-mix(in srgb, var(--t-sb-mu) 92%, white 8%)', letterSpacing: '0.26em', textTransform: 'uppercase', padding: '4px 8px 10px' }}>Navigate</p>
               )}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 4,
+                gap: 6,
                 width: '100%',
                 alignItems: collapsed ? 'center' : 'stretch',
               }}>
@@ -333,13 +340,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     return (
                       <Link key={href} href={href} title={label}
                         style={{
-                          width: 48, height: 48, borderRadius: 14, margin: '0 auto',
+                          width: 50, height: 50, borderRadius: 15, margin: '0 auto',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           textDecoration: 'none',
-                          background: active ? 'var(--t-sb-act)' : 'transparent',
-                          border: active ? '1px solid var(--t-sb-act-brd)' : '1px solid transparent',
-                          boxShadow: active ? `0 4px 16px color-mix(in srgb, ${color} 30%, transparent)` : 'none',
-                          transition: 'all 0.18s',
+                          background: active ? `linear-gradient(180deg, color-mix(in srgb, ${color} 20%, var(--t-sb-act)) 0%, color-mix(in srgb, ${color} 12%, var(--t-sb)) 100%)` : 'transparent',
+                          border: active ? '1px solid var(--t-sb-act-brd)' : '1px solid color-mix(in srgb, var(--t-sb-mu) 18%, transparent)',
+                          boxShadow: active ? `0 8px 20px color-mix(in srgb, ${color} 34%, transparent)` : 'none',
+                          transition: 'all 0.2s ease',
                         }}>
                         <Icon style={{ width: 20, height: 20, color: active ? color : 'var(--t-sb-mu)' }} />
                       </Link>
@@ -350,45 +357,75 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link key={href} href={href}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 11,
-                        padding: '8px 10px',
-                        borderRadius: 13,
+                        padding: '9px 11px',
+                        borderRadius: 15,
                         textDecoration: 'none',
                         background: active
-                          ? 'var(--t-sb-act)'
+                          ? `linear-gradient(135deg, color-mix(in srgb, ${color} 16%, var(--t-sb-act)) 0%, color-mix(in srgb, ${color} 8%, var(--t-sb-hov)) 100%)`
                           : 'transparent',
                         border: active
                           ? '1px solid var(--t-sb-act-brd)'
-                          : '1px solid transparent',
-                        boxShadow: active ? `0 2px 12px color-mix(in srgb, ${color} 20%, transparent)` : 'none',
-                        transition: 'all 0.18s',
+                          : '1px solid color-mix(in srgb, var(--t-sb-mu) 14%, transparent)',
+                        boxShadow: active ? `0 10px 24px color-mix(in srgb, ${color} 22%, transparent)` : 'none',
+                        transition: 'all 0.2s ease',
                         position: 'relative',
                       }}
-                      onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'var(--t-sb-hov)'; (e.currentTarget as HTMLElement).style.border = '1px solid var(--t-sb-hov-brd)'; } }}
-                      onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.border = '1px solid transparent'; } }}
+                      onMouseEnter={e => {
+                        if (!active) {
+                          const el = e.currentTarget as HTMLElement;
+                          el.style.background = 'var(--t-sb-hov)';
+                          el.style.border = '1px solid var(--t-sb-hov-brd)';
+                          el.style.transform = 'translateY(-1px)';
+                          el.style.boxShadow = '0 8px 18px color-mix(in srgb, var(--t-shadow) 18%, transparent)';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!active) {
+                          const el = e.currentTarget as HTMLElement;
+                          el.style.background = 'transparent';
+                          el.style.border = '1px solid color-mix(in srgb, var(--t-sb-mu) 14%, transparent)';
+                          el.style.transform = 'translateY(0)';
+                          el.style.boxShadow = 'none';
+                        }
+                      }}
                     >
+                      {active && (
+                        <div style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 9,
+                          bottom: 9,
+                          width: 3,
+                          borderRadius: 99,
+                          background: `linear-gradient(180deg, ${color} 0%, color-mix(in srgb, ${color} 65%, white) 100%)`,
+                          boxShadow: `0 0 10px color-mix(in srgb, ${color} 45%, transparent)`,
+                        }} />
+                      )}
                       {/* Icon box */}
                       <div style={{
-                        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                        width: 36, height: 36, borderRadius: 11, flexShrink: 0,
                         background: active
-                          ? `color-mix(in srgb, ${color} 22%, transparent)`
-                          : 'color-mix(in srgb, var(--t-sb-mu) 16%, transparent)',
-                        border: `1px solid ${active ? `color-mix(in srgb, ${color} 40%, transparent)` : 'color-mix(in srgb, var(--t-sb-mu) 20%, transparent)'}`,
+                          ? `linear-gradient(180deg, color-mix(in srgb, ${color} 30%, transparent) 0%, color-mix(in srgb, ${color} 16%, transparent) 100%)`
+                          : 'color-mix(in srgb, var(--t-sb-mu) 13%, transparent)',
+                        border: `1px solid ${active ? `color-mix(in srgb, ${color} 48%, transparent)` : 'color-mix(in srgb, var(--t-sb-mu) 26%, transparent)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.18s',
-                        boxShadow: active ? `0 0 10px color-mix(in srgb, ${color} 25%, transparent)` : 'none',
+                        transition: 'all 0.2s ease',
+                        boxShadow: active ? `0 0 0 1px color-mix(in srgb, ${color} 18%, transparent), 0 8px 14px color-mix(in srgb, ${color} 22%, transparent)` : 'none',
                       }}>
                         <Icon style={{ width: 16, height: 16, color: active ? color : 'var(--t-sb-mu)', transition: 'color 0.18s' }} />
                       </div>
 
                       {/* Label + description */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? 'var(--t-sb-tx)' : 'var(--t-sb-mu)', lineHeight: 1.1, transition: 'color 0.18s' }}>{label}</p>
-                        <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--t-sb-mu) 72%, transparent)', marginTop: 2, lineHeight: 1.2 }}>{description}</p>
+                        <p style={{ fontSize: 14, fontWeight: active ? 800 : 600, color: active ? 'var(--t-sb-tx)' : inactiveNavLabelColor, lineHeight: 1.08, transition: 'color 0.18s', letterSpacing: active ? '0.01em' : '0' }}>{label}</p>
+                        <p style={{ fontSize: 10.5, color: active ? 'color-mix(in srgb, var(--t-sb-tx) 74%, transparent)' : inactiveNavDescriptionColor, marginTop: 2, lineHeight: 1.25 }}>{description}</p>
                       </div>
 
                       {/* Active indicator */}
                       {active && (
-                        <div style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}, 0 0 12px ${color}` }} />
+                        <div style={{ width: 20, height: 20, borderRadius: 999, background: `color-mix(in srgb, ${color} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <ChevronRight style={{ width: 12, height: 12, color }} />
+                        </div>
                       )}
                     </Link>
                   );
@@ -401,7 +438,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               padding: collapsed ? '8px 10px 10px' : '8px 10px 10px',
               borderTop: '1px solid color-mix(in srgb, var(--t-brd) 40%, transparent)',
               marginTop: 'auto',
-              marginBottom: 'auto',
+              marginBottom: 0,
               flexShrink: 0,
             }}>
               <button type="button" onClick={handleLogout}
