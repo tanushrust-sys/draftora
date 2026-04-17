@@ -209,20 +209,40 @@ export default function DashboardPage() {
         </div>
 
         {/* ── 4 STAT CARDS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1.1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.75rem' }}>
           {([
             { tone: streakTone, Icon: Flame,    label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
             { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${profile.level}` },
             { tone: wordsTone,  Icon: FileText, label: 'Today',     value: words,                sub: `of ${wordGoal} words` },
             { tone: vocabTone,  Icon: BookOpen, label: 'Word Bank', value: vocabTotal,           sub: `${vocabMastered} mastered` },
           ] as const).map(({ tone, Icon, label, value, sub }) => (
-            <div key={label} style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 22, padding: '1.4rem 1.6rem', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 46, height: 46, borderRadius: 14, background: `color-mix(in srgb, ${tone} 12%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon style={{ color: tone, width: 20, height: 20 }} />
+            <div key={label} style={{
+              background: `linear-gradient(165deg, color-mix(in srgb, var(--t-card) 94%, ${tone} 6%) 0%, var(--t-card) 100%)`,
+              border: `1px solid color-mix(in srgb, var(--t-brd) 80%, ${tone} 20%)`,
+              borderRadius: 20,
+              padding: '1.15rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 13,
+              minHeight: 124,
+              boxShadow: '0 10px 24px rgba(8, 20, 40, 0.06)',
+            }}>
+              <div style={{
+                width: 44,
+                height: 44,
+                borderRadius: 13,
+                background: `linear-gradient(180deg, color-mix(in srgb, ${tone} 16%, white) 0%, color-mix(in srgb, ${tone} 12%, transparent) 100%)`,
+                border: `1px solid color-mix(in srgb, ${tone} 28%, transparent)`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Icon style={{ color: tone, width: 19, height: 19 }} />
               </div>
               <div>
-                <p style={{ fontSize: 30, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--t-tx)', lineHeight: 1, marginBottom: 4 }}>{value.toLocaleString()}</p>
-                <p style={{ color: 'var(--t-tx3)', fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{label}</p>
+                <p style={{ fontSize: 34, fontWeight: 900, letterSpacing: '-0.045em', color: 'var(--t-tx)', lineHeight: 0.95, marginBottom: 5 }}>{value.toLocaleString()}</p>
+                <p style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{label}</p>
                 <p style={{ color: wordsTone, fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{sub}</p>
               </div>
             </div>
