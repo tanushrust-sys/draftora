@@ -289,55 +289,55 @@
 
 /* ── Sunset Glow — radiant gold-to-crimson sky (#FFD166 → #FF8C42 → #FF5E5B → #D7263D) ── */
 [data-theme="sunset-glow"] {
-  --t-bg:          #ffe2b8;
-  --t-card:        #fff1d8;
-  --t-card2:       #ffd8a5;
-  --t-card3:       #ffb879;
-  --t-brd:         rgba(215, 38, 61, 0.20);
-  --t-brd-a:       rgba(215, 38, 61, 0.34);
-  --t-tx:          #341118;
-  --t-tx2:         #6e2430;
-  --t-tx3:         #9a4350;
-  --t-acc:         #d7263d;
-  --t-acc-light:   #ffd166;
-  --t-acc-a:       rgba(215, 38, 61, 0.12);
-  --t-acc-b:       rgba(215, 38, 61, 0.24);
-  --t-acc-c:       rgba(215, 38, 61, 0.40);
-  --t-btn:         linear-gradient(135deg, #ffd166 0%, #ff8c42 35%, #ff5e5b 68%, #d7263d 100%);
+  --t-bg:          #ffe8c8;
+  --t-card:        #fff4e4;
+  --t-card2:       #ffdfbc;
+  --t-card3:       #ffc897;
+  --t-brd:         rgba(176, 72, 45, 0.22);
+  --t-brd-a:       rgba(176, 72, 45, 0.36);
+  --t-tx:          #2f1512;
+  --t-tx2:         #5f2f25;
+  --t-tx3:         #8f5549;
+  --t-acc:         #c7442f;
+  --t-acc-light:   #ffc76e;
+  --t-acc-a:       rgba(199, 68, 47, 0.12);
+  --t-acc-b:       rgba(199, 68, 47, 0.24);
+  --t-acc-c:       rgba(199, 68, 47, 0.42);
+  --t-btn:         linear-gradient(135deg, #ffc76e 0%, #ff9a4d 34%, #f15b42 67%, #c7442f 100%);
   --t-btn-color:   #ffffff;
-  /* Sidebar: deep ember red with hot coral highlights */
-  --t-sb:          linear-gradient(175deg, #5c1422 0%, #8b1d30 35%, #b4253a 70%, #d7263d 100%);
-  --t-sb-brd:      rgba(255, 209, 102, 0.22);
-  --t-sb-user:     rgba(255, 140, 66, 0.14);
-  --t-sb-stats:    rgba(255, 140, 66, 0.08);
-  --t-sb-act:      rgba(255, 94, 91, 0.32);
-  --t-sb-act-brd:  rgba(255, 209, 102, 0.38);
-  --t-sb-hov:      rgba(255, 140, 66, 0.18);
-  --t-sb-hov-brd:  rgba(255, 209, 102, 0.28);
+  /* Sidebar: richer dusk red with copper warmth */
+  --t-sb:          linear-gradient(175deg, #4d1624 0%, #7c1f2f 36%, #9f2f39 70%, #c7442f 100%);
+  --t-sb-brd:      rgba(255, 199, 110, 0.26);
+  --t-sb-user:     rgba(255, 154, 77, 0.18);
+  --t-sb-stats:    rgba(255, 154, 77, 0.11);
+  --t-sb-act:      rgba(241, 91, 66, 0.34);
+  --t-sb-act-brd:  rgba(255, 199, 110, 0.42);
+  --t-sb-hov:      rgba(255, 154, 77, 0.22);
+  --t-sb-hov-brd:  rgba(255, 199, 110, 0.30);
   --t-sb-tx:       #ffffff;
-  --t-sb-mu:       rgba(255, 230, 196, 0.72);
+  --t-sb-mu:       rgba(255, 226, 189, 0.74);
   --t-sb-hov-tx:   #ffffff;
   --t-sb-username: #ffffff;
-  --t-xp:          linear-gradient(90deg, #ffd166 0%, #ff8c42 34%, #ff5e5b 67%, #d7263d 100%);
-  --t-xp-track:    rgba(215, 38, 61, 0.16);
-  --t-signout-brd: rgba(255, 209, 102, 0.18);
-  --t-scroll:      #cf4353;
-  --t-scroll-hov:  #e25966;
-  --t-shadow:      rgba(76, 20, 31, 0.26);
-  --t-glass:       rgba(255, 247, 234, 0.88);
-  --t-shell-1:     rgba(255, 209, 102, 0.46);
-  --t-shell-2:     rgba(255, 94, 91, 0.34);
-  --t-shell-3:     #ffc885;
-  --t-overlay:     rgba(37, 10, 16, 0.30);
-  --t-topbar:      rgba(255, 225, 184, 0.96);
-  --t-mod-write:   #ff8c42;
-  --t-mod-vocab:   #08b8a8;
-  --t-mod-coach:   #9459ff;
-  --t-mod-rewards: #d7263d;
-  --t-success:     #1d9f73;
-  --t-warning:     #d98422;
-  --t-danger:      #d7263d;
-  --t-info:        #ff8c42;
+  --t-xp:          linear-gradient(90deg, #ffc76e 0%, #ff9a4d 34%, #f15b42 67%, #c7442f 100%);
+  --t-xp-track:    rgba(199, 68, 47, 0.18);
+  --t-signout-brd: rgba(255, 199, 110, 0.20);
+  --t-scroll:      #b24a39;
+  --t-scroll-hov:  #c75a46;
+  --t-shadow:      rgba(70, 26, 21, 0.30);
+  --t-glass:       rgba(255, 244, 226, 0.90);
+  --t-shell-1:     rgba(255, 199, 110, 0.42);
+  --t-shell-2:     rgba(241, 91, 66, 0.32);
+  --t-shell-3:     #ffc187;
+  --t-overlay:     rgba(40, 14, 12, 0.32);
+  --t-topbar:      rgba(255, 228, 191, 0.95);
+  --t-mod-write:   #ff8a3d;
+  --t-mod-vocab:   #0d9f97;
+  --t-mod-coach:   #7b5cff;
+  --t-mod-rewards: #cf3d31;
+  --t-success:     #1f9470;
+  --t-warning:     #cb7b20;
+  --t-danger:      #c7442f;
+  --t-info:        #ff8a3d;
 }
 
 /* Sunset body: golden sky to coral and deep crimson horizon */
@@ -345,10 +345,10 @@
 [data-theme="sunset-glow"] .app-frame,
 [data-theme="sunset-glow"] .app-frame .min-h-screen {
   background:
-    radial-gradient(ellipse 95% 52% at 50% 0%,  rgba(255, 209, 102, 0.58) 0%, transparent 48%),
-    radial-gradient(ellipse 70% 42% at 84% 22%, rgba(255, 140, 66, 0.40) 0%, transparent 52%),
-    radial-gradient(ellipse 64% 46% at 14% 72%, rgba(215, 38, 61, 0.30) 0%, transparent 56%),
-    linear-gradient(172deg, #ffe8c2 0%, #ffd08d 28%, #ffb067 48%, #ff8c42 66%, #ff5e5b 82%, #d7263d 100%);
+    radial-gradient(ellipse 96% 54% at 50% 0%,  rgba(255, 199, 110, 0.56) 0%, transparent 48%),
+    radial-gradient(ellipse 72% 44% at 84% 22%, rgba(255, 154, 77, 0.34) 0%, transparent 52%),
+    radial-gradient(ellipse 68% 48% at 14% 75%, rgba(199, 68, 47, 0.26) 0%, transparent 56%),
+    linear-gradient(172deg, #fff0d8 0%, #ffddb5 30%, #ffc089 52%, #ff9a5d 72%, #f07456 88%, #cb463e 100%);
 }
 
 /* ══════════════════════════════════════
@@ -1563,7 +1563,7 @@ body {
 
 .dashboard-main {
   min-height: 100vh;
-  padding: 1rem 1rem 1rem;
+  padding: 1.5rem 1rem 1rem;
 }
 
 @media (min-width: 768px) {
@@ -2124,7 +2124,7 @@ select:focus-visible {
 }
 
 .dashboard-main {
-  padding: 1rem 1rem 1rem;
+  padding: 1.5rem 1rem 1rem;
 }
 
 .dashboard-content {

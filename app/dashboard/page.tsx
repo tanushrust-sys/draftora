@@ -17,6 +17,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
+import { useTheme } from '@/app/context/ThemeContext';
 import { supabase } from '@/app/lib/supabase';
 import { getTitleForLevel, getXPProgress } from '@/app/types/database';
 import type { DailyStats } from '@/app/types/database';
@@ -37,6 +38,7 @@ type DashboardRole = 'student' | 'teacher' | 'parent';
 
 export default function DashboardPage() {
   const { profile } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const ageGroup = profile?.age_group ?? '';
@@ -156,6 +158,7 @@ export default function DashboardPage() {
 
   const diffColor = difficulty === 'beginner' ? 'var(--t-success)' : difficulty === 'intermediate' ? 'var(--t-warning)' : 'var(--t-danger)';
   const isFreshStart = (profile.xp ?? 0) === 0 && (profile.streak ?? 0) === 0 && words === 0 && vocabTotal === 0;
+  const isDarkTheme = theme === 'midnight-blue' || theme === 'midnight-bloom';
 
   const greetingLine = activeDays === 7
     ? 'Perfect week — you wrote every single day.'
@@ -170,46 +173,63 @@ export default function DashboardPage() {
     : accountType === 'parent'
       ? 'Track progress, encourage practice, and stay close to the journey.'
       : greetingLine;
+  const cardSurface = {
+    background: 'linear-gradient(165deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, var(--t-card) 62%)',
+    border: '1px solid color-mix(in srgb, var(--t-brd) 72%, var(--t-acc) 28%)',
+    boxShadow: '0 18px 46px color-mix(in srgb, var(--t-shadow) 18%, transparent), inset 0 1px 0 rgba(255,255,255,0.42)',
+  } as const;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '0.875rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
+    <div style={{ minHeight: '100vh', padding: '1.3125rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── HERO ── */}
-        <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 28, padding: '1.4rem 2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.7rem' }}>
+        <div style={{
+          ...cardSurface,
+          borderRadius: 30,
+          padding: '1.7rem 2.05rem',
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-card) 84%, var(--t-acc) 16%) 0%, color-mix(in srgb, var(--t-card) 70%, var(--t-mod-write) 30%) 100%)',
+          border: '1px solid color-mix(in srgb, var(--t-acc) 30%, var(--t-brd))',
+          boxShadow: '0 18px 40px color-mix(in srgb, var(--t-shadow) 24%, transparent)',
+        }}>
+          <div style={{ position: 'absolute', top: -90, right: -60, width: 260, height: 260, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-acc) 26%, transparent)', filter: 'blur(26px)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -95, left: -20, width: 220, height: 220, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-mod-write) 18%, transparent)', filter: 'blur(24px)', pointerEvents: 'none' }} />
+
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.7rem' }}>
             {profile.streak > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `color-mix(in srgb, ${streakTone} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${streakTone} 20%, transparent)`, borderRadius: 99, padding: '5px 14px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `linear-gradient(180deg, color-mix(in srgb, ${streakTone} 22%, white) 0%, color-mix(in srgb, ${streakTone} 14%, var(--t-card2)) 100%)`, border: `1px solid color-mix(in srgb, ${streakTone} 30%, transparent)`, borderRadius: 99, padding: '6px 14px' }}>
                 <Flame style={{ width: 12, height: 12, color: streakTone }} />
                 <span style={{ fontSize: 12, fontWeight: 700, color: streakTone }}>{profile.streak}-day streak</span>
               </div>
             )}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 99, padding: '5px 14px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 24%, white) 0%, color-mix(in srgb, var(--t-acc) 14%, var(--t-card2)) 100%)', border: '1px solid color-mix(in srgb, var(--t-acc) 34%, transparent)', borderRadius: 99, padding: '6px 14px' }}>
               <Award style={{ width: 12, height: 12, color: 'var(--t-acc)' }} />
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-acc)' }}>Level {profile.level} · {title}</span>
             </div>
           </div>
 
-          <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.08, color: 'var(--t-tx)', marginBottom: '0.75rem' }}>
+          <h1 style={{ position: 'relative', zIndex: 1, fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.08, color: 'var(--t-tx)', marginBottom: '0.75rem', textShadow: '0 6px 18px color-mix(in srgb, var(--t-shadow) 18%, transparent)' }}>
             Welcome back, <span className="themed-shimmer" style={{ textTransform: 'capitalize' }}>{profile.username}</span>
           </h1>
-          <p style={{ color: 'var(--t-tx2)', fontSize: 15, lineHeight: 1.6, maxWidth: 500, marginBottom: '1rem' }}>{roleLine}</p>
+          <p style={{ position: 'relative', zIndex: 1, color: 'var(--t-tx2)', fontSize: 15, lineHeight: 1.6, maxWidth: 500, marginBottom: '1rem' }}>{roleLine}</p>
 
           {xp && (
-            <div style={{ maxWidth: 340 }}>
+            <div style={{ position: 'relative', zIndex: 1, maxWidth: 420, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 86%, black 14%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '0.65rem 0.8rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--t-tx3)', fontSize: 12, fontWeight: 600 }}>Level {profile.level} → {profile.level + 1}</span>
                 <span style={{ color: 'var(--t-acc)', fontSize: 12, fontWeight: 700 }}>{xp.current} / {xp.needed} XP</span>
               </div>
-              <div style={{ height: 9, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${xp.percent}%`, background: 'var(--t-xp)', borderRadius: 99, transition: 'width 0.6s ease' }} />
+              <div style={{ height: 10, background: 'color-mix(in srgb, var(--t-xp-track) 84%, white 16%)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 75%, #0e5ad7) 0%, color-mix(in srgb, var(--t-mod-write) 55%, #67d0ff) 100%)', borderRadius: 99, transition: 'width 0.6s ease' }} />
               </div>
             </div>
           )}
         </div>
 
         {/* ── 4 STAT CARDS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.45rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.55rem' }}>
           {([
             { tone: streakTone, Icon: Flame,    label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
             { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${profile.level}` },
@@ -217,73 +237,144 @@ export default function DashboardPage() {
             { tone: vocabTone,  Icon: BookOpen, label: 'Word Bank', value: vocabTotal,           sub: `${vocabMastered} mastered` },
           ] as const).map(({ tone, Icon, label, value, sub }) => (
             <div key={label} style={{
-              background: `linear-gradient(175deg, color-mix(in srgb, var(--t-card) 86%, ${tone} 14%) 0%, var(--t-card) 65%)`,
-              border: `1px solid color-mix(in srgb, var(--t-brd) 65%, ${tone} 35%)`,
+              background: isDarkTheme
+                ? `linear-gradient(165deg, color-mix(in srgb, ${tone} 24%, var(--t-card)) 0%, color-mix(in srgb, ${tone} 10%, var(--t-card)) 100%)`
+                : `linear-gradient(165deg, color-mix(in srgb, ${tone} 16%, transparent) 0%, color-mix(in srgb, var(--t-card) 80%, transparent) 100%)`,
+              border: isDarkTheme
+                ? `1px solid color-mix(in srgb, ${tone} 52%, var(--t-brd))`
+                : `1px solid color-mix(in srgb, ${tone} 30%, var(--t-brd))`,
               borderRadius: 16,
-              padding: '1.05rem 1.05rem',
+              padding: '1.1rem 1.1rem',
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              minHeight: 114,
-              boxShadow: '0 12px 28px rgba(10, 28, 56, 0.10), inset 0 1px 0 rgba(255,255,255,0.45)',
+              gap: 12,
+              minHeight: 122,
+              boxShadow: isDarkTheme
+                ? `0 16px 34px color-mix(in srgb, ${tone} 14%, transparent), inset 0 1px 0 rgba(255,255,255,0.14)`
+                : '0 16px 34px color-mix(in srgb, var(--t-shadow) 18%, transparent), inset 0 1px 0 rgba(255,255,255,0.55)',
+              backdropFilter: 'blur(12px) saturate(1.08)',
+              WebkitBackdropFilter: 'blur(12px) saturate(1.08)',
             }}>
               <div style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                background: `linear-gradient(180deg, color-mix(in srgb, ${tone} 22%, white) 0%, color-mix(in srgb, ${tone} 14%, transparent) 100%)`,
-                border: `1px solid color-mix(in srgb, ${tone} 36%, transparent)`,
+                width: 44,
+                height: 44,
+                borderRadius: 13,
+                background: isDarkTheme
+                  ? `linear-gradient(180deg, color-mix(in srgb, ${tone} 42%, white) 0%, color-mix(in srgb, ${tone} 18%, var(--t-card2)) 100%)`
+                  : `linear-gradient(180deg, color-mix(in srgb, ${tone} 22%, white) 0%, color-mix(in srgb, ${tone} 10%, transparent) 100%)`,
+                border: isDarkTheme
+                  ? `1px solid color-mix(in srgb, ${tone} 68%, transparent)`
+                  : `1px solid color-mix(in srgb, ${tone} 40%, transparent)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <Icon style={{ color: tone, width: 18, height: 18 }} />
+                <Icon style={{ color: isDarkTheme ? `color-mix(in srgb, ${tone} 88%, white)` : tone, width: 19, height: 19 }} />
               </div>
               <div>
-                <p style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-0.03em', color: 'var(--t-tx)', lineHeight: 1, marginBottom: 3 }}>{value.toLocaleString()}</p>
-                <p style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 700, marginBottom: 1 }}>{label}</p>
-                <p style={{ color: wordsTone, fontSize: 12, fontWeight: 700, opacity: 0.9 }}>{sub}</p>
+                <p style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--t-tx)', lineHeight: 1, marginBottom: 4 }}>{value.toLocaleString()}</p>
+                <p style={{ color: isDarkTheme ? 'color-mix(in srgb, var(--t-tx) 92%, white 8%)' : 'var(--t-tx2)', fontSize: 13, fontWeight: 800, marginBottom: 2 }}>{label}</p>
+                <p style={{ color: isDarkTheme ? 'color-mix(in srgb, var(--t-mod-write) 90%, white 10%)' : wordsTone, fontSize: 12, fontWeight: 700, opacity: 0.92 }}>{sub}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* ── PROMPT ── */}
-        <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 32, padding: '2.4rem 2.8rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.6rem', gap: 16 }}>
-            <div>
-              <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6 }}>Prompt of the day</p>
+        <div style={{
+          ...cardSurface,
+          borderRadius: 30,
+          padding: '2rem 2.1rem',
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'linear-gradient(165deg, color-mix(in srgb, var(--t-card) 90%, var(--t-acc) 10%) 0%, color-mix(in srgb, var(--t-card) 78%, var(--t-acc) 22%) 100%)',
+        }}>
+          <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', top: -130, right: -70, background: 'color-mix(in srgb, var(--t-acc) 20%, transparent)', filter: 'blur(24px)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', width: 180, height: 180, borderRadius: '50%', bottom: -90, left: -40, background: 'color-mix(in srgb, var(--t-mod-write) 14%, transparent)', filter: 'blur(18px)', pointerEvents: 'none' }} />
+
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 10, background: 'color-mix(in srgb, var(--t-acc) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--t-acc) 34%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <BookMarked style={{ width: 14, height: 14, color: 'var(--t-acc)' }} />
+                </div>
+                <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase' }}>Prompt of the day</p>
+              </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ background: 'var(--t-acc-a)', color: 'var(--t-acc)', borderRadius: 99, padding: '4px 14px', fontSize: 12, fontWeight: 700 }}>{selectedCategory}</span>
-                <span style={{ background: `color-mix(in srgb, ${diffColor} 10%, transparent)`, color: diffColor, borderRadius: 99, padding: '4px 14px', fontSize: 12, fontWeight: 700, textTransform: 'capitalize' }}>{difficulty}</span>
+                <span style={{ background: 'color-mix(in srgb, var(--t-acc) 14%, transparent)', color: 'var(--t-acc)', border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)', borderRadius: 99, padding: '5px 14px', fontSize: 12, fontWeight: 800 }}>{selectedCategory}</span>
+                <span style={{ background: `color-mix(in srgb, ${diffColor} 14%, transparent)`, color: diffColor, border: `1px solid color-mix(in srgb, ${diffColor} 26%, transparent)`, borderRadius: 99, padding: '5px 14px', fontSize: 12, fontWeight: 800, textTransform: 'capitalize' }}>{difficulty}</span>
               </div>
             </div>
-            <button type="button" onClick={() => setShowCategories(true)}
-              style={{ background: 'var(--t-card2)', color: 'var(--t-tx2)', border: '1px solid var(--t-brd)', borderRadius: 99, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+
+            <button
+              type="button"
+              onClick={() => setShowCategories(true)}
+              style={{
+                background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 78%, black 22%) 100%)',
+                color: 'var(--t-tx2)',
+                border: '1px solid color-mix(in srgb, var(--t-brd) 62%, transparent)',
+                borderRadius: 999,
+                padding: '10px 20px',
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: 'pointer',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                boxShadow: '0 10px 24px color-mix(in srgb, var(--t-shadow) 16%, transparent), inset 0 1px 0 rgba(255,255,255,0.35)',
+              }}
+            >
               Browse
             </button>
           </div>
 
-          <p style={{ color: 'var(--t-tx)', fontSize: 18, lineHeight: 1.85, marginBottom: '2rem', maxWidth: 680 }}>{promptText}</p>
+          <div style={{ position: 'relative', zIndex: 1, background: 'color-mix(in srgb, var(--t-card2) 74%, transparent)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 22, padding: '1.15rem 1.3rem', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.24)', display: 'flex', justifyContent: 'center' }}>
+            <p style={{ color: 'var(--t-tx)', fontSize: 20, lineHeight: 1.72, margin: 0, width: '100%', maxWidth: '100%', textAlign: 'center', fontWeight: 540 }}>{promptText}</p>
+          </div>
 
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button type="button" onClick={startWriting} className="auth-primary-btn"
-              style={{ minHeight: 52, fontSize: 15, fontWeight: 800, borderRadius: 16, paddingLeft: '2rem', paddingRight: '2rem' }}>
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={startWriting}
+              className="auth-primary-btn"
+              style={{
+                minHeight: 52,
+                fontSize: 16,
+                fontWeight: 850,
+                borderRadius: 16,
+                padding: '0 2.1rem',
+                flex: '1 1 320px',
+                boxShadow: '0 14px 30px color-mix(in srgb, var(--t-acc) 22%, transparent)',
+              }}
+            >
               Start writing
             </button>
-            <button type="button" onClick={() => setShowCategories(true)} className="auth-secondary-btn-modern"
-              style={{ minHeight: 52, fontSize: 14, fontWeight: 700, borderRadius: 16, paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
+            <button
+              type="button"
+              onClick={() => setShowCategories(true)}
+              className="auth-secondary-btn-modern"
+              style={{
+                minHeight: 52,
+                fontSize: 14,
+                fontWeight: 800,
+                borderRadius: 16,
+                padding: '0 1.5rem',
+                flex: '1 1 260px',
+                background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 96%, white 4%) 0%, color-mix(in srgb, var(--t-card2) 82%, black 18%) 100%)',
+                border: '1px solid color-mix(in srgb, var(--t-brd) 68%, transparent)',
+                boxShadow: '0 10px 24px color-mix(in srgb, var(--t-shadow) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.3)',
+              }}
+            >
               Change prompt
             </button>
           </div>
         </div>
 
         {/* ── BOTTOM ROW: activity + goals ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.4rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
 
           {/* 7-day activity */}
-          <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 28, padding: '2rem 2rem' }}>
+          <div style={{ ...cardSurface, borderRadius: 26, padding: '1.8rem 1.85rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.6rem' }}>
               <div>
                 <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 5 }}>This week</p>
@@ -297,11 +388,11 @@ export default function DashboardPage() {
                   <div style={{
                     width: '100%', aspectRatio: '1', borderRadius: 14,
                     background: active
-                      ? `color-mix(in srgb, ${streakTone} 22%, var(--t-card2))`
-                      : isToday ? 'color-mix(in srgb, var(--t-acc) 8%, var(--t-card2))' : 'var(--t-card2)',
+                      ? `color-mix(in srgb, ${streakTone} 28%, var(--t-card2))`
+                      : isToday ? 'color-mix(in srgb, var(--t-acc) 14%, var(--t-card2))' : 'var(--t-card2)',
                     border: active
-                      ? `1.5px solid color-mix(in srgb, ${streakTone} 30%, transparent)`
-                      : isToday ? '1.5px solid color-mix(in srgb, var(--t-acc) 22%, transparent)' : '1px solid var(--t-brd)',
+                      ? `1.5px solid color-mix(in srgb, ${streakTone} 42%, transparent)`
+                      : isToday ? '1.5px solid color-mix(in srgb, var(--t-acc) 34%, transparent)' : '1px solid var(--t-brd)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     position: 'relative',
                   }}>
@@ -320,7 +411,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Daily goals */}
-          <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 28, padding: '2rem 2rem' }}>
+          <div style={{ ...cardSurface, borderRadius: 26, padding: '1.8rem 1.85rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.6rem' }}>
               <div style={{ width: 42, height: 42, borderRadius: 14, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Target style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
@@ -349,7 +440,7 @@ export default function DashboardPage() {
                   <div style={{ height: '100%', width: `${vocabPct}%`, background: vocabTone, borderRadius: 99, transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div style={{ background: 'var(--t-card2)', border: '1px solid var(--t-brd)', borderRadius: 16, padding: '1rem 1.2rem' }}>
+              <div style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 92%, white 8%) 0%, color-mix(in srgb, var(--t-card2) 82%, black 18%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '1rem 1.2rem', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                   <Sparkles style={{ color: 'var(--t-acc)', width: 13, height: 13, flexShrink: 0 }} />
                   <span style={{ color: 'var(--t-tx2)', fontSize: 12, fontWeight: 700 }}>Custom goal</span>
