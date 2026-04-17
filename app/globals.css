@@ -1563,7 +1563,7 @@ body {
 
 .dashboard-main {
   min-height: 100vh;
-  padding: 0.4rem 1rem 1rem;
+  padding: 1rem 1rem 1rem;
 }
 
 @media (min-width: 768px) {
@@ -2124,7 +2124,7 @@ select:focus-visible {
 }
 
 .dashboard-main {
-  padding: 0.4rem 1rem 1rem;
+  padding: 1rem 1rem 1rem;
 }
 
 .dashboard-content {

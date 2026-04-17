@@ -172,7 +172,7 @@ export default function DashboardPage() {
       : greetingLine;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '0.35rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
+    <div style={{ minHeight: '100vh', padding: '0.875rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── HERO ── */}
