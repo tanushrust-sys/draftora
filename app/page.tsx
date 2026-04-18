@@ -13,5 +13,21 @@ export default async function RootPage() {
     redirect('/dashboard');
   }
 
-  return <MarketingHome />;
+  const organizationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Draftora',
+    url: 'https://draftora.com.au',
+    logo: 'https://draftora.com.au/logo.svg',
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+      />
+      <MarketingHome />
+    </>
+  );
 }
