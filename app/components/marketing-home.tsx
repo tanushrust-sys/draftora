@@ -160,27 +160,27 @@ const FAQS = [
   {
     question: 'What is Draftora?',
     answer:
-      'Draftora is an AI writing app for students designed to make writing practice clearer, more consistent, and less stressful. It gives students a focused writing space, feedback that explains exactly what to improve next, and progress signals that help families and teachers stay aligned. Instead of treating writing as a one-time task, Draftora supports a repeatable draft-revise-improve routine that helps students build confidence over time.',
+      'Draftora is an AI writing app for students that turns writing into a clear improvement system. Students draft, get targeted feedback, revise with purpose, and track progress over time. Parents and teachers stay aligned with the same learning signals, so support at home and school becomes consistent, specific, and far more effective.',
   },
   {
     question: 'How does Draftora help students improve their writing?',
     answer:
-      'Draftora helps students improve writing skills by combining immediate feedback with practical revision steps. After each draft, students can see strengths, improvement areas, and sentence-level suggestions they can apply right away. This short feedback loop helps students understand not just what to change, but why the change works, so each revision becomes a learning moment rather than guesswork.',
+      'Draftora improves writing through fast, actionable feedback after every draft. Students see what is working, what needs improvement, and exactly which sentences to strengthen next. Because feedback is immediate and specific, students revise while ideas are still fresh, building stronger structure, clarity, and vocabulary with every cycle.',
   },
   {
     question: 'Is Draftora suitable for different age groups and skill levels?',
     answer:
-      'Yes. Draftora is built for a wide range of age groups and writing experience levels. Guidance can be adjusted so newer writers receive simpler support and confident writers get more advanced critique. This makes the platform useful for students who are just getting started, students building foundational structure, and students who are ready for stronger craft-level feedback.',
+      'Yes. Draftora is designed for multiple age groups and writing levels, from early writers to more advanced students. Support can be tuned so beginners get simpler guidance while experienced writers receive deeper critique. That means each student gets feedback at the right difficulty level instead of one-size-fits-all comments.',
   },
   {
     question: 'Can parents track their child’s writing progress?',
     answer:
-      'Yes. Draftora gives parents clear visibility into writing activity and progress without overwhelming dashboards. Parents can see what was written, how feedback changed over time, and where to encourage next. This helps families support writing at home with specific, constructive conversations instead of general reminders to “write more.”',
+      'Yes. Parents can view writing activity, progress patterns, and feedback trends in a way that is easy to understand. Instead of guessing how to help, they can see concrete next steps and reinforce them at home. This leads to better conversations, better accountability, and steadier writing growth week to week.',
   },
   {
     question: 'Is Draftora secure and how is user data protected?',
     answer:
-      'Draftora is designed with security-minded account handling and controlled access patterns. Student data is scoped to authorized users, and role-based access is used so students, parents, and teachers only see the information they should. Authentication-backed access, protected API routes, and careful data handling are used to reduce exposure risk and keep learning progress private.',
+      'Draftora is built with security-focused access controls and authenticated user sessions. Student information is scoped by role so students, parents, and teachers only access the data they are authorized to view. Protected API routes and careful data-handling practices help keep progress data private and reduce exposure risk.',
   },
 ] as const;
 
