@@ -35,6 +35,60 @@ type DashCache = {
 };
 
 type DashboardRole = 'student' | 'teacher' | 'parent';
+type EditorPreference = {
+  category?: string | null;
+  prompt?: string | null;
+};
+
+function getEditorPreferenceKey(userId: string) {
+  return `draftora:writing-editor-preference:${userId}`;
+}
+
+function readEditorPreferredCategory(userId: string | undefined | null) {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    const rawPreference = window.localStorage.getItem(getEditorPreferenceKey(userId));
+    if (!rawPreference) return null;
+
+    try {
+      const parsedPreference = JSON.parse(rawPreference) as EditorPreference | string;
+      if (typeof parsedPreference === 'string') {
+        const legacyCategory = parsedPreference.trim();
+        return CATEGORIES.includes(legacyCategory) ? legacyCategory : null;
+      }
+
+      const preferredCategory = (parsedPreference?.category || '').trim();
+      return CATEGORIES.includes(preferredCategory) ? preferredCategory : null;
+    } catch {
+      const legacyCategory = rawPreference.trim();
+      return CATEGORIES.includes(legacyCategory) ? legacyCategory : null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function persistEditorPreference(userId: string | undefined | null, nextPreference: EditorPreference) {
+  if (!userId || typeof window === 'undefined') return;
+  const nextCategory = (nextPreference.category || '').trim();
+  if (!nextCategory || !CATEGORIES.includes(nextCategory)) return;
+
+  const nextPrompt = typeof nextPreference.prompt === 'string'
+    ? nextPreference.prompt.trim()
+    : '';
+
+  try {
+    window.localStorage.setItem(
+      getEditorPreferenceKey(userId),
+      JSON.stringify({
+        category: nextCategory,
+        prompt: nextPrompt || null,
+      }),
+    );
+  } catch {
+    // Preference save is best-effort only.
+  }
+}
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -67,6 +121,14 @@ export default function DashboardPage() {
   const [vocabMastered, setVocabMastered]       = useState(cached?.vocabMastered ?? 0);
   const [vocabTotal, setVocabTotal]             = useState(cached?.vocabTotal ?? 0);
   const [weekStats, setWeekStats]               = useState<DailyStats[]>(cached?.weekStats ?? []);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const preferredCategory = readEditorPreferredCategory(profile.id);
+    if (preferredCategory) {
+      setSelectedCategory(preferredCategory);
+    }
+  }, [profile?.id]);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -114,7 +176,8 @@ export default function DashboardPage() {
   const difficulty = getPromptDifficulty();
 
   const startWriting = () => {
-    router.push(`/dashboard/writings?prompt=${encodeURIComponent(promptText)}&category=${encodeURIComponent(selectedCategory)}`);
+    persistEditorPreference(profile?.id, { category: selectedCategory, prompt: promptText });
+    router.push('/dashboard/writings');
   };
 
   if (!profile) {

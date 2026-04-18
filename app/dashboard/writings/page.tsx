@@ -20,7 +20,7 @@ import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWrit
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
 import type { Writing } from '@/app/types/database';
-import { getDailyPrompt } from '@/app/data/prompts';
+import { getDailyPrompt, getPromptPool } from '@/app/data/prompts';
 import {
   PenLine, Send, Sparkles, CheckCircle, AlertCircle,
   RotateCcw, Tag, Save, TrendingUp, Calendar,
@@ -39,9 +39,11 @@ function uniqueWordRatio(text: string): number {
 
 const CATEGORIES = [
   'Persuasive Essay', 'Creative Story', 'Blog Entry',
-  'Email', 'Feature Article', 'Personal', 'Poetry', 'Other',
+  'Email', 'Feature Article', 'Personal', 'Poetry', 'Other', 'Free Writing',
 ];
 const JOURNAL_CATEGORIES = ['All', ...CATEGORIES];
+const FREE_WRITING_CATEGORY = 'Free Writing';
+const FREE_WRITING_PROMPT = 'Write anything you like!';
 type ActiveTab = 'write' | 'journal' | 'progress';
 type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
 type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_version: string };
@@ -54,6 +56,10 @@ type EditorBackup = {
   prompt?: string | null;
   category?: string | null;
   updatedAt?: string | null;
+};
+type EditorPreference = {
+  category?: string | null;
+  prompt?: string | null;
 };
 
 function isUnavailableFeedback(feedback: WritingFeedback | null | undefined) {
@@ -200,8 +206,87 @@ function buildDraftSignature(input: {
   return JSON.stringify(input);
 }
 
+function resolvePromptForCategory(category: string, ageGroup?: string) {
+  if (category === FREE_WRITING_CATEGORY) return FREE_WRITING_PROMPT;
+  return getDailyPrompt(category, ageGroup);
+}
+
+function getAlternatePrompt(category: string, currentPrompt: string, ageGroup?: string) {
+  if (category === FREE_WRITING_CATEGORY) return FREE_WRITING_PROMPT;
+  const pool = getPromptPool(category, ageGroup);
+  if (pool.length <= 1) return resolvePromptForCategory(category, ageGroup);
+  const candidates = pool.filter((item) => item !== currentPrompt);
+  if (candidates.length === 0) return resolvePromptForCategory(category, ageGroup);
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 function getEditorBackupKey(userId: string) {
   return `draftora:writing-editor-backup:${userId}`;
+}
+
+function getEditorPreferenceKey(userId: string) {
+  return `draftora:writing-editor-preference:${userId}`;
+}
+
+function parseEditorPreference(rawPreference: string): EditorPreference | null {
+  try {
+    const parsedPreference = JSON.parse(rawPreference) as EditorPreference | string;
+    if (typeof parsedPreference === 'string') {
+      const legacyCategory = parsedPreference.trim();
+      if (!legacyCategory || !CATEGORIES.includes(legacyCategory)) return null;
+      return { category: legacyCategory };
+    }
+
+    const preferredCategory = (parsedPreference?.category || '').trim();
+    if (!preferredCategory || !CATEGORIES.includes(preferredCategory)) return null;
+
+    const preferredPrompt = typeof parsedPreference?.prompt === 'string'
+      ? parsedPreference.prompt.trim()
+      : '';
+
+    return {
+      category: preferredCategory,
+      prompt: preferredPrompt || null,
+    };
+  } catch {
+    // Support legacy plain-string values saved without JSON encoding.
+    const legacyCategory = rawPreference.trim();
+    if (!legacyCategory || !CATEGORIES.includes(legacyCategory)) return null;
+    return { category: legacyCategory };
+  }
+}
+
+function readEditorPreference(userId: string | undefined | null) {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    const rawPreference = window.localStorage.getItem(getEditorPreferenceKey(userId));
+    if (!rawPreference) return null;
+    return parseEditorPreference(rawPreference);
+  } catch {
+    return null;
+  }
+}
+
+function persistEditorPreference(userId: string | undefined | null, nextPreference: EditorPreference) {
+  if (!userId || typeof window === 'undefined') return;
+  const nextCategory = (nextPreference.category || '').trim();
+  if (!nextCategory || !CATEGORIES.includes(nextCategory)) return;
+
+  const nextPrompt = typeof nextPreference.prompt === 'string'
+    ? nextPreference.prompt.trim()
+    : '';
+
+  try {
+    window.localStorage.setItem(
+      getEditorPreferenceKey(userId),
+      JSON.stringify({
+        category: nextCategory,
+        prompt: nextPrompt || null,
+      }),
+    );
+  } catch {
+    // Preference save is best-effort only.
+  }
 }
 
 function buildTimeAxisTicks(range: TimeRange, start: Date, end: Date) {
@@ -481,6 +566,8 @@ function WritingsContent() {
   const journalLoadedRef = useRef(false);
   const progressLoadedRef = useRef(false);
   const progressLoadedTokenRef = useRef(-1);
+  const categoryPreferenceHydratedRef = useRef(false);
+  const skipNextPreferencePersistRef = useRef(false);
 
   const switchTab = useCallback((nextTab: ActiveTab) => {
     startTransition(() => {
@@ -492,6 +579,18 @@ function WritingsContent() {
     if (nextTab === 'write') nextParams.delete('tab');
     else nextParams.set('tab', nextTab);
 
+    const nextQuery = nextParams.toString();
+    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+    router.replace(nextUrl, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const clearPromptContextFromUrl = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    const hadPromptContext = nextParams.has('prompt') || nextParams.has('category');
+    if (!hadPromptContext) return;
+
+    nextParams.delete('prompt');
+    nextParams.delete('category');
     const nextQuery = nextParams.toString();
     const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
     router.replace(nextUrl, { scroll: false });
@@ -538,16 +637,26 @@ function WritingsContent() {
       prompt?: string | null;
       category?: string | null;
     }) => {
-      const nextCategory = draft.category || 'Creative Story';
+      const preferredEditorPreference = readEditorPreference(profile.id);
+      const preferredCategory = preferredEditorPreference?.category || null;
+      const preferredPrompt = preferredEditorPreference?.prompt || null;
+      const nextCategory = draft.category || preferredCategory || 'Creative Story';
+      const resolvedPrompt = (draft.prompt || '').trim()
+        || (
+          preferredPrompt &&
+          preferredCategory === nextCategory
+            ? preferredPrompt
+            : resolvePromptForCategory(nextCategory, profile.age_group ?? undefined)
+        );
       setTitle(draft.title || '');
       setContent(draft.content || '');
       setCategory(nextCategory);
-      setPrompt(draft.prompt || getDailyPrompt(nextCategory, profile.age_group ?? undefined));
+      setPrompt(resolvedPrompt);
       setWritingId(draft.id ?? null);
       lastSavedDraftSignatureRef.current = buildDraftSignature({
         title: draft.title || 'Untitled Draft',
         content: draft.content || '',
-        prompt: draft.prompt || '',
+        prompt: resolvedPrompt,
         category: nextCategory,
       });
     };
@@ -555,12 +664,17 @@ function WritingsContent() {
     try {
       const localBackupRaw = window.localStorage.getItem(getEditorBackupKey(profile.id));
       let localBackup: EditorBackup | null = null;
+      const todayKey = getLocalDateKey();
 
       if (localBackupRaw) {
         try {
           const parsed = JSON.parse(localBackupRaw) as EditorBackup;
-          if (parsed?.content && parsed.content.trim()) {
+          const backupDateKey = parsed?.updatedAt ? getLocalDateKey(new Date(parsed.updatedAt)) : '';
+          const isBackupFromToday = backupDateKey === todayKey;
+          if (parsed?.content && parsed.content.trim() && isBackupFromToday) {
             localBackup = parsed;
+          } else if (!isBackupFromToday) {
+            window.localStorage.removeItem(getEditorBackupKey(profile.id));
           }
         } catch {
           // Ignore malformed local backup.
@@ -595,7 +709,18 @@ function WritingsContent() {
           .limit(1)
           .maybeSingle();
         if (!error && data?.content?.trim()) {
-          cloudDraft = data as Writing;
+          const draftDateKey = getLocalDateKey(new Date(data.updated_at || data.created_at || ''));
+          if (draftDateKey === todayKey) {
+            cloudDraft = data as Writing;
+          } else {
+            // Expire stale in-progress drafts from previous days.
+            await supabase
+              .from('writings')
+              .delete()
+              .eq('id', data.id)
+              .eq('user_id', profile.id)
+              .eq('status', 'in_progress');
+          }
         }
       } catch {
         // Ignore cloud errors and use local fallback.
@@ -694,21 +819,90 @@ function WritingsContent() {
     return null;
   }, [recoverTimedOutWriting]);
 
-  // ── Read URL params; lock prompt to today's daily prompt ──
+  // ── Read URL params without overriding an already-restored draft ──
   useEffect(() => {
     const p = searchParams.get('prompt');
     const c = searchParams.get('category');
+    const hasExplicitPrompt = Boolean(p);
+    const hasExplicitCategory = Boolean(c);
+    const hasActiveDraftState = Boolean(writingId || content.trim() || title.trim() || feedback);
+
+    if (!hasExplicitPrompt && !hasExplicitCategory) {
+      setActiveTab(getRequestedTab(searchParams));
+      return;
+    }
+
+    // If there is already draft/editor state, never let stale URL prompt/category
+    // override the in-editor category/prompt selection.
+    if (hasActiveDraftState) {
+      setActiveTab(getRequestedTab(searchParams));
+      return;
+    }
+
+    const savedPreference = profile ? readEditorPreference(profile.id) : null;
+    const savedCategory = (savedPreference?.category || '').trim();
+    const savedPrompt = (savedPreference?.prompt || '').trim();
+    const hasSavedPreference = Boolean(savedCategory && CATEGORIES.includes(savedCategory));
+    if (hasSavedPreference) {
+      setCategory(savedCategory);
+      setPrompt(savedPrompt || resolvePromptForCategory(savedCategory, profile?.age_group ?? undefined));
+      setActiveTab(getRequestedTab(searchParams));
+
+      if (hasExplicitPrompt || hasExplicitCategory) {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.delete('prompt');
+        nextParams.delete('category');
+        const nextQuery = nextParams.toString();
+        const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+        router.replace(nextUrl, { scroll: false });
+      }
+      return;
+    }
+
     const resolvedCategory = c ? decodeURIComponent(c) : 'Creative Story';
 
     setCategory(resolvedCategory);
-    setPrompt(p ? decodeURIComponent(p) : getDailyPrompt(resolvedCategory, profile?.age_group ?? undefined));
+    setPrompt(
+      resolvedCategory === FREE_WRITING_CATEGORY
+        ? FREE_WRITING_PROMPT
+        : (p ? decodeURIComponent(p) : resolvePromptForCategory(resolvedCategory, profile?.age_group ?? undefined)),
+    );
     setActiveTab(getRequestedTab(searchParams));
-  }, [profile?.age_group, searchParams]);
+  }, [profile, profile?.age_group, searchParams, writingId, content, title, feedback, pathname, router]);
+
+  useEffect(() => {
+    const hasPromptContext = searchParams.has('prompt') || searchParams.has('category');
+    const hasDraftState = Boolean(writingId || content.trim() || title.trim() || feedback);
+    if (!hasPromptContext || !hasDraftState) return;
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('prompt');
+    nextParams.delete('category');
+    const nextQuery = nextParams.toString();
+    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+    router.replace(nextUrl, { scroll: false });
+  }, [searchParams, writingId, content, title, feedback, pathname, router]);
+
+  useEffect(() => {
+    if (!content.trim()) return;
+    if (!searchParams.has('prompt') && !searchParams.has('category')) return;
+    clearPromptContextFromUrl();
+  }, [content, searchParams, clearPromptContextFromUrl]);
 
   useEffect(() => {
     if (searchParams.get('prompt')) return;
-    setPrompt(getDailyPrompt(category, profile?.age_group ?? undefined));
-  }, [category, profile?.age_group, searchParams]);
+    if (writingId || content.trim() || title.trim() || feedback) return;
+
+    const savedPreference = profile ? readEditorPreference(profile.id) : null;
+    const savedCategory = (savedPreference?.category || '').trim();
+    const savedPrompt = (savedPreference?.prompt || '').trim();
+    if (categoryPreferenceHydratedRef.current && savedPrompt && savedCategory === category) {
+      setPrompt(savedPrompt);
+      return;
+    }
+
+    setPrompt(resolvePromptForCategory(category, profile?.age_group ?? undefined));
+  }, [category, profile?.age_group, profile?.id, searchParams, writingId, content, title, feedback]);
 
   // ── Live word count ──
   useEffect(() => {
@@ -752,7 +946,33 @@ function WritingsContent() {
 
   useEffect(() => {
     hasAttemptedDraftRestoreRef.current = false;
+    categoryPreferenceHydratedRef.current = false;
+    skipNextPreferencePersistRef.current = false;
   }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile) return;
+    if (categoryPreferenceHydratedRef.current) return;
+
+    try {
+      const savedPreference = readEditorPreference(profile.id);
+      const preferredCategory = savedPreference?.category;
+      if (preferredCategory) {
+        const preferredPrompt = (savedPreference?.prompt || '').trim();
+        // Prevent the immediate post-hydration persist cycle from writing stale
+        // initial state (Creative Story) before these state updates apply.
+        skipNextPreferencePersistRef.current = true;
+        setCategory(preferredCategory);
+        setPrompt(
+          preferredPrompt || resolvePromptForCategory(preferredCategory, profile.age_group ?? undefined),
+        );
+      }
+    } catch {
+      // Ignore malformed local preferences.
+    } finally {
+      categoryPreferenceHydratedRef.current = true;
+    }
+  }, [profile]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1062,6 +1282,45 @@ function WritingsContent() {
     }
   }, [profile, content, title, prompt, category, wordCount, writingId, incrementWritingsCreated, syncStoredWriting, loadJournal, recoverTimedOutWriting]);
 
+  const clearInProgressDraft = useCallback(async (clearEditor = false) => {
+    if (!profile) return;
+
+    try {
+      window.localStorage.removeItem(getEditorBackupKey(profile.id));
+    } catch {
+      // Ignore local cleanup failures.
+    }
+
+    const currentWritingId = writingId;
+    if (currentWritingId) {
+      try {
+        const { error: deleteError } = await supabase
+          .from('writings')
+          .delete()
+          .eq('id', currentWritingId)
+          .eq('user_id', profile.id)
+          .eq('status', 'in_progress');
+
+        if (!deleteError) {
+          setWritings(prev => prev.filter(item => item.id !== currentWritingId));
+          removeStoredWritingHistory(profile.id, currentWritingId);
+        }
+      } catch {
+        // Keep editor responsive even if cleanup fails.
+      }
+    }
+
+    setWritingId(null);
+    lastSavedDraftSignatureRef.current = '';
+
+    if (clearEditor) {
+      setTitle('');
+      setContent('');
+      setPrompt(resolvePromptForCategory(category, profile.age_group ?? undefined));
+      setError('');
+    }
+  }, [profile, writingId, category]);
+
   useEffect(() => {
     if (activeTab !== 'write') return;
     if (!profile) return;
@@ -1092,6 +1351,16 @@ function WritingsContent() {
   }, [activeTab, profile, content, title, prompt, category, status, feedback, saveDraft]);
 
   useEffect(() => {
+    if (activeTab !== 'write') return;
+    if (!profile) return;
+    if (status !== 'idle') return;
+    if (feedback) return;
+    if (content.trim()) return;
+    if (!writingId) return;
+    void clearInProgressDraft(false);
+  }, [activeTab, clearInProgressDraft, content, feedback, profile, status, writingId]);
+
+  useEffect(() => {
     const previousTab = previousActiveTabRef.current;
     if (previousTab === 'write' && activeTab !== 'write') {
       if (autosaveTimerRef.current) {
@@ -1119,7 +1388,7 @@ function WritingsContent() {
     if (!profile) return;
 
     const key = getEditorBackupKey(profile.id);
-    if (feedback || status !== 'idle' || !content.trim()) {
+    if (feedback || !content.trim()) {
       try {
         window.localStorage.removeItem(key);
       } catch {
@@ -1143,10 +1412,25 @@ function WritingsContent() {
   }, [profile, title, content, prompt, category, writingId, feedback, status]);
 
   useEffect(() => {
+    if (!profile) return;
+    if (!categoryPreferenceHydratedRef.current) return;
+    if (skipNextPreferencePersistRef.current) {
+      skipNextPreferencePersistRef.current = false;
+      return;
+    }
+    persistEditorPreference(profile.id, { category, prompt });
+  }, [profile, category, prompt]);
+
+  useEffect(() => {
     const flushPendingDraft = () => {
       if (activeTab !== 'write') return;
       if (!profile) return;
-      if (!content.trim()) return;
+      if (!content.trim()) {
+        if (writingId && status === 'idle' && !feedback) {
+          void clearInProgressDraft(false);
+        }
+        return;
+      }
       if (status !== 'idle') return;
 
       const signature = buildDraftSignature({
@@ -1156,6 +1440,19 @@ function WritingsContent() {
         category,
       });
       if (signature === lastSavedDraftSignatureRef.current) return;
+
+      try {
+        window.localStorage.setItem(getEditorBackupKey(profile.id), JSON.stringify({
+          writingId: writingId ?? null,
+          title,
+          content,
+          prompt,
+          category,
+          updatedAt: new Date().toISOString(),
+        }));
+      } catch {
+        // Local backup is best-effort only.
+      }
 
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current);
@@ -1178,7 +1475,18 @@ function WritingsContent() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
     };
-  }, [activeTab, category, content, profile, prompt, saveDraft, status, title]);
+  }, [activeTab, category, content, profile, prompt, saveDraft, status, title, writingId, feedback, clearInProgressDraft]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const timer = setTimeout(() => {
+      if (status !== 'idle' || feedback) return;
+      if (!content.trim() && !writingId) return;
+      void clearInProgressDraft(true);
+    }, msUntilNextLocalMidnight() + 1000);
+
+    return () => clearTimeout(timer);
+  }, [profile, status, feedback, content, writingId, clearInProgressDraft]);
 
   // (Legacy submitForFeedback removed — submitForFeedbackSafe is the active path)
 
@@ -1440,7 +1748,7 @@ function WritingsContent() {
       }
     }
     setTitle(''); setContent(''); setCategory('Creative Story');
-    setPrompt(getDailyPrompt('Creative Story', profile?.age_group ?? undefined));
+    setPrompt(resolvePromptForCategory('Creative Story', profile?.age_group ?? undefined));
     lastSavedDraftSignatureRef.current = '';
     hasAttemptedDraftRestoreRef.current = true;
     writingRewardsGrantedRef.current = false;
@@ -1451,6 +1759,27 @@ function WritingsContent() {
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
     loadProgress();
   };
+
+  const handleCategoryChange = useCallback((nextCategory: string) => {
+    const nextPrompt = resolvePromptForCategory(nextCategory, profile?.age_group ?? undefined);
+    setCategory(nextCategory);
+    setPrompt(nextPrompt);
+
+    if (profile) {
+      persistEditorPreference(profile.id, { category: nextCategory, prompt: nextPrompt });
+    }
+
+    clearPromptContextFromUrl();
+  }, [profile, clearPromptContextFromUrl]);
+
+  const getNewPrompt = useCallback(() => {
+    const next = getAlternatePrompt(category, prompt, profile?.age_group ?? undefined);
+    setPrompt(next);
+    if (profile) {
+      persistEditorPreference(profile.id, { category, prompt: next });
+    }
+    clearPromptContextFromUrl();
+  }, [category, prompt, profile, profile?.age_group, clearPromptContextFromUrl]);
 
   // ── Journal actions ──
   const toggleFavorite = async (w: Writing) => {
@@ -1752,11 +2081,31 @@ function WritingsContent() {
                     <Tag style={{ width: 13, height: 13, color: 'var(--t-tx3)' }} />
                     <select
                       value={category}
-                      onChange={e => { setCategory(e.target.value); setPrompt(getDailyPrompt(e.target.value, profile?.age_group ?? undefined)); }}
+                      onChange={e => { handleCategoryChange(e.target.value); }}
                       style={{ background: 'var(--t-bg)', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--t-brd)', color: 'var(--t-tx2)', fontSize: 12, outline: 'none', cursor: 'pointer' }}
                     >
                       {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                     </select>
+                    <button
+                      onClick={getNewPrompt}
+                      type="button"
+                      style={{
+                        background: 'var(--t-card)',
+                        border: '1px solid var(--t-brd)',
+                        color: 'var(--t-tx2)',
+                        borderRadius: 8,
+                        padding: '4px 10px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <RotateCcw style={{ width: 12, height: 12 }} />
+                      Get New Prompt
+                    </button>
                   </div>
                   <span style={{ color: wordCount > 3000 ? 'var(--t-danger)' : 'var(--t-tx3)', fontSize: 12, padding: '4px 10px', background: 'var(--t-bg)', borderRadius: 8, border: `1px solid ${wordCount > 3000 ? 'var(--t-danger)' : 'var(--t-brd)'}` }}>
                     {wordCount} / 3000 words
