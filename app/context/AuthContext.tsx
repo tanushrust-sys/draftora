@@ -211,17 +211,15 @@ function isTransientAuthLockError(error: unknown) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const cachedProfile = readCachedProfile();
-
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(cachedProfile);
+  const [profile, setProfile] = useState<Profile | null>(() => readCachedProfile());
   const [loading, setLoading] = useState(true);
   const [levelUpEvent, setLevelUpEvent] = useState<{ level: number; title: string } | null>(null);
   const clearLevelUpEvent = useCallback(() => setLevelUpEvent(null), []);
   const profileFetchInFlight = useRef<Promise<Profile | null> | null>(null);
   const mountedRef = useRef(true);
-  const profileRef = useRef<Profile | null>(cachedProfile);
+  const profileRef = useRef<Profile | null>(profile);
   const sessionRef = useRef<Session | null>(null);
 
   const clearProfileState = useCallback((reason: 'signed-out' | 'invalid-session') => {
@@ -269,7 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (nextError) {
         if (isTransientAuthLockError(nextError)) {
-          return profileRef.current ?? cachedProfile ?? null;
+          return profileRef.current ?? null;
         }
         console.error('Failed to fetch profile:', nextError.message);
         if (mountedRef.current) {
@@ -322,26 +320,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     mountedRef.current = true;
     const timeout = setTimeout(() => {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }, 800);
 
     getVerifiedSession()
       .then(async (session) => {
+        if (!mountedRef.current) return;
         clearTimeout(timeout);
+        sessionRef.current = session;
         setSession(session);
         setUser(session?.user ?? null);
 
-      sessionRef.current = session;
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          clearProfileState('invalid-session');
+        }
 
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      } else {
-        clearProfileState('invalid-session');
-      }
-
+        if (!mountedRef.current) return;
         setLoading(false);
       })
       .catch((error) => {
+        if (!mountedRef.current) return;
         if (isTransientAuthLockError(error)) {
           setLoading(false);
           return;
@@ -353,6 +355,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+      if (!mountedRef.current) return;
       sessionRef.current = nextSession;
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
@@ -375,7 +378,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mountedRef.current = false;
       subscription.unsubscribe();
     };
-  }, [cachedProfile, fetchProfile]);
+  }, [clearProfileState, fetchProfile]);
 
   return (
     <AuthContext.Provider value={{ user, session, profile, loading, refreshProfile, levelUpEvent, clearLevelUpEvent }}>

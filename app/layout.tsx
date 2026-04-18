@@ -4,8 +4,8 @@ import { Providers } from '@/app/providers';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://draftora.com.au'),
-  title: 'Draftora - AI Writing Coach for Students',
-  description: 'Draftora is an AI writing coach for students that helps improve writing, vocabulary, feedback, and daily practice through XP, rewards, and guided learning.',
+  title: 'Draftora | AI Writing App for Students, Parents, and Teachers',
+  description: 'Draftora is an AI writing app for students that helps improve writing skills with instant feedback, clearer revision steps, and shared progress for parents and teachers.',
   manifest: '/manifest.webmanifest',
   alternates: {
     canonical: '/',
@@ -19,8 +19,8 @@ export const metadata: Metadata = {
     apple: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
   },
   openGraph: {
-    title: 'Draftora - AI Writing Coach for Students',
-    description: 'Improve writing, learn vocabulary, get AI feedback, track XP, and build better daily writing habits with Draftora.',
+    title: 'Draftora | AI Writing App for Students, Parents, and Teachers',
+    description: 'Help students improve writing skills with AI feedback, clear revision guidance, and progress visibility for parents and teachers.',
     siteName: 'Draftora',
     type: 'website',
     url: 'https://draftora.com.au',
@@ -33,8 +33,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Draftora - AI Writing Coach for Students',
-    description: 'Improve writing, learn vocabulary, get AI feedback, track XP, and build better daily writing habits with Draftora.',
+    title: 'Draftora | AI Writing App for Students, Parents, and Teachers',
+    description: 'An AI writing app for students to improve writing skills with clear feedback and shared progress for parents and teachers.',
     images: ['/logo.svg'],
   },
 };

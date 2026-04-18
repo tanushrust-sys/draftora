@@ -135,6 +135,55 @@ const TESTIMONIALS = [
   },
 ];
 
+const BLOG_POSTS = [
+  {
+    title: 'How an AI writing app for students can build daily writing confidence',
+    summary:
+      'Start with short prompts, review instant feedback, and revise one paragraph at a time. This routine helps students improve writing skills without feeling overwhelmed.',
+    audience: 'For students',
+  },
+  {
+    title: 'How parents can use AI feedback to support writing at home',
+    summary:
+      'Look at one strength and one next step after each draft. Small, consistent check-ins help children improve writing skills while keeping writing practice positive.',
+    audience: 'For parents',
+  },
+  {
+    title: 'Simple classroom habits to improve writing skills faster',
+    summary:
+      'Teachers can use clear revision goals, sentence-level feedback, and weekly progress snapshots to help every student write stronger drafts with less friction.',
+    audience: 'For teachers',
+  },
+] as const;
+
+const FAQS = [
+  {
+    question: 'What is Draftora?',
+    answer:
+      'Draftora is an AI writing app for students designed to make writing practice clearer, more consistent, and less stressful. It gives students a focused writing space, feedback that explains exactly what to improve next, and progress signals that help families and teachers stay aligned. Instead of treating writing as a one-time task, Draftora supports a repeatable draft-revise-improve routine that helps students build confidence over time.',
+  },
+  {
+    question: 'How does Draftora help students improve their writing?',
+    answer:
+      'Draftora helps students improve writing skills by combining immediate feedback with practical revision steps. After each draft, students can see strengths, improvement areas, and sentence-level suggestions they can apply right away. This short feedback loop helps students understand not just what to change, but why the change works, so each revision becomes a learning moment rather than guesswork.',
+  },
+  {
+    question: 'Is Draftora suitable for different age groups and skill levels?',
+    answer:
+      'Yes. Draftora is built for a wide range of age groups and writing experience levels. Guidance can be adjusted so newer writers receive simpler support and confident writers get more advanced critique. This makes the platform useful for students who are just getting started, students building foundational structure, and students who are ready for stronger craft-level feedback.',
+  },
+  {
+    question: 'Can parents track their child’s writing progress?',
+    answer:
+      'Yes. Draftora gives parents clear visibility into writing activity and progress without overwhelming dashboards. Parents can see what was written, how feedback changed over time, and where to encourage next. This helps families support writing at home with specific, constructive conversations instead of general reminders to “write more.”',
+  },
+  {
+    question: 'Is Draftora secure and how is user data protected?',
+    answer:
+      'Draftora is designed with security-minded account handling and controlled access patterns. Student data is scoped to authorized users, and role-based access is used so students, parents, and teachers only see the information they should. Authentication-backed access, protected API routes, and careful data handling are used to reduce exposure risk and keep learning progress private.',
+  },
+] as const;
+
 function AppPreviewCard({
   label,
   title,
@@ -220,15 +269,15 @@ export default function MarketingHome() {
       <main className={styles.main}>
         <section className={`${styles.hero} ${styles.reveal}`} data-reveal>
           <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>AI Writing App for Students, Parents, and Teachers</p>
-            <h1 className={styles.heroTypeTitle} aria-label="Write better with AI coaching for students, parents, and teachers.">
-              <span className={`${styles.typeLine} ${styles.typeLineSky}`}>Write better with</span>
-              <span className={`${styles.typeLine} ${styles.typeLineLake}`}>AI coaching for</span>
-              <span className={`${styles.typeLine} ${styles.typeLineDark}`}>students, parents,</span>
-              <span className={`${styles.typeLine} ${styles.typeLineDeep}`}>and teachers.</span>
+            <p className={styles.eyebrow}>AI writing app for students, parents, and teachers</p>
+            <h1 className={styles.heroTypeTitle} aria-label="AI writing app for students to improve writing skills with support for parents and teachers.">
+              <span className={`${styles.typeLine} ${styles.typeLineSky}`}>AI writing app</span>
+              <span className={`${styles.typeLine} ${styles.typeLineLake}`}>for students to</span>
+              <span className={`${styles.typeLine} ${styles.typeLineDark}`}>improve writing</span>
+              <span className={`${styles.typeLine} ${styles.typeLineDeep}`}>skills daily.</span>
             </h1>
             <p className={styles.subhead}>
-              Draftora helps students write stronger drafts, gives parents clear progress visibility, and helps teachers deliver faster feedback at scale.
+              Draftora helps students improve writing skills with guided feedback, gives parents clear progress visibility, and helps teachers deliver faster writing support at scale.
             </p>
             <div className={styles.heroActions}>
               <Link href="/signup" className={styles.primaryCta}>
@@ -304,9 +353,9 @@ export default function MarketingHome() {
 
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
-            <h2>Why Draftora</h2>
+            <h2>Why Draftora works for writing growth</h2>
             <p className={styles.sectionSubhead}>
-              One writing workflow that supports students directly and keeps parents and teachers aligned.
+              One AI writing workflow that supports students directly and keeps parents and teachers aligned.
             </p>
           </div>
           <div className={styles.outcomeGrid}>
@@ -323,9 +372,9 @@ export default function MarketingHome() {
 
         <section id="showcase" className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
-            <h2>See the app in action</h2>
+            <h2>See how students improve writing skills</h2>
             <p className={styles.sectionSubhead}>
-              Explore the core surfaces students use every day to draft, revise, and improve.
+              Explore the core surfaces students use every day to draft, revise, and improve with AI support.
             </p>
           </div>
           <div className={styles.previewGrid}>
@@ -343,7 +392,7 @@ export default function MarketingHome() {
 
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
-            <h2>Built to help students level up every draft</h2>
+            <h2>Built to help students improve writing skills every draft</h2>
             <p className={styles.sectionSubhead}>
               Three focused experiences that work independently and stay seamlessly connected.
             </p>
@@ -410,7 +459,7 @@ export default function MarketingHome() {
 
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
-            <h2>Loved by Students</h2>
+            <h2>Loved by students, trusted by parents</h2>
             <p className={styles.sectionSubhead}>
               Draftora helps make writing clearer, calmer, and more consistent week after week.
             </p>
@@ -439,6 +488,27 @@ export default function MarketingHome() {
           </div>
         </section>
 
+        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
+          <div className={styles.sectionHead}>
+            <h2>Writing tips blog</h2>
+            <p className={styles.sectionSubhead}>
+              Short guides for families and classrooms using an AI writing app for students.
+            </p>
+          </div>
+          <div className={styles.blogGrid}>
+            {BLOG_POSTS.map((post) => (
+              <article key={post.title} className={styles.blogCard}>
+                <p className={styles.blogAudience}>
+                  <BookOpen size={14} />
+                  <span>{post.audience}</span>
+                </p>
+                <h3>{post.title}</h3>
+                <p>{post.summary}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className={`${styles.finalCta} ${styles.reveal}`} data-reveal>
           <h2>Start improving your writing today</h2>
           <Link href="/signup" className={styles.primaryCta}>
@@ -450,6 +520,23 @@ export default function MarketingHome() {
               <ArrowRight size={16} />
             </span>
           </Link>
+        </section>
+
+        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
+          <div className={styles.sectionHead}>
+            <h2>Frequently asked questions</h2>
+            <p className={styles.sectionSubhead}>
+              Quick answers for students, parents, and teachers exploring Draftora.
+            </p>
+          </div>
+          <div className={styles.faqGrid}>
+            {FAQS.map((item) => (
+              <details key={item.question} className={styles.faqCard}>
+                <summary className={styles.faqQuestion}>{item.question}</summary>
+                <p className={styles.faqAnswer}>{item.answer}</p>
+              </details>
+            ))}
+          </div>
         </section>
       </main>
 

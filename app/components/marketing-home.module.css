@@ -1242,6 +1242,170 @@
   flex-shrink: 0;
 }
 
+.blogGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.78rem;
+}
+
+.blogCard {
+  border: 1px solid rgba(45, 116, 177, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.95), rgba(239, 250, 255, 0.88));
+  box-shadow: 0 14px 30px rgba(36, 104, 164, 0.12);
+  padding: 0.9rem 0.92rem;
+}
+
+.blogAudience {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #2d6a9c;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.blogAudience svg {
+  color: #1a74c2;
+}
+
+.blogCard h3 {
+  margin: 0.6rem 0 0;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #10253f;
+}
+
+.blogCard p {
+  margin: 0.5rem 0 0;
+  color: #33597c;
+  font-size: 0.87rem;
+  line-height: 1.52;
+}
+
+.faqGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.78rem;
+}
+
+.faqCard {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(45, 116, 177, 0.2);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.72), rgba(234, 246, 255, 0.56));
+  box-shadow:
+    0 18px 34px rgba(25, 95, 155, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(120, 174, 216, 0.22);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  padding: 1rem 1.08rem;
+  transition: transform 200ms ease, box-shadow 220ms ease, border-color 220ms ease, background 220ms ease;
+}
+
+.faqCard::before {
+  content: "";
+  position: absolute;
+  left: 0.8rem;
+  right: 0.8rem;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.faqCard:hover {
+  transform: translateY(-1px);
+  border-color: rgba(41, 117, 186, 0.33);
+  box-shadow:
+    0 22px 40px rgba(25, 95, 155, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(120, 174, 216, 0.3);
+}
+
+.faqCard[open] {
+  border-color: rgba(36, 111, 184, 0.44);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.8), rgba(228, 243, 255, 0.66));
+  box-shadow:
+    0 24px 44px rgba(22, 93, 155, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(120, 174, 216, 0.36);
+}
+
+.faqQuestion {
+  list-style: none;
+  cursor: pointer;
+  margin: 0;
+  font-size: 1.03rem;
+  line-height: 1.4;
+  color: #0e2744;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  padding-right: 3rem;
+  text-align: center;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+.faqCard > summary::after {
+  content: '+';
+  position: absolute;
+  right: 0.9rem;
+  top: 0.82rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1c5f96;
+  font-weight: 800;
+  font-size: 1.06rem;
+  line-height: 1;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.86), rgba(223, 241, 255, 0.74));
+  border: 1px solid rgba(46, 120, 184, 0.26);
+  box-shadow:
+    0 8px 14px rgba(37, 103, 160, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  transition: transform 200ms ease, background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+.faqCard[open] > summary::after {
+  content: '−';
+  transform: rotate(180deg);
+  color: #0f4f87;
+  border-color: rgba(43, 124, 191, 0.36);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(208, 234, 255, 0.82));
+}
+
+.faqAnswer {
+  margin: 0.7rem 0 0.12rem;
+  color: #2e5377;
+  font-size: 0.87rem;
+  line-height: 1.68;
+  border-top: 1px solid rgba(43, 113, 177, 0.16);
+  padding-top: 0.72rem;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.faqCard[open] .faqAnswer {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .finalCta {
   padding: 2.2rem 1.3rem;
   text-align: center;
@@ -1355,7 +1519,8 @@
   .heroProofGrid,
   .previewGrid,
   .testimonialGrid,
-  .trustMarkers {
+  .trustMarkers,
+  .blogGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1409,7 +1574,8 @@
   .experienceGrid,
   .previewGrid,
   .testimonialGrid,
-  .trustMarkers {
+  .trustMarkers,
+  .blogGrid {
     grid-template-columns: 1fr;
   }
 
