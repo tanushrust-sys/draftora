@@ -45,6 +45,14 @@ const JOURNAL_CATEGORIES = ['All', ...CATEGORIES];
 type ActiveTab = 'write' | 'journal' | 'progress';
 type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
 type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_version: string };
+type EditorBackup = {
+  writingId?: string | null;
+  title?: string | null;
+  content?: string | null;
+  prompt?: string | null;
+  category?: string | null;
+  updatedAt?: string | null;
+};
 
 function isUnavailableFeedback(feedback: WritingFeedback | null | undefined) {
   if (!feedback) return false;
@@ -538,18 +546,11 @@ function WritingsContent() {
 
     try {
       const localBackupRaw = window.localStorage.getItem(getEditorBackupKey(profile.id));
-      let localBackup: {
-        writingId?: string | null;
-        title?: string | null;
-        content?: string | null;
-        prompt?: string | null;
-        category?: string | null;
-        updatedAt?: string | null;
-      } | null = null;
+      let localBackup: EditorBackup | null = null;
 
       if (localBackupRaw) {
         try {
-          const parsed = JSON.parse(localBackupRaw) as typeof localBackup;
+          const parsed = JSON.parse(localBackupRaw) as EditorBackup;
           if (parsed?.content && parsed.content.trim()) {
             localBackup = parsed;
           }
