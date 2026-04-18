@@ -11,7 +11,6 @@ import {
   ArrowRight,
   CheckCircle2,
   MessageSquareText,
-  Lightbulb,
 } from 'lucide-react';
 import BrandLogo from '@/app/components/BrandLogo';
 import styles from '@/app/components/marketing-home.module.css';
@@ -272,72 +271,32 @@ export default function MarketingHome() {
           </div>
 
           <div className={styles.heroVisual}>
-            <div className={styles.liveSignalRow}>
-              <span className={styles.liveSignal}>Live product preview</span>
-              <span className={styles.liveSignal}>Student-safe guidance</span>
+            <div className={styles.demoCard}>
+              <div className={styles.liveSignalRow}>
+                <span className={styles.liveSignal}>Live product preview</span>
+                <span className={styles.liveSignal}>Student-safe guidance</span>
+              </div>
+              <div className={styles.dashboardShotWrap}>
+                <img
+                  src="/marketing/dashboard-real.png"
+                  alt="Draftora live product demo"
+                  className={styles.dashboardShot}
+                  loading="eager"
+                />
+              </div>
             </div>
-            <div className={styles.windowChrome}>
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className={styles.feedbackDemo}>
-              <article className={styles.draftTop}>
-                <div className={styles.topRow}>
-                  <p className={styles.miniLabel}>Prompt</p>
-                  <span className={styles.exampleBadge}>Input</span>
-                </div>
-                <p className={styles.promptText}>Describe a stormy evening in your neighborhood.</p>
-
-                <div className={styles.topRow}>
-                  <p className={styles.miniLabel}>Writing Piece</p>
-                  <span className={styles.exampleBadgeStrong}>Draft</span>
-                </div>
-                <p className={styles.draftText}>
-                  The storm rolled in by sunset. I started writing quickly, but then I slowed down and described how the wind rattled every window in the street.
-                </p>
-              </article>
-
-              <div className={styles.feedbackBottom}>
-                <article className={styles.feedbackCardMini}>
-                  <p className={styles.feedbackMiniTitle}>Overall Feedback</p>
-                  <div className={styles.feedbackItem}>
-                    <MessageSquareText size={15} />
-                    <span>
-                      Clear opening and strong mood.
-                      <br />
-                      <br />
-                      Your scene is easy to imagine, and the sentence flow mostly works.
-                      <br />
-                      <br />
-                      To level up, add one emotional reaction and one concrete sensory detail so the reader feels the storm, not just the summary.
-                    </span>
-                  </div>
-                </article>
-                <article className={styles.feedbackCardMini}>
-                  <p className={styles.feedbackMiniTitle}>Section by Section</p>
-                  <div className={styles.feedbackItem}>
-                    <Lightbulb size={15} />
-                    <span>
-                      Opening: direct and effective.
-                      <br />
-                      <br />
-                      Middle: vivid, but one long clause should be split for rhythm.
-                      <br />
-                      <br />
-                      Ending: stops too quickly. Add one reflective closing line about sound or feeling so the paragraph lands with stronger control and completion.
-                    </span>
-                  </div>
-                </article>
-                <article className={styles.feedbackCardMini}>
-                  <p className={styles.feedbackMiniTitle}>Rewrite</p>
-                  <div className={styles.feedbackItem}>
-                    <Sparkles size={15} />
-                    <span>
-                      The storm rolled in by sunset, and restless wind pushed along our street. I slowed my writing as the noise grew louder, describing shutters rattling and panes trembling. By the end, the weather felt close and threatening.
-                    </span>
-                  </div>
-                </article>
+            <div className={`${styles.demoCard} ${styles.secondaryDemoCard}`}>
+              <div className={styles.liveSignalRow}>
+                <span className={styles.liveSignal}>Secondary live demo</span>
+                <span className={styles.liveSignal}>Progress snapshot</span>
+              </div>
+              <div className={styles.dashboardShotWrap}>
+                <img
+                  src="/marketing/dashboard-real-2.png"
+                  alt="Draftora secondary live product demo"
+                  className={styles.dashboardShot}
+                  loading="lazy"
+                />
               </div>
             </div>
           </div>
