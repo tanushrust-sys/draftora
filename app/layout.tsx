@@ -12,11 +12,14 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
       { url: '/icon.svg', type: 'image/svg+xml' },
     ],
-    shortcut: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: [
+      { url: '/favicon.ico', type: 'image/x-icon' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/icon.svg', type: 'image/svg+xml' }],
   },
   openGraph: {
     title: 'Draftora | AI Writing App for Students, Parents, and Teachers',
