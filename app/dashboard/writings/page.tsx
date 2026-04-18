@@ -74,6 +74,7 @@ const AI_FEEDBACK_TIMEOUT_MS = 90000;
 const JOURNAL_LOAD_TIMEOUT_MS = 20000;
 const WRITING_SAVE_TIMEOUT_MS = 20000;
 const PROFILE_REFRESH_TIMEOUT_MS = 20000;
+const AUTOSAVE_DELAY_MS = 1600;
 
 function writingStatusTheme(status: Writing['status']) {
   if (status === 'reviewed') {
@@ -178,6 +179,19 @@ function getTimeRangeStart(range: TimeRange, end = new Date()) {
   else start.setFullYear(2000);
   start.setHours(0, 0, 0, 0);
   return start;
+}
+
+function buildDraftSignature(input: {
+  title: string;
+  content: string;
+  prompt: string;
+  category: string;
+}) {
+  return JSON.stringify(input);
+}
+
+function getEditorBackupKey(userId: string) {
+  return `draftora:writing-editor-backup:${userId}`;
 }
 
 function buildTimeAxisTicks(range: TimeRange, start: Date, end: Date) {
@@ -434,8 +448,19 @@ function WritingsContent() {
   const progressLoadInFlight = useRef(false);
   const aiAnalysisFetched = useRef<string | null>(null); // tracks last fetched writing IDs hash
   const hasAutoExpandedRef = useRef(false);
+  const hasAttemptedDraftRestoreRef = useRef(false);
+  const restoringDraftRef = useRef(false);
+  const latestEditorStateRef = useRef({
+    title: '',
+    content: '',
+    prompt: '',
+    category: 'Creative Story',
+  });
+  const previousActiveTabRef = useRef<ActiveTab>('write');
   const writingMutationLock = useRef(false);
   const writingReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedDraftSignatureRef = useRef('');
   const writingRewardsGrantedRef = useRef(false);
   const journalLoadedRef = useRef(false);
   const progressLoadedRef = useRef(false);
@@ -483,6 +508,117 @@ function WritingsContent() {
     if (!profile) return;
     upsertStoredWritingHistory(profile.id, writing);
   }, [profile]);
+
+  const restoreLatestInProgressDraft = useCallback(async () => {
+    if (!profile) return;
+    if (restoringDraftRef.current) return;
+    if (writingId || content.trim() || feedback || status !== 'idle') return;
+    restoringDraftRef.current = true;
+
+    const applyDraft = (draft: {
+      id?: string | null;
+      title?: string | null;
+      content?: string | null;
+      prompt?: string | null;
+      category?: string | null;
+    }) => {
+      const nextCategory = draft.category || 'Creative Story';
+      setTitle(draft.title || '');
+      setContent(draft.content || '');
+      setCategory(nextCategory);
+      setPrompt(draft.prompt || getDailyPrompt(nextCategory, profile.age_group ?? undefined));
+      setWritingId(draft.id ?? null);
+      lastSavedDraftSignatureRef.current = buildDraftSignature({
+        title: draft.title || 'Untitled Draft',
+        content: draft.content || '',
+        prompt: draft.prompt || '',
+        category: nextCategory,
+      });
+    };
+
+    try {
+      const localBackupRaw = window.localStorage.getItem(getEditorBackupKey(profile.id));
+      let localBackup: {
+        writingId?: string | null;
+        title?: string | null;
+        content?: string | null;
+        prompt?: string | null;
+        category?: string | null;
+        updatedAt?: string | null;
+      } | null = null;
+
+      if (localBackupRaw) {
+        try {
+          const parsed = JSON.parse(localBackupRaw) as typeof localBackup;
+          if (parsed?.content && parsed.content.trim()) {
+            localBackup = parsed;
+          }
+        } catch {
+          // Ignore malformed local backup.
+        }
+      }
+
+      let localAppliedSignature: string | null = null;
+      if (localBackup) {
+        applyDraft({
+          id: localBackup.writingId ?? null,
+          title: localBackup.title ?? '',
+          content: localBackup.content ?? '',
+          prompt: localBackup.prompt ?? '',
+          category: localBackup.category ?? 'Creative Story',
+        });
+        localAppliedSignature = buildDraftSignature({
+          title: localBackup.title || 'Untitled Draft',
+          content: localBackup.content || '',
+          prompt: localBackup.prompt || '',
+          category: localBackup.category || 'Creative Story',
+        });
+      }
+
+      let cloudDraft: Writing | null = null;
+      try {
+        const { data, error } = await supabase
+          .from('writings')
+          .select('id,title,content,prompt,category,status,word_count,feedback,strengths,improvements,created_at,updated_at')
+          .eq('user_id', profile.id)
+          .eq('status', 'in_progress')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data?.content?.trim()) {
+          cloudDraft = data as Writing;
+        }
+      } catch {
+        // Ignore cloud errors and use local fallback.
+      }
+
+      if (cloudDraft && localBackup) {
+        const currentEditorSignature = buildDraftSignature({
+          title: latestEditorStateRef.current.title || 'Untitled Draft',
+          content: latestEditorStateRef.current.content || '',
+          prompt: latestEditorStateRef.current.prompt || '',
+          category: latestEditorStateRef.current.category || 'Creative Story',
+        });
+        if (localAppliedSignature && currentEditorSignature !== localAppliedSignature) {
+          return;
+        }
+
+        const cloudUpdatedAt = Date.parse(cloudDraft.updated_at || cloudDraft.created_at || '');
+        const localUpdatedAt = Date.parse(localBackup.updatedAt || '');
+        if (!Number.isFinite(localUpdatedAt) || cloudUpdatedAt > localUpdatedAt) {
+          applyDraft(cloudDraft);
+        }
+        return;
+      }
+
+      if (cloudDraft) {
+        applyDraft(cloudDraft);
+        return;
+      }
+    } finally {
+      restoringDraftRef.current = false;
+    }
+  }, [content, feedback, profile, status, writingId]);
 
   const grantWritingSubmitRewards = useCallback(async () => {
     if (!profile || writingRewardsGrantedRef.current) return;
@@ -597,6 +733,19 @@ function WritingsContent() {
   useEffect(() => { loadProgress(); }, [loadProgress]);
 
   useEffect(() => {
+    latestEditorStateRef.current = {
+      title,
+      content,
+      prompt,
+      category,
+    };
+  }, [title, content, prompt, category]);
+
+  useEffect(() => {
+    hasAttemptedDraftRestoreRef.current = false;
+  }, [profile?.id]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       loadProgress();
     }, msUntilNextLocalMidnight() + 1000);
@@ -704,6 +853,14 @@ function WritingsContent() {
     }
   }, [activeTab, loadJournal, profile]);
 
+  useEffect(() => {
+    if (activeTab !== 'write') return;
+    if (!profile) return;
+    if (hasAttemptedDraftRestoreRef.current) return;
+    hasAttemptedDraftRestoreRef.current = true;
+    void restoreLatestInProgressDraft();
+  }, [activeTab, profile, restoreLatestInProgressDraft]);
+
   // ── Load progress data ──
   const loadProgressData = useCallback(async () => {
     if (!profile || progressLoadInFlight.current) return;
@@ -792,11 +949,11 @@ function WritingsContent() {
 
   // ── Write tab actions ──
   const saveDraft = useCallback(async () => {
-    if (writingMutationLock.current) return;
-    if (!content.trim()) return;
+    if (writingMutationLock.current) return false;
+    if (!content.trim()) return false;
     if (!profile) {
       setError('Your session is not ready right now. Refresh the page and try again.');
-      return;
+      return false;
     }
     writingMutationLock.current = true;
     setStatus('saving');
@@ -850,21 +1007,34 @@ function WritingsContent() {
       }
 
       if (persistedWriting) {
+        lastSavedDraftSignatureRef.current = buildDraftSignature({
+          title: title || 'Untitled Draft',
+          content,
+          prompt: prompt || '',
+          category,
+        });
         syncStoredWriting(persistedWriting);
         setWritings(prev => upsertWriting(prev, persistedWriting as Writing));
         debouncedLoadJournal();
       }
+      return true;
     } catch (error) {
       logSafeError('saveDraft error:', error);
       if (error instanceof PromiseTimeoutError) {
         const recoveredWriting = await recoverTimedOutWritingWithRetry(title || 'Untitled Draft');
         if (recoveredWriting) {
           setWritingId(recoveredWriting.id);
+          lastSavedDraftSignatureRef.current = buildDraftSignature({
+            title: title || 'Untitled Draft',
+            content,
+            prompt: prompt || '',
+            category,
+          });
           syncStoredWriting(recoveredWriting);
           setWritings(prev => upsertWriting(prev, recoveredWriting as Writing));
           debouncedLoadJournal();
           setError('');
-          return;
+          return true;
         }
       }
       setError(
@@ -872,6 +1042,7 @@ function WritingsContent() {
           ? 'Saving took too long, so the editor was released. Please try again in a moment.'
           : 'Could not save your draft right now. Please try again.',
       );
+      return false;
     } finally {
       if (writingReleaseTimer.current) {
         clearTimeout(writingReleaseTimer.current);
@@ -881,6 +1052,124 @@ function WritingsContent() {
       setStatus('idle');
     }
   }, [profile, content, title, prompt, category, wordCount, writingId, incrementWritingsCreated, syncStoredWriting, loadJournal, recoverTimedOutWriting]);
+
+  useEffect(() => {
+    if (activeTab !== 'write') return;
+    if (!profile) return;
+    if (!content.trim()) return;
+    if (status !== 'idle') return;
+    if (feedback) return;
+
+    const signature = buildDraftSignature({
+      title: title || 'Untitled Draft',
+      content,
+      prompt: prompt || '',
+      category,
+    });
+
+    if (signature === lastSavedDraftSignatureRef.current) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveDraft();
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [activeTab, profile, content, title, prompt, category, status, feedback, saveDraft]);
+
+  useEffect(() => {
+    const previousTab = previousActiveTabRef.current;
+    if (previousTab === 'write' && activeTab !== 'write') {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+
+      if (profile && content.trim() && status === 'idle' && !feedback) {
+        const signature = buildDraftSignature({
+          title: title || 'Untitled Draft',
+          content,
+          prompt: prompt || '',
+          category,
+        });
+        if (signature !== lastSavedDraftSignatureRef.current) {
+          void saveDraft();
+        }
+      }
+    }
+
+    previousActiveTabRef.current = activeTab;
+  }, [activeTab, profile, content, title, prompt, category, status, feedback, saveDraft]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const key = getEditorBackupKey(profile.id);
+    if (feedback || status !== 'idle' || !content.trim()) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // Ignore local cleanup errors.
+      }
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(key, JSON.stringify({
+        writingId: writingId ?? null,
+        title,
+        content,
+        prompt,
+        category,
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch {
+      // Local backup is best-effort only.
+    }
+  }, [profile, title, content, prompt, category, writingId, feedback, status]);
+
+  useEffect(() => {
+    const flushPendingDraft = () => {
+      if (activeTab !== 'write') return;
+      if (!profile) return;
+      if (!content.trim()) return;
+      if (status !== 'idle') return;
+
+      const signature = buildDraftSignature({
+        title: title || 'Untitled Draft',
+        content,
+        prompt: prompt || '',
+        category,
+      });
+      if (signature === lastSavedDraftSignatureRef.current) return;
+
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      void saveDraft();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushPendingDraft();
+    };
+
+    const handlePageHide = () => {
+      flushPendingDraft();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [activeTab, category, content, profile, prompt, saveDraft, status, title]);
 
   // (Legacy submitForFeedback removed — submitForFeedbackSafe is the active path)
 
@@ -1069,8 +1358,17 @@ function WritingsContent() {
   };
 
   const startFresh = () => {
+    if (profile) {
+      try {
+        window.localStorage.removeItem(getEditorBackupKey(profile.id));
+      } catch {
+        // Ignore local cleanup errors.
+      }
+    }
     setTitle(''); setContent(''); setCategory('Creative Story');
     setPrompt(getDailyPrompt('Creative Story', profile?.age_group ?? undefined));
+    lastSavedDraftSignatureRef.current = '';
+    hasAttemptedDraftRestoreRef.current = true;
     writingRewardsGrantedRef.current = false;
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
     loadProgress();

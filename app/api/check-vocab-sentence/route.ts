@@ -14,6 +14,7 @@ type SentenceFeedback = {
   improvements: string;
   summary: string;
   suggestion: string;
+  vocabularySuggestions: string[];
 };
 
 const FALLBACK_FEEDBACK: SentenceFeedback = {
@@ -23,6 +24,7 @@ const FALLBACK_FEEDBACK: SentenceFeedback = {
   improvements: 'Live AI feedback is unavailable right now, so try again in a moment for a full check.',
   summary: 'Your progress is still safe.',
   suggestion: '',
+  vocabularySuggestions: ['precise', 'vivid', 'descriptive', 'compelling'],
 };
 
 const STOPWORDS = new Set([
@@ -78,7 +80,74 @@ function createFeedback(grade: SentenceFeedbackGrade, strengths: string, improve
     improvements,
     summary,
     suggestion,
+    vocabularySuggestions: [],
   };
+}
+
+function normalizeSuggestionWord(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z-]/g, '');
+}
+
+function toWordSet(text: string) {
+  return new Set(tokenize(text).map(normalizeSuggestionWord).filter(Boolean));
+}
+
+function parseVocabularySuggestions(value: unknown): string[] {
+  const rawItems: string[] = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : typeof value === 'string'
+      ? value.split(/[,\n;/]+/)
+      : [];
+
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const raw of rawItems) {
+    const candidate = normalizeSuggestionWord(raw);
+    if (!candidate || candidate.length < 3) continue;
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    output.push(candidate);
+    if (output.length >= 8) break;
+  }
+  return output;
+}
+
+function buildVocabularySuggestions(word: string, meaning: string, sentence: string, seed: string[] = [], limit = 4) {
+  const usedWords = toWordSet(sentence);
+  const target = normalizeSuggestionWord(word);
+  const keywordPool = extractKeywords(meaning)
+    .map(normalizeSuggestionWord)
+    .filter(Boolean);
+  const fallbackPool = [
+    'precise', 'vivid', 'descriptive', 'compelling', 'dynamic', 'evocative', 'detailed', 'powerful',
+    'turbulent', 'ominous', 'resilient', 'cohesive',
+  ];
+
+  const combined = [...seed, ...keywordPool, ...fallbackPool];
+  const unique = new Set<string>();
+  const suggestions: string[] = [];
+  for (const item of combined) {
+    const normalized = normalizeSuggestionWord(item);
+    if (!normalized || normalized.length < 3) continue;
+    if (normalized === target) continue;
+    if (usedWords.has(normalized)) continue;
+    if (unique.has(normalized)) continue;
+    unique.add(normalized);
+    suggestions.push(normalized);
+    if (suggestions.length >= limit) break;
+  }
+
+  if (suggestions.length < limit) {
+    for (const item of fallbackPool) {
+      if (suggestions.length >= limit) break;
+      const normalized = normalizeSuggestionWord(item);
+      if (!normalized || normalized === target || usedWords.has(normalized) || unique.has(normalized)) continue;
+      unique.add(normalized);
+      suggestions.push(normalized);
+    }
+  }
+
+  return suggestions.slice(0, limit);
 }
 
 function normalizeGrade(value: unknown): SentenceFeedbackGrade | null {
@@ -217,6 +286,10 @@ function normalizeFeedback(value: unknown): SentenceFeedback | null {
   const improvements = typeof candidate.improvements === 'string' ? candidate.improvements.trim() : '';
   const summary = typeof candidate.summary === 'string' ? candidate.summary.trim() : '';
   const suggestion = typeof candidate.suggestion === 'string' ? candidate.suggestion.trim() : '';
+  const vocabularySuggestions = parseVocabularySuggestions(
+    (candidate as { vocabularySuggestions?: unknown; vocabulary_suggestions?: unknown }).vocabularySuggestions
+      ?? (candidate as { vocabulary_suggestions?: unknown }).vocabulary_suggestions,
+  );
 
   if (!summary) {
     return null;
@@ -229,6 +302,7 @@ function normalizeFeedback(value: unknown): SentenceFeedback | null {
     improvements,
     summary,
     suggestion,
+    vocabularySuggestions,
   };
 }
 
@@ -362,6 +436,10 @@ Core rules:
 - At least one of strengths or improvements must be non-empty.
 - "summary" must be 5 words or fewer.
 - "suggestion" leave as empty string always.
+- "vocabularySuggestions": return exactly 4 single-word upgraded vocabulary options the student could use next time.
+- Each vocabulary suggestion must be a real word (not a phrase, not categories, not labels).
+- Do not include the target word "${word}".
+- Do not include any word already used in the student sentence.
 - If sentence is gibberish or not real, set "grade" to "incorrect" and "correct" to false.
 - Always be warm, encouraging, and polite — never harsh or blunt.
 
@@ -372,14 +450,15 @@ Return exactly this JSON structure:
   "strengths": "Max 20 words, or empty string.",
   "improvements": "Max 20 words, or empty string if sentence is strong.",
   "summary": "Up to 5 words.",
-  "suggestion": ""
+  "suggestion": "",
+  "vocabularySuggestions": ["word1", "word2", "word3", "word4"]
   }`;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await chat({
       tier: 'fast',
-      system: `Return strict JSON with keys: grade, correct, strengths, improvements, summary, suggestion. Be warm and encouraging. Use the four-step grading scale exactly: correct, mostly correct, mostly incorrect, incorrect. Grade generously — reward understanding of the concept, not perfect precision. For young learners (ages 5-10) be extremely lenient: if the student shows any grasp of the meaning, prefer mostly correct or correct. strengths: one genuine polite strength max 20 words, or empty string. improvements: one kind coaching tip max 20 words, or empty string if strong. summary: max 5 words upbeat. suggestion: always empty string.`,
-      maxTokens: 100,
+      system: `Return strict JSON with keys: grade, correct, strengths, improvements, summary, suggestion, vocabularySuggestions. Be warm and encouraging. Use the four-step grading scale exactly: correct, mostly correct, mostly incorrect, incorrect. Grade generously — reward understanding of the concept, not perfect precision. For young learners (ages 5-10) be extremely lenient: if the student shows any grasp of the meaning, prefer mostly correct or correct. strengths: one genuine polite strength max 20 words, or empty string. improvements: one kind coaching tip max 20 words, or empty string if strong. summary: max 5 words upbeat. suggestion: always empty string. vocabularySuggestions: exactly 4 single-word upgrade words, not used in the student sentence and not equal to the target word.`,
+      maxTokens: 160,
       messages: [{ role: 'user', content: basePrompt }],
     });
 
@@ -388,6 +467,13 @@ Return exactly this JSON structure:
       if (lowQualityHint.grade === 'incorrect') {
         normalized.strengths = '';
       }
+      normalized.vocabularySuggestions = buildVocabularySuggestions(
+        word,
+        meaning,
+        sentence,
+        normalized.vocabularySuggestions,
+        4,
+      );
       return normalized;
     }
   }
@@ -406,13 +492,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Word and sentence are required' }, { status: 400 });
     }
 
-    const feedback = await generateFeedback(word, typeof meaning === 'string' ? meaning : '', sentence, typeof ageGroup === 'string' ? ageGroup : undefined, writingExperienceScore);
-    return NextResponse.json(feedback ?? buildHeuristicFeedback(word, typeof meaning === 'string' ? meaning : '', sentence, typeof ageGroup === 'string' ? ageGroup : undefined));
+    const cleanMeaning = typeof meaning === 'string' ? meaning : '';
+    const cleanAge = typeof ageGroup === 'string' ? ageGroup : undefined;
+    const feedback = await generateFeedback(word, cleanMeaning, sentence, cleanAge, writingExperienceScore);
+    if (feedback) {
+      return NextResponse.json({
+        ...feedback,
+        vocabularySuggestions: buildVocabularySuggestions(word, cleanMeaning, sentence, feedback.vocabularySuggestions, 4),
+      });
+    }
+    const heuristic = buildHeuristicFeedback(word, cleanMeaning, sentence, cleanAge);
+    return NextResponse.json({
+      ...heuristic,
+      vocabularySuggestions: buildVocabularySuggestions(word, cleanMeaning, sentence, [], 4),
+    });
   } catch (error) {
     console.error('Vocab sentence check error:', error);
     const { word = '', sentence = '' } = payload;
     const meaning = typeof payload.meaning === 'string' ? payload.meaning : '';
     const age = typeof payload.ageGroup === 'string' ? payload.ageGroup : undefined;
-    return NextResponse.json(word && sentence ? buildHeuristicFeedback(word, meaning, sentence, age) : FALLBACK_FEEDBACK);
+    if (word && sentence) {
+      const heuristic = buildHeuristicFeedback(word, meaning, sentence, age);
+      return NextResponse.json({
+        ...heuristic,
+        vocabularySuggestions: buildVocabularySuggestions(word, meaning, sentence, [], 4),
+      });
+    }
+    return NextResponse.json(FALLBACK_FEEDBACK);
   }
 }
