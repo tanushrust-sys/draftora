@@ -16,78 +16,36 @@ import {
 import BrandLogo from '@/app/components/BrandLogo';
 import styles from '@/app/components/marketing-home.module.css';
 
-const SHOWCASE_THEMES = [
-  styles.showcaseTone1,
-  styles.showcaseTone2,
-  styles.showcaseTone3,
-] as const;
-
-const SHOWCASE_SECTIONS = [
+const PLATFORM_EXPERIENCES = [
   {
-    icon: Sparkles,
-    title: 'Instant AI Feedback',
-    description: 'Students get targeted, specific coaching within seconds of submitting a draft.',
-    impact: ['Fast feedback', 'Specific coaching', 'Clear next steps'],
-    prompt: 'Prompt: Explain why protecting rainforests matters.',
-    draft: `The rainforest is important and we should protect it because animals live there. It helps the planet and people need it too. We should stop cutting trees and tell everyone to care about nature.`,
-    feedback: {
-      summary: 'Clear message and a strong cause, but you need concrete evidence and vivid detail.',
-      strengths: [
-        'Your purpose is clear from the first sentence.',
-        'You connect rainforest protection to both animals and people.',
-      ],
-      improvements: [
-        'Add one factual detail (for example: rainforest oxygen production or biodiversity).',
-        'Replace broad words like "important" with precise language.',
-        'Use a stronger ending line that motivates action.',
-      ],
-      vocabulary: ['biodiversity', 'conservation', 'ecosystem'],
-      nextStep: 'Add one statistic and one sensory image, then tighten your ending into a single persuasive sentence.',
-    },
+    icon: FileText,
+    app: 'Student App',
+    title: 'Focused writing and feedback loop',
+    points: [
+      'Write in a calm, prompt-aware editor.',
+      'Get instant AI coaching and rewrites.',
+      'Build confidence with every draft.',
+    ],
   },
   {
-    icon: Wand2,
-    title: 'Smart Rewrites',
-    description: 'Draftora keeps student intent, then upgrades clarity, tone, and sentence rhythm.',
-    impact: ['Voice preserved', 'Sharper wording', 'Better flow'],
-    prompt: 'Goal: Improve sentence impact for a sports reflection.',
-    draft: `The match was fun and our team did good. We tried hard and then we won at the end.`,
-    feedback: {
-      summary: 'Meaning is clear, but wording is too generic and does not show game intensity.',
-      strengths: [
-        'You communicate effort and outcome clearly.',
-        'Your sentence order is easy to follow.',
-      ],
-      improvements: [
-        'Swap vague words like "fun" and "good" for specific verbs and adjectives.',
-        'Add one detail from a key moment in the match.',
-        'Vary sentence length so the rhythm feels more dynamic.',
-      ],
-      vocabulary: ['thrilling', 'disciplined', 'momentum'],
-      nextStep: 'Rewrite with one high-pressure moment and one precise adjective that shows emotion, not just tells it.',
-    },
+    icon: CalendarCheck2,
+    app: 'Parent App',
+    title: 'Simple progress visibility at home',
+    points: [
+      'See writing momentum without complexity.',
+      'Understand feedback in plain language.',
+      'Support practice with clear next steps.',
+    ],
   },
   {
-    icon: BookOpen,
-    title: 'Vocabulary Growth',
-    description: 'Vocabulary suggestions are context-aware, so stronger words sound natural in student writing.',
-    impact: ['Context-aware words', 'Natural usage', 'Sentence precision'],
-    prompt: 'Word target: resilient',
-    draft: `Mia lost two races and felt upset, but she kept practicing every afternoon and improved next month.`,
-    feedback: {
-      summary: 'Great context for "resilient." The idea is strong; now make the sentence sharper.',
-      strengths: [
-        'You show resilience through actions, not just definitions.',
-        'The timeline gives your example a realistic flow.',
-      ],
-      improvements: [
-        'Place the target word directly in the sentence for stronger control.',
-        'Replace "felt upset" with a more vivid emotional phrase.',
-        'Shorten the second clause to improve readability.',
-      ],
-      vocabulary: ['resilient', 'persistent', 'composed'],
-      nextStep: 'Rewrite using “resilient” in the first sentence and add one specific training detail.',
-    },
+    icon: MessageSquareText,
+    app: 'Teacher App',
+    title: 'Practical support for classroom writing',
+    points: [
+      'Review stronger drafts in less time.',
+      'Use structured AI insights for guidance.',
+      'Keep support consistent across students.',
+    ],
   },
 ] as const;
 
@@ -283,10 +241,41 @@ export default function MarketingHome() {
                   <ArrowRight size={16} />
                 </span>
               </Link>
+              <a href="#showcase" className={styles.secondaryHeroCta}>
+                View Product Walkthrough
+              </a>
+            </div>
+            <p className={styles.heroTrustLine}>Built for students. Trusted by parents. Practical for teachers.</p>
+            <div className={styles.heroProofGrid}>
+              <article className={styles.heroProofCard}>
+                <MessageSquareText size={15} />
+                <div>
+                  <strong>Actionable Feedback</strong>
+                  <span>Clear next steps after every draft</span>
+                </div>
+              </article>
+              <article className={styles.heroProofCard}>
+                <Wand2 size={15} />
+                <div>
+                  <strong>Smart Rewrites</strong>
+                  <span>Better clarity without losing voice</span>
+                </div>
+              </article>
+              <article className={styles.heroProofCard}>
+                <CalendarCheck2 size={15} />
+                <div>
+                  <strong>Daily Writing Rhythm</strong>
+                  <span>Consistent support that builds confidence</span>
+                </div>
+              </article>
             </div>
           </div>
 
           <div className={styles.heroVisual}>
+            <div className={styles.liveSignalRow}>
+              <span className={styles.liveSignal}>Live product preview</span>
+              <span className={styles.liveSignal}>Student-safe guidance</span>
+            </div>
             <div className={styles.windowChrome}>
               <span />
               <span />
@@ -357,6 +346,9 @@ export default function MarketingHome() {
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
             <h2>Why Draftora</h2>
+            <p className={styles.sectionSubhead}>
+              One writing workflow that supports students directly and keeps parents and teachers aligned.
+            </p>
           </div>
           <div className={styles.outcomeGrid}>
             {OUTCOMES.map((item) => (
@@ -370,9 +362,12 @@ export default function MarketingHome() {
           </div>
         </section>
 
-        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
+        <section id="showcase" className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
             <h2>See the app in action</h2>
+            <p className={styles.sectionSubhead}>
+              Explore the core surfaces students use every day to draft, revise, and improve.
+            </p>
           </div>
           <div className={styles.previewGrid}>
             {APP_PREVIEWS.map((preview) => (
@@ -390,90 +385,65 @@ export default function MarketingHome() {
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
             <h2>Built to help students level up every draft</h2>
+            <p className={styles.sectionSubhead}>
+              Three focused experiences that work independently and stay seamlessly connected.
+            </p>
           </div>
-          <div className={styles.showcaseStack}>
-            {SHOWCASE_SECTIONS.map(({ icon: Icon, title, description, impact, prompt, draft, feedback }, index) => (
-              <article key={title} className={`${styles.showcaseCard} ${SHOWCASE_THEMES[index % SHOWCASE_THEMES.length]}`}>
-                <div className={styles.showcaseMeta}>
-                  <div className={styles.showcaseTopRow}>
-                    <span className={styles.showcaseBadge}>Live Product Demo</span>
-                    <div className={styles.showcaseTabs}>
-                      <span className={`${styles.showcaseTab} ${styles.showcaseTabActive}`}>Draft</span>
-                      <span className={styles.showcaseTab}>AI Review</span>
-                    </div>
-                  </div>
-                  <div className={styles.featureIcon}>
-                    <Icon size={18} />
-                  </div>
-                  <div>
-                    <h3 className={styles.showcaseTitle}>{title}</h3>
-                    <p className={styles.showcaseModule}>Module {String(index + 1).padStart(2, '0')}</p>
-                    <p className={styles.showcaseDescription}>{description}</p>
-                    <div className={styles.impactChips}>
-                      {impact.map((item) => (
-                        <span key={item} className={styles.impactChip}>{item}</span>
-                      ))}
-                    </div>
-                  </div>
+          <div className={styles.seamlessBand}>
+            <div className={`${styles.experienceTop} ${styles.seamlessTop}`}>
+              <span className={styles.experienceIcon}>
+                <Sparkles size={16} />
+              </span>
+              <span className={styles.experienceApp}>Connected Draftora Flow</span>
+              <p className={styles.seamlessInlineTitle}>
+                All three apps work separately, but stay perfectly synced in one seamless system.
+              </p>
+            </div>
+            <ul className={`${styles.experiencePoints} ${styles.seamlessList}`}>
+              <li>
+                <CheckCircle2 size={13} />
+                <span>One shared student profile across all three apps.</span>
+              </li>
+              <li>
+                <CheckCircle2 size={13} />
+                <span>Draft updates appear instantly for parents and teachers.</span>
+              </li>
+              <li>
+                <CheckCircle2 size={13} />
+                <span>Feedback context stays consistent between home and class.</span>
+              </li>
+              <li>
+                <CheckCircle2 size={13} />
+                <span>Progress signals sync automatically with no manual tracking.</span>
+              </li>
+              <li>
+                <CheckCircle2 size={13} />
+                <span>Vocabulary growth flows into writing support in real time.</span>
+              </li>
+              <li>
+                <CheckCircle2 size={13} />
+                <span>Everyone sees the same next-step priorities for each student.</span>
+              </li>
+            </ul>
+          </div>
+          <div className={styles.experienceGrid}>
+            {PLATFORM_EXPERIENCES.map(({ icon: Icon, app, title, points }) => (
+              <article key={app} className={styles.experienceCard}>
+                <div className={styles.experienceTop}>
+                  <span className={styles.experienceIcon}>
+                    <Icon size={16} />
+                  </span>
+                  <span className={styles.experienceApp}>{app}</span>
                 </div>
-                <div className={styles.showcaseExample}>
-                  <div className={styles.exampleBlock}>
-                    <div className={styles.exampleTopRow}>
-                      <p className={styles.exampleLabel}>Student Draft</p>
-                      <span className={styles.exampleBadge}>Input</span>
-                    </div>
-                    <div className={styles.exampleScroll}>
-                      <p className={styles.examplePrompt}>{prompt}</p>
-                      <p className={styles.exampleText}>{draft}</p>
-                    </div>
-                  </div>
-                  <div className={styles.exampleBlockStrong}>
-                    <div className={styles.exampleTopRow}>
-                      <p className={styles.exampleLabel}>Draftora AI Feedback</p>
-                      <span className={styles.exampleBadgeStrong}>Detailed</span>
-                    </div>
-                    <div className={styles.exampleScroll}>
-                      <div className={styles.feedbackSection}>
-                        <p className={styles.feedbackHeading}>Overall</p>
-                        <p className={styles.exampleText}>{feedback.summary}</p>
-                      </div>
-
-                      <div className={styles.feedbackSection}>
-                        <p className={styles.feedbackHeading}>What&apos;s Working</p>
-                        <ul className={styles.feedbackList}>
-                          {feedback.strengths.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className={styles.feedbackSection}>
-                        <p className={styles.feedbackHeading}>Improve Next</p>
-                        <ul className={styles.feedbackList}>
-                          {feedback.improvements.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className={styles.feedbackSection}>
-                        <p className={styles.feedbackHeading}>Vocabulary Upgrades</p>
-                        <div className={styles.vocabChips}>
-                          {feedback.vocabulary.map((word) => (
-                            <span key={word} className={styles.vocabChip}>
-                              {word}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className={styles.feedbackSection}>
-                        <p className={styles.feedbackHeading}>Next Step</p>
-                        <p className={styles.exampleText}>{feedback.nextStep}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <h3 className={styles.experienceTitle}>{title}</h3>
+                <ul className={styles.experiencePoints}>
+                  {points.map((item) => (
+                    <li key={item}>
+                      <CheckCircle2 size={13} />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </article>
             ))}
           </div>
@@ -482,6 +452,9 @@ export default function MarketingHome() {
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
             <h2>Loved by Students</h2>
+            <p className={styles.sectionSubhead}>
+              Draftora helps make writing clearer, calmer, and more consistent week after week.
+            </p>
           </div>
           <div className={styles.testimonialGrid}>
             {TESTIMONIALS.map((item) => (
@@ -490,6 +463,20 @@ export default function MarketingHome() {
                 <footer>{item.role}</footer>
               </blockquote>
             ))}
+          </div>
+          <div className={styles.trustMarkers}>
+            <article>
+              <FileText size={15} />
+              <span>Student-friendly feedback language</span>
+            </article>
+            <article>
+              <CalendarCheck2 size={15} />
+              <span>Built for consistent daily writing practice</span>
+            </article>
+            <article>
+              <Sparkles size={15} />
+              <span>Designed to improve writing confidence</span>
+            </article>
           </div>
         </section>
 

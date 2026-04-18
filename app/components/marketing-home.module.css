@@ -62,7 +62,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.2rem 0 1.1rem;
+  position: sticky;
+  top: 0.5rem;
+  padding: 0.82rem 1rem;
+  margin-top: 0.4rem;
+  border-radius: 16px;
+  border: 1px solid rgba(28, 102, 173, 0.16);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.82), rgba(241, 250, 255, 0.74));
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 28px rgba(21, 82, 145, 0.08);
+  z-index: 20;
 }
 
 .brandWrap {
@@ -118,14 +127,15 @@
 .main {
   display: flex;
   flex-direction: column;
-  gap: 2.7rem;
-  padding-bottom: 3.6rem;
+  gap: 3.2rem;
+  padding-top: 1rem;
+  padding-bottom: 4rem;
 }
 
 .hero {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
-  gap: 2rem;
+  gap: 2.25rem;
   align-items: flex-start;
 }
 
@@ -218,6 +228,76 @@
 
 .heroActions {
   margin-top: 1.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  flex-wrap: wrap;
+}
+
+.secondaryHeroCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.78rem 1.12rem;
+  text-decoration: none;
+  color: #1f5c96;
+  border: 1px solid rgba(33, 106, 176, 0.24);
+  background: rgba(255, 255, 255, 0.74);
+  font-size: 0.85rem;
+  font-weight: 800;
+  transition: transform 180ms ease, border-color 180ms ease;
+}
+
+.secondaryHeroCta:hover {
+  transform: translateY(-2px);
+  border-color: rgba(33, 106, 176, 0.38);
+}
+
+.heroTrustLine {
+  margin: 0.88rem 0 0;
+  color: #4b6f94;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.heroProofGrid {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.52rem;
+}
+
+.heroProofCard {
+  border-radius: 13px;
+  border: 1px solid rgba(50, 122, 184, 0.2);
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.82), rgba(236, 250, 255, 0.72));
+  padding: 0.6rem 0.62rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem;
+  align-items: start;
+}
+
+.heroProofCard svg {
+  color: #1a74c2;
+  margin-top: 0.08rem;
+}
+
+.heroProofCard strong {
+  display: block;
+  color: #15395f;
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.heroProofCard span {
+  display: block;
+  margin-top: 0.14rem;
+  color: #477198;
+  font-size: 0.68rem;
+  line-height: 1.3;
 }
 
 .primaryCta {
@@ -284,6 +364,25 @@
   padding: 1.1rem;
   display: grid;
   gap: 0.8rem;
+}
+
+.liveSignalRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.liveSignal {
+  border-radius: 999px;
+  padding: 0.25rem 0.58rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #215f93;
+  border: 1px solid rgba(39, 115, 182, 0.22);
+  background: linear-gradient(140deg, rgba(54, 129, 198, 0.12), rgba(31, 179, 178, 0.1));
 }
 
 .windowChrome {
@@ -436,6 +535,121 @@
   font-size: clamp(1.34rem, 2.4vw, 2rem);
   letter-spacing: -0.02em;
   color: #071829;
+}
+
+.sectionSubhead {
+  margin: 0.4rem 0 0;
+  max-width: 64ch;
+  color: #3b6085;
+  font-size: 0.93rem;
+  line-height: 1.62;
+}
+
+.seamlessBand {
+  display: grid;
+  gap: 0.62rem;
+  width: 100%;
+  border: 1px solid rgba(45, 116, 177, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.95), rgba(239, 250, 255, 0.88));
+  box-shadow: 0 14px 30px rgba(36, 104, 164, 0.12);
+  padding: 0.92rem 0.94rem;
+}
+
+.seamlessBand svg {
+  color: #1675bc;
+}
+
+.seamlessTop {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.62rem;
+}
+
+.seamlessInlineTitle {
+  margin: 0;
+  color: #10253f;
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.seamlessList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.54rem 0.68rem;
+}
+
+.experienceGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.78rem;
+}
+
+.experienceCard {
+  border: 1px solid rgba(45, 116, 177, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.95), rgba(239, 250, 255, 0.88));
+  box-shadow: 0 14px 30px rgba(36, 104, 164, 0.12);
+  padding: 0.82rem 0.86rem;
+}
+
+.experienceTop {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.experienceIcon {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #106dbf;
+  background: linear-gradient(145deg, rgba(18, 109, 194, 0.18), rgba(17, 181, 175, 0.15));
+}
+
+.experienceApp {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #2d6a9c;
+}
+
+.experienceTitle {
+  margin: 0.62rem 0 0;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: #10253f;
+}
+
+.experiencePoints {
+  margin: 0.62rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.experiencePoints li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem;
+  align-items: start;
+}
+
+.experiencePoints li svg {
+  color: #17928f;
+  margin-top: 0.11rem;
+}
+
+.experiencePoints li span {
+  color: #33597c;
+  font-size: 0.83rem;
+  line-height: 1.45;
 }
 
 .showcaseStack {
@@ -975,6 +1189,31 @@
   font-weight: 700;
 }
 
+.trustMarkers {
+  margin-top: 0.88rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.trustMarkers article {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.44rem;
+  border: 1px solid rgba(43, 114, 175, 0.22);
+  border-radius: 12px;
+  padding: 0.58rem 0.62rem;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.78), rgba(235, 248, 255, 0.72));
+  color: #2d577c;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.trustMarkers svg {
+  color: #1d7bc5;
+  flex-shrink: 0;
+}
+
 .finalCta {
   padding: 2.2rem 1.3rem;
   text-align: center;
@@ -1083,8 +1322,12 @@
 }
 
 @media (max-width: 1050px) {
+  .seamlessList,
+  .experienceGrid,
+  .heroProofGrid,
   .previewGrid,
-  .testimonialGrid {
+  .testimonialGrid,
+  .trustMarkers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1110,7 +1353,8 @@
   }
 
   .header {
-    padding-top: 0.9rem;
+    top: 0.35rem;
+    padding-top: 0.74rem;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.72rem;
@@ -1125,10 +1369,18 @@
     justify-content: space-between;
   }
 
+  .secondaryHeroCta {
+    width: 100%;
+  }
+
   .heroGrid,
+  .heroProofGrid,
   .outcomeGrid,
+  .seamlessList,
+  .experienceGrid,
   .previewGrid,
-  .testimonialGrid {
+  .testimonialGrid,
+  .trustMarkers {
     grid-template-columns: 1fr;
   }
 
@@ -1138,6 +1390,11 @@
 
   .showcaseExample {
     grid-template-columns: 1fr;
+  }
+
+  .seamlessInlineTitle {
+    width: 100%;
+    font-size: 0.95rem;
   }
 
   .exampleScroll {
