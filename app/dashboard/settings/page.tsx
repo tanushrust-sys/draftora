@@ -591,6 +591,120 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* ══ AGE GROUP ══ */}
+        <Card>
+          <SectionHeader
+            icon={<Users style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />}
+            title="Age Group"
+            subtitle="Tailors prompts, vocab, and feedback to your level"
+            right={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {ageSaved && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-success)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <CheckCircle style={{ width: 13, height: 13 }} /> Saved!
+                  </span>
+                )}
+                {!editingAge ? (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingAge(true); setSelectedAge(displayAgeGroup || profile.age_group || ''); setAgeError(''); }}
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: '6px 16px', borderRadius: 10, cursor: 'pointer',
+                      background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx2)',
+                    }}>
+                    Change
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" onClick={() => { setEditingAge(false); setAgeError(''); }}
+                      style={{ fontSize: 12, padding: '6px 14px', borderRadius: 10, cursor: 'pointer', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)', background: 'transparent' }}>
+                      Cancel
+                    </button>
+                    <button type="button" onClick={saveAgeGroup} disabled={!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')}
+                      style={{ fontSize: 12, fontWeight: 700, padding: '6px 16px', borderRadius: 10, cursor: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 'not-allowed' : 'pointer', background: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 'var(--t-brd)' : 'var(--t-btn)', color: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 'var(--t-tx3)' : 'var(--t-btn-color)', border: 'none', opacity: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 0.6 : 1 }}>
+                      {savingAge ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            }
+          />
+
+          <div style={{ padding: '20px 24px' }}>
+            {ageError && (
+              <div style={{
+                marginBottom: 14,
+                padding: '10px 12px',
+                borderRadius: 12,
+                background: 'color-mix(in srgb, var(--t-danger) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--t-danger) 20%, transparent)',
+                color: 'var(--t-danger)',
+                fontSize: 12,
+                fontWeight: 600,
+              }}>
+                {ageError}
+              </div>
+            )}
+            {editingAge ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {AGE_GROUPS.map(ag => {
+                  const selected = selectedAge === ag.value;
+                  return (
+                    <button
+                      key={ag.value}
+                      onClick={() => { setSelectedAge(ag.value); setAgeError(''); }}
+                      style={{
+                        borderRadius: 16, padding: '14px 12px', cursor: 'pointer',
+                        textAlign: 'center', border: 'none', transition: 'all 0.15s',
+                        background: selected
+                          ? 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))'
+                          : 'var(--t-card2)',
+                        outline: selected ? '2px solid var(--t-acc)' : '2px solid transparent',
+                        outlineOffset: 2,
+                        boxShadow: selected ? '0 4px 16px var(--t-acc-a)' : '0 1px 4px rgba(0,0,0,0.08)',
+                      }}
+                    >
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>{ag.emoji}</div>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: selected ? 'var(--t-acc)' : 'var(--t-tx)', margin: 0, lineHeight: 1 }}>{ag.label}</p>
+                      <p style={{ fontSize: 10, color: selected ? 'var(--t-acc)' : 'var(--t-tx3)', margin: '4px 0 0', fontWeight: 600, opacity: selected ? 0.8 : 1 }}>{ag.sub}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              (() => {
+                const currentAge = displayAgeGroup || profile.age_group || '';
+                const current = AGE_GROUPS.find(ag => ag.value === currentAge);
+                return current ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{
+                      width: 54, height: 54, borderRadius: 16, flexShrink: 0,
+                      background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
+                      border: '1px solid var(--t-brd-a)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 26,
+                    }}>
+                      {current.emoji}
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--t-tx)', margin: 0, letterSpacing: '-0.02em' }}>
+                        Age {current.label}
+                      </p>
+                      <p style={{ fontSize: 13, color: 'var(--t-tx3)', margin: '3px 0 0', fontWeight: 500 }}>
+                        {current.sub} — prompts &amp; vocab are matched to this range
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--t-tx3)', margin: 0 }}>
+                    No age group set — click <strong>Change</strong> to configure it.
+                  </p>
+                );
+              })()
+            )}
+          </div>
+        </Card>
+
         <Card>
           <SectionHeader
             icon={<Shield style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />}
@@ -882,120 +996,6 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </Card>
-
-        {/* ══ AGE GROUP ══ */}
-        <Card>
-          <SectionHeader
-            icon={<Users style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />}
-            title="Age Group"
-            subtitle="Tailors prompts, vocab, and feedback to your level"
-            right={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {ageSaved && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--t-success)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <CheckCircle style={{ width: 13, height: 13 }} /> Saved!
-                  </span>
-                )}
-                {!editingAge ? (
-                  <button
-                    type="button"
-                    onClick={() => { setEditingAge(true); setSelectedAge(displayAgeGroup || profile.age_group || ''); setAgeError(''); }}
-                    style={{
-                      fontSize: 12, fontWeight: 600, padding: '6px 16px', borderRadius: 10, cursor: 'pointer',
-                      background: 'var(--t-bg)', border: '1px solid var(--t-brd)', color: 'var(--t-tx2)',
-                    }}>
-                    Change
-                  </button>
-                ) : (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" onClick={() => { setEditingAge(false); setAgeError(''); }}
-                      style={{ fontSize: 12, padding: '6px 14px', borderRadius: 10, cursor: 'pointer', border: '1px solid var(--t-brd)', color: 'var(--t-tx3)', background: 'transparent' }}>
-                      Cancel
-                    </button>
-                    <button type="button" onClick={saveAgeGroup} disabled={!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')}
-                      style={{ fontSize: 12, fontWeight: 700, padding: '6px 16px', borderRadius: 10, cursor: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 'not-allowed' : 'pointer', background: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 'var(--t-brd)' : 'var(--t-btn)', color: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 'var(--t-tx3)' : 'var(--t-btn-color)', border: 'none', opacity: (!selectedAge || savingAge || selectedAge === (displayAgeGroup || profile.age_group || '')) ? 0.6 : 1 }}>
-                      {savingAge ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            }
-          />
-
-          <div style={{ padding: '20px 24px' }}>
-            {ageError && (
-              <div style={{
-                marginBottom: 14,
-                padding: '10px 12px',
-                borderRadius: 12,
-                background: 'color-mix(in srgb, var(--t-danger) 10%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--t-danger) 20%, transparent)',
-                color: 'var(--t-danger)',
-                fontSize: 12,
-                fontWeight: 600,
-              }}>
-                {ageError}
-              </div>
-            )}
-            {editingAge ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                {AGE_GROUPS.map(ag => {
-                  const selected = selectedAge === ag.value;
-                  return (
-                    <button
-                      key={ag.value}
-                      onClick={() => { setSelectedAge(ag.value); setAgeError(''); }}
-                      style={{
-                        borderRadius: 16, padding: '14px 12px', cursor: 'pointer',
-                        textAlign: 'center', border: 'none', transition: 'all 0.15s',
-                        background: selected
-                          ? 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))'
-                          : 'var(--t-card2)',
-                        outline: selected ? '2px solid var(--t-acc)' : '2px solid transparent',
-                        outlineOffset: 2,
-                        boxShadow: selected ? '0 4px 16px var(--t-acc-a)' : '0 1px 4px rgba(0,0,0,0.08)',
-                      }}
-                    >
-                      <div style={{ fontSize: 22, marginBottom: 6 }}>{ag.emoji}</div>
-                      <p style={{ fontSize: 14, fontWeight: 800, color: selected ? 'var(--t-acc)' : 'var(--t-tx)', margin: 0, lineHeight: 1 }}>{ag.label}</p>
-                      <p style={{ fontSize: 10, color: selected ? 'var(--t-acc)' : 'var(--t-tx3)', margin: '4px 0 0', fontWeight: 600, opacity: selected ? 0.8 : 1 }}>{ag.sub}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              (() => {
-                const currentAge = displayAgeGroup || profile.age_group || '';
-                const current = AGE_GROUPS.find(ag => ag.value === currentAge);
-                return current ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{
-                      width: 54, height: 54, borderRadius: 16, flexShrink: 0,
-                      background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
-                      border: '1px solid var(--t-brd-a)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 26,
-                    }}>
-                      {current.emoji}
-                    </div>
-                    <div>
-                      <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--t-tx)', margin: 0, letterSpacing: '-0.02em' }}>
-                        Age {current.label}
-                      </p>
-                      <p style={{ fontSize: 13, color: 'var(--t-tx3)', margin: '3px 0 0', fontWeight: 500 }}>
-                        {current.sub} — prompts &amp; vocab are matched to this range
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 13, color: 'var(--t-tx3)', margin: 0 }}>
-                    No age group set — click <strong>Change</strong> to configure it.
-                  </p>
-                );
-              })()
             )}
           </div>
         </Card>
