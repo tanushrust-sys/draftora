@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Sparkles,
   Wand2,
@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle2,
   MessageSquareText,
+  X,
 } from 'lucide-react';
 import BrandLogo from '@/app/components/BrandLogo';
 import styles from '@/app/components/marketing-home.module.css';
@@ -135,26 +136,155 @@ const TESTIMONIALS = [
   },
 ];
 
-const BLOG_POSTS = [
+type BlogPost = {
+  title: string;
+  summary: string;
+  audience: string;
+  readTime: string;
+  intro: string;
+  sections: { heading: string; paragraphs: string[] }[];
+};
+
+const BLOG_POSTS: BlogPost[] = [
   {
     title: 'How an AI writing app for students can build daily writing confidence',
     summary:
       'Start with short prompts, review instant feedback, and revise one paragraph at a time. This routine helps students improve writing skills without feeling overwhelmed.',
     audience: 'For students',
+    readTime: '3 min read',
+    intro:
+      'Most students do not struggle because they lack ideas. They struggle because writing feels vague: where to start, what to fix, and how to know if progress is real. A strong AI writing app for students removes that uncertainty by turning writing into a repeatable daily process.',
+    sections: [
+      {
+        heading: 'Start with short wins, not long assignments',
+        paragraphs: [
+          'Confidence grows faster when students complete a small writing task every day instead of waiting for one big weekly piece. A focused 10-15 minute prompt creates momentum and lowers resistance.',
+          'When students finish a short draft, they build trust in their own process. That consistency is more valuable than occasional perfect essays.',
+        ],
+      },
+      {
+        heading: 'Use immediate feedback while ideas are fresh',
+        paragraphs: [
+          'Feedback is most effective when it comes right after writing. Students can still remember their intent, so revision becomes practical instead of frustrating.',
+          'With instant guidance, students can identify one sentence to sharpen, one detail to clarify, and one vocabulary improvement to apply immediately.',
+        ],
+      },
+      {
+        heading: 'Turn revision into a clear routine',
+        paragraphs: [
+          'A simple routine works best: draft, review strengths, fix one improvement area, then polish. This keeps students focused on progress instead of perfection.',
+          'Over time, students begin to self-correct structure, clarity, and tone before feedback even appears. That is when real writing independence starts.',
+        ],
+      },
+      {
+        heading: 'Track progress students can actually feel',
+        paragraphs: [
+          'Visible progress indicators matter. Students stay motivated when they can see growth in consistency, clarity, and completion rate.',
+          'When improvement is visible, writing feels rewarding rather than stressful. That shift is what builds long-term writing confidence.',
+        ],
+      },
+      {
+        heading: 'Keep effort high with reflection loops',
+        paragraphs: [
+          'Students improve faster when they briefly reflect after each session: What improved? What is still unclear? What will I focus on tomorrow?',
+          'This tiny reflection loop strengthens ownership. Instead of waiting for someone else to judge quality, students start developing internal standards for strong writing.',
+        ],
+      },
+    ],
   },
   {
     title: 'How parents can use AI feedback to support writing at home',
     summary:
       'Look at one strength and one next step after each draft. Small, consistent check-ins help children improve writing skills while keeping writing practice positive.',
     audience: 'For parents',
+    readTime: '3 min read',
+    intro:
+      'Parents do not need to be writing experts to help a child improve. The key is consistent, calm support around specific next steps. AI feedback helps parents focus on what matters most after each draft.',
+    sections: [
+      {
+        heading: 'Focus on one strength and one next step',
+        paragraphs: [
+          'After each writing session, start with one strength to reinforce confidence, then choose one improvement target. This keeps feedback actionable and emotionally balanced.',
+          'Too many corrections at once can overwhelm students. One clear priority leads to better follow-through.',
+        ],
+      },
+      {
+        heading: 'Use shared language at home',
+        paragraphs: [
+          'When parents and teachers use similar feedback language, students experience less confusion and more clarity. Terms like “add detail,” “improve flow,” or “strong opening” become familiar and useful.',
+          'Shared language makes writing support feel consistent across home and school.',
+        ],
+      },
+      {
+        heading: 'Make check-ins short and regular',
+        paragraphs: [
+          'A 5-minute daily check-in is often more powerful than a long weekly correction session. Ask what was improved today and what the next target is.',
+          'Short check-ins reduce pressure and help writing become a normal habit.',
+        ],
+      },
+      {
+        heading: 'Celebrate progress, not just grades',
+        paragraphs: [
+          'Celebrate concrete improvement signals: clearer ideas, stronger sentence structure, or more consistent writing sessions.',
+          'When effort and growth are recognized, students stay engaged for the long run and become more willing to revise.',
+        ],
+      },
+      {
+        heading: 'Turn feedback into home routines',
+        paragraphs: [
+          'Pick one regular writing rhythm that fits your family schedule: after homework, before dinner, or during a weekend slot. Consistency matters more than session length.',
+          'Pair writing with one encouraging ritual, like reading the best sentence aloud. Positive closure helps students associate revision with progress, not pressure.',
+        ],
+      },
+    ],
   },
   {
     title: 'Simple classroom habits to improve writing skills faster',
     summary:
       'Teachers can use clear revision goals, sentence-level feedback, and weekly progress snapshots to help every student write stronger drafts with less friction.',
     audience: 'For teachers',
+    readTime: '3 min read',
+    intro:
+      'In most classrooms, the bottleneck is not effort. It is feedback bandwidth. Small instructional habits can dramatically increase writing progress without increasing marking overload.',
+    sections: [
+      {
+        heading: 'Set one revision goal per draft',
+        paragraphs: [
+          'Students improve faster when each draft has one instructional focus: clarity, evidence, paragraph flow, or sentence variety.',
+          'A single goal sharpens attention and makes feedback easier to apply at scale.',
+        ],
+      },
+      {
+        heading: 'Use sentence-level examples, not vague comments',
+        paragraphs: [
+          'Comments like “be more descriptive” are hard to act on. A stronger approach is showing one specific sentence and how to improve it.',
+          'Concrete examples reduce cognitive load and help students transfer the same pattern into the rest of the piece.',
+        ],
+      },
+      {
+        heading: 'Build weekly progress snapshots',
+        paragraphs: [
+          'Weekly snapshots help teachers spot trend lines quickly: who is improving structure, who needs vocabulary support, and who is struggling with consistency.',
+          'This enables targeted intervention instead of broad re-teaching.',
+        ],
+      },
+      {
+        heading: 'Keep the feedback loop tight',
+        paragraphs: [
+          'The shorter the loop between writing and revision, the stronger the learning. Rapid cycles lead to better retention and quicker growth in writing quality.',
+          'When students can apply feedback immediately, classroom writing becomes an active skill-building system instead of a submission-only workflow.',
+        ],
+      },
+      {
+        heading: 'Design for teacher sustainability',
+        paragraphs: [
+          'A great writing system must work at classroom scale. Reusable comment patterns, targeted mini-lessons, and clear revision checkpoints help maintain quality without burning teacher time.',
+          'When workload stays manageable, feedback stays consistent, and students receive better instructional support across the full term.',
+        ],
+      },
+    ],
   },
-] as const;
+];
 
 const FAQS = [
   {
@@ -220,6 +350,8 @@ function AppPreviewCard({
 }
 
 export default function MarketingHome() {
+  const [activeBlog, setActiveBlog] = useState<BlogPost | null>(null);
+
   useEffect(() => {
     const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
     if (!nodes.length) return;
@@ -245,6 +377,26 @@ export default function MarketingHome() {
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!activeBlog) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveBlog(null);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [activeBlog]);
 
   return (
     <div className={styles.page}>
@@ -497,13 +649,28 @@ export default function MarketingHome() {
           </div>
           <div className={styles.blogGrid}>
             {BLOG_POSTS.map((post) => (
-              <article key={post.title} className={styles.blogCard}>
+              <article
+                key={post.title}
+                className={styles.blogCard}
+                onClick={() => setActiveBlog(post)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setActiveBlog(post);
+                  }
+                }}
+              >
                 <p className={styles.blogAudience}>
                   <BookOpen size={14} />
                   <span>{post.audience}</span>
                 </p>
                 <h3>{post.title}</h3>
                 <p>{post.summary}</p>
+                <p className={styles.blogReadMore}>
+                  ... click to read more
+                </p>
               </article>
             ))}
           </div>
@@ -539,6 +706,34 @@ export default function MarketingHome() {
           </div>
         </section>
       </main>
+
+      {activeBlog && (
+        <div className={styles.blogOverlay} onClick={() => setActiveBlog(null)} role="dialog" aria-modal="true">
+          <article className={styles.blogModal} onClick={(event) => event.stopPropagation()}>
+            <button type="button" className={styles.blogCloseBtn} onClick={() => setActiveBlog(null)} aria-label="Close blog article">
+              <X size={20} />
+            </button>
+
+            <header className={styles.blogModalHeader}>
+              <p className={styles.blogModalAudience}>{activeBlog.audience}</p>
+              <p className={styles.blogModalMeta}>{activeBlog.readTime}</p>
+              <h2>{activeBlog.title}</h2>
+              <p className={styles.blogModalIntro}>{activeBlog.intro}</p>
+            </header>
+
+            <div className={styles.blogModalBody}>
+              {activeBlog.sections.map((section) => (
+                <section key={section.heading} className={styles.blogModalSection}>
+                  <h3>{section.heading}</h3>
+                  {section.paragraphs.map((paragraph) => (
+                    <p key={paragraph}>{paragraph}</p>
+                  ))}
+                </section>
+              ))}
+            </div>
+          </article>
+        </div>
+      )}
 
       <footer className={styles.footer}>
         <div className={styles.footerBrand}>Draftora</div>
