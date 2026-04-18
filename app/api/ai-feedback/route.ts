@@ -524,6 +524,7 @@ export async function POST(req: Request) {
       ageGroup,
       writingExperienceScore = 0,
     } = payload;
+    const mappedAgeGroup = mapAgeGroup(ageGroup);
 
     if (assistMode) {
       const safeContent = content ?? '';
@@ -556,11 +557,11 @@ export async function POST(req: Request) {
         });
         const rawAssist = completion.choices[0]?.message?.content ?? '[]';
         const parsedAssist = JSON.parse(extractJSON(rawAssist)) as unknown;
-        const result = normalizeAssistResult(parsedAssist, hasContent, safePrompt);
+        const result = normalizeAssistResult(parsedAssist, hasContent, safePrompt, mappedAgeGroup);
         return NextResponse.json(result);
       } catch (assistError) {
         console.error('ai-assist via ai-feedback route error:', assistError);
-        return NextResponse.json(normalizeAssistResult({}, hasContent, safePrompt));
+        return NextResponse.json(normalizeAssistResult({}, hasContent, safePrompt, mappedAgeGroup));
       }
     }
 
@@ -568,7 +569,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No content provided' }, { status: 400 });
     }
 
-    const mappedAgeGroup = mapAgeGroup(ageGroup);
     const mappedWritingType = mapWritingType(category);
     const experienceLabel = getWritingExperienceLabel(writingExperienceScore);
     const safeWordCount = typeof wordCount === 'number' ? wordCount : splitWords(content).length;
