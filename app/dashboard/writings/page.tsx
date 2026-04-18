@@ -26,7 +26,7 @@ import {
   RotateCcw, Tag, Save, TrendingUp, Calendar,
   BookMarked, Heart, Trash2, ChevronDown, ChevronUp,
   FileText, Clock, Filter, Eye, Star, BarChart2, Search,
-  Zap, BookOpen, Trophy,
+  Zap, BookOpen, Trophy, X,
 } from 'lucide-react';
 
 /** Returns the ratio of unique words to total words (0–1).
@@ -45,6 +45,8 @@ const JOURNAL_CATEGORIES = ['All', ...CATEGORIES];
 type ActiveTab = 'write' | 'journal' | 'progress';
 type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
 type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_version: string };
+type AssistSuggestion = { type: 'tip' | 'example'; label: string; detail: string };
+type AssistResponse = { tips?: AssistSuggestion[]; examples?: AssistSuggestion[] };
 type EditorBackup = {
   writingId?: string | null;
   title?: string | null;
@@ -425,6 +427,11 @@ function WritingsContent() {
   const [wordCount, setWordCount] = useState(0);
   const [xpEarned, setXpEarned]  = useState(0);
   const [error, setError]        = useState('');
+  const [aiAssistOpen, setAiAssistOpen] = useState(false);
+  const [aiAssistLoading, setAiAssistLoading] = useState(false);
+  const [aiAssistTips, setAiAssistTips] = useState<AssistSuggestion[]>([]);
+  const [aiAssistExamples, setAiAssistExamples] = useState<AssistSuggestion[]>([]);
+  const [aiAssistCopied, setAiAssistCopied] = useState(false);
   const [todayWords, setTodayWords] = useState(0);
   const [weekWords, setWeekWords]   = useState(0);
   // (daily limit removed — users can write unlimited pieces per day up to their total cap)
@@ -467,6 +474,7 @@ function WritingsContent() {
   const previousActiveTabRef = useRef<ActiveTab>('write');
   const writingMutationLock = useRef(false);
   const writingReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiAssistCopyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftSignatureRef = useRef('');
   const writingRewardsGrantedRef = useRef(false);
@@ -1358,6 +1366,71 @@ function WritingsContent() {
     }
   };
 
+  const runAiAssist = useCallback(async () => {
+    setAiAssistOpen(true);
+    setAiAssistLoading(true);
+    setAiAssistCopied(false);
+
+    try {
+      const response = await fetch('/api/ai-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assistMode: true,
+          prompt,
+          content,
+          category,
+        }),
+      });
+
+      const payload = await response.json() as AssistResponse;
+      const tips = Array.isArray(payload?.tips)
+        ? payload.tips
+            .filter((item) =>
+              item &&
+              item.type === 'tip' &&
+              typeof item.label === 'string' &&
+              typeof item.detail === 'string')
+            .slice(0, 4)
+        : [];
+      const examples = Array.isArray(payload?.examples)
+        ? payload.examples
+            .filter((item) =>
+              item &&
+              item.type === 'example' &&
+              typeof item.label === 'string' &&
+              typeof item.detail === 'string')
+            .slice(0, 4)
+        : [];
+
+      setAiAssistTips(tips);
+      setAiAssistExamples(examples);
+    } catch (assistError) {
+      logSafeError('runAiAssist error:', assistError);
+      setAiAssistTips([]);
+      setAiAssistExamples([]);
+    } finally {
+      setAiAssistLoading(false);
+    }
+  }, [category, content, prompt]);
+
+  const copyAiAssistTip = useCallback(async (detail: string) => {
+    try {
+      await navigator.clipboard.writeText(detail);
+      setAiAssistCopied(true);
+      if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
+      aiAssistCopyTimer.current = setTimeout(() => setAiAssistCopied(false), 1300);
+    } catch {
+      // Clipboard failures are non-fatal for writing flow.
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
+    };
+  }, []);
+
   const startFresh = () => {
     if (profile) {
       try {
@@ -1371,6 +1444,10 @@ function WritingsContent() {
     lastSavedDraftSignatureRef.current = '';
     hasAttemptedDraftRestoreRef.current = true;
     writingRewardsGrantedRef.current = false;
+    setAiAssistLoading(false);
+    setAiAssistTips([]);
+    setAiAssistExamples([]);
+    setAiAssistCopied(false);
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
     loadProgress();
   };
@@ -1725,12 +1802,134 @@ function WritingsContent() {
                       <Save style={{ width: 14, height: 14 }} />
                       {status === 'saving' ? 'Saving…' : 'Save Draft'}
                     </button>
+                    <button
+                      onClick={runAiAssist}
+                      disabled={status !== 'idle' || aiAssistLoading}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        minWidth: 122,
+                        justifyContent: 'center',
+                        backgroundColor: '#f4c94b',
+                        background: 'linear-gradient(135deg, #fff3bf 0%, #f8d35d 35%, #efb73a 68%, #d8971f 100%)',
+                        color: '#4a3200',
+                        border: '1px solid #c88d1e',
+                        borderRadius: 12,
+                        padding: '8px 16px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 8px 18px rgba(218,156,36,0.35)',
+                        cursor: (status !== 'idle' || aiAssistLoading) ? 'not-allowed' : 'pointer',
+                        opacity: (status !== 'idle' || aiAssistLoading) ? 0.6 : 1,
+                      }}
+                    >
+                      <Sparkles style={{ width: 15, height: 15 }} />
+                      {aiAssistLoading ? 'Thinking…' : 'AI Assist'}
+                    </button>
                     <button onClick={submitForFeedbackSafe} disabled={status !== 'idle' || wordCount < 20} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 20px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: (status !== 'idle' || wordCount < 20) ? 0.4 : 1 }}>
                       {['submitting', 'reviewing'].includes(status)
                         ? <><Sparkles style={{ width: 15, height: 15 }} />{status === 'reviewing' ? 'Getting Feedback…' : 'Submitting…'}</>
                         : <><Send style={{ width: 15, height: 15 }} />Submit for Feedback</>
                       }
                     </button>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: aiAssistOpen ? '12px 20px 16px' : '0 20px',
+                    maxHeight: aiAssistOpen ? 320 : 0,
+                    opacity: aiAssistOpen ? 1 : 0,
+                    overflow: 'hidden',
+                    transition: 'max-height 0.22s ease, opacity 0.22s ease, padding 0.22s ease',
+                  }}
+                >
+                  <div style={{
+                    borderRadius: 16,
+                    border: '1px solid var(--t-brd)',
+                    background: 'linear-gradient(160deg, var(--t-card2), color-mix(in srgb, var(--t-acc-a) 16%, var(--t-card) 84%))',
+                    padding: 12,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div>
+                        <strong style={{ fontSize: 13 }}>AI Assist Studio</strong>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, opacity: 0.75 }}>4 focused tips + 4 ready-to-adapt examples</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAiAssistOpen(false)}
+                        aria-label="Close AI Assist"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, padding: 4, border: '1px solid var(--t-brd)' }}
+                      >
+                        <X style={{ width: 14, height: 14 }} />
+                      </button>
+                    </div>
+
+                    {aiAssistCopied && (
+                      <div style={{ marginBottom: 10, fontSize: 12 }}>
+                        Tip copied!
+                      </div>
+                    )}
+
+                    <div style={{ maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
+                      {aiAssistLoading ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                          {Array.from({ length: 2 }).map((_, col) => (
+                            <div key={col}>
+                              <div style={{ height: 12, width: 90, borderRadius: 6, background: 'currentColor', opacity: 0.32, marginBottom: 8 }} />
+                              <div style={{ display: 'grid', gap: 8 }}>
+                                {Array.from({ length: 4 }).map((__, index) => (
+                                  <div key={`${col}-${index}`} style={{ borderRadius: 12, padding: 10, border: '1px solid var(--t-brd)', opacity: 0.5 }}>
+                                    <div style={{ height: 12, marginBottom: 8, borderRadius: 6, background: 'currentColor', opacity: 0.28 }} />
+                                    <div style={{ height: 10, borderRadius: 6, background: 'currentColor', opacity: 0.18 }} />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        (aiAssistTips.length > 0 || aiAssistExamples.length > 0) ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Tips</div>
+                              <div style={{ display: 'grid', gap: 8 }}>
+                                {aiAssistTips.map((tip, index) => (
+                                  <button
+                                    key={`tip-${tip.label}-${index}`}
+                                    type="button"
+                                    onClick={() => { void copyAiAssistTip(tip.detail); }}
+                                    style={{ textAlign: 'left', borderRadius: 12, padding: 10, border: '1px solid var(--t-brd)', background: 'var(--t-card)', cursor: 'pointer' }}
+                                  >
+                                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{tip.label}</div>
+                                    <div style={{ fontSize: 12, opacity: 0.8 }}>{tip.detail}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Examples</div>
+                              <div style={{ display: 'grid', gap: 8 }}>
+                                {aiAssistExamples.map((example, index) => (
+                                  <button
+                                    key={`example-${example.label}-${index}`}
+                                    type="button"
+                                    onClick={() => { void copyAiAssistTip(example.detail); }}
+                                    style={{ textAlign: 'left', borderRadius: 12, padding: 10, border: '1px solid var(--t-brd)', background: 'var(--t-card)', cursor: 'pointer' }}
+                                  >
+                                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{example.label}</div>
+                                    <div style={{ fontSize: 12, opacity: 0.8 }}>{example.detail}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: 12, margin: 0 }}>No AI assist suggestions right now. Please try again.</p>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

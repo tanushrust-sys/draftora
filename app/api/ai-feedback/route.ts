@@ -19,11 +19,130 @@ type RawFeedback = {
   rewritten_version: string;
 };
 
+type AssistSuggestion = {
+  type: 'tip' | 'example';
+  label: string;
+  detail: string;
+};
+
+type AssistResult = {
+  tips: AssistSuggestion[];
+  examples: AssistSuggestion[];
+};
+
 const AI_FEEDBACK_UNAVAILABLE_MESSAGE =
   'AI feedback is unavailable right now. Your writing was received, so please try again in a moment.';
 
+const AI_ASSIST_SYSTEM_PROMPT = `You are a creative writing coach.
+Read the writing prompt and the user's current story excerpt.
+Return ONLY a valid JSON object with exactly 2 keys:
+{
+  "tips": [
+    { "type": "tip", "label": "<5 words max>", "detail": "<one sentence actionable coaching>" }
+  ],
+  "examples": [
+    { "type": "example", "label": "<5 words max>", "detail": "<one sentence example line/mini-example the student could adapt>" }
+  ]
+}
+
+Rules:
+- Return exactly 4 items in "tips" and exactly 4 items in "examples".
+- Tips must be specific to the actual draft content (or specific to beginning strategy if draft is empty).
+- Examples must be concrete sample lines or sample micro-paragraph directions directly tied to this prompt and current draft.
+- If the textarea is empty: all tips must be beginning-focused and all examples must show how to start.
+- Never use generic advice unrelated to the given draft.
+- Never include any keys other than "tips" and "examples".
+- Never include text outside JSON.`;
+
 function splitWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean);
+}
+
+function trimToFiveWords(label: string) {
+  return label.trim().split(/\s+/).slice(0, 5).join(' ');
+}
+
+function normalizeAssistSuggestion(raw: unknown, forcedType: 'tip' | 'example'): AssistSuggestion | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Record<string, unknown>;
+  const labelRaw = String(item.label ?? '').trim();
+  const detailRaw = String(item.detail ?? '').trim();
+
+  if (!labelRaw || !detailRaw) return null;
+
+  return {
+    type: forcedType,
+    label: trimToFiveWords(labelRaw),
+    detail: detailRaw,
+  };
+}
+
+function assistFallback(prompt: string, hasContent: boolean, mappedAgeGroup: string): AssistResult {
+  const promptHint = prompt.trim() || 'the writing prompt';
+  const kidMode = mappedAgeGroup === 'children';
+  const teenMode = mappedAgeGroup === 'teens';
+  if (!hasContent) {
+    return {
+      tips: [
+        { type: 'tip', label: 'Start In Motion', detail: kidMode ? `Begin with one clear action so we instantly know what is happening in ${promptHint}.` : `Open with a concrete action that places the reader directly inside ${promptHint}.` },
+        { type: 'tip', label: 'Set Scene Quickly', detail: kidMode ? 'Use one strong describing word so the place feels real right away.' : 'Use one sensory image in the first two sentences so the location feels real.' },
+        { type: 'tip', label: 'Reveal Character Goal', detail: kidMode ? 'Tell us what your character wants in the first two lines.' : 'Show what your main character wants in line one or two.' },
+        { type: 'tip', label: 'Signal Early Tension', detail: kidMode ? 'Add a small problem early so readers want to know what happens next.' : 'Introduce a small problem immediately so readers feel momentum from the start.' },
+      ],
+      examples: [
+        { type: 'example', label: 'Action Opening', detail: kidMode ? 'The bell rang, and I ran to find my best friend before I lost courage.' : 'By the time the school bell rang, I was still clutching the note I never sent.' },
+        { type: 'example', label: 'Scene First Line', detail: kidMode ? 'Rain hit the bus window while I practiced the words in my head.' : 'Rain tapped the bus window while I rehearsed what I would finally say to her.' },
+        { type: 'example', label: 'Character Hook', detail: teenMode ? 'People said I was being dramatic, but I was terrified she would walk away.' : 'Everyone thought I was angry, but I was mostly scared she would not listen.' },
+        { type: 'example', label: 'Conflict Seed', detail: kidMode ? 'When she sat next to me, my mouth went dry and I forgot every sentence.' : 'When she sat beside me at lunch, the words I had waited months to say disappeared.' },
+      ],
+    };
+  }
+
+  return {
+    tips: [
+      { type: 'tip', label: 'Sharpen One Image', detail: kidMode ? 'Swap one plain describing phrase for a picture word readers can imagine.' : 'Upgrade one broad description into a specific image the reader can clearly picture.' },
+      { type: 'tip', label: 'Add Emotion Beat', detail: kidMode ? 'Add one short sentence that says how your character feels right then.' : 'Insert one reaction sentence showing exactly what the narrator feels right now.' },
+      { type: 'tip', label: 'Tighten Sentence Rhythm', detail: kidMode ? 'Split one long sentence into two shorter ones so it is easier to read.' : 'Break one long sentence into two to improve pacing during the tense moment.' },
+      { type: 'tip', label: 'Raise Stakes Next', detail: kidMode ? 'Show what could go wrong next so readers care even more.' : 'Show what the character could lose in the next beat to increase urgency.' },
+    ],
+    examples: [
+      { type: 'example', label: 'Dialogue Pivot', detail: kidMode ? 'She crossed her arms and said, If you are just joking, do not start.' : 'She folded her arms and said, If this is another excuse, do not say it.' },
+      { type: 'example', label: 'Emotion Line', detail: kidMode ? 'I tried to sound calm, but my voice shook on every word.' : 'My voice sounded steady, but my hands kept shaking under the table.' },
+      { type: 'example', label: 'Concrete Detail', detail: kidMode ? 'I twisted my lunchbox zipper again and again while she waited.' : 'The plastic straw bent in half as I pressed it between my fingers.' },
+      { type: 'example', label: 'Hook Ending', detail: kidMode ? 'Then she pulled a crumpled note from her pocket and looked me in the eye.' : 'Then she reached into her bag and pulled out the message I never sent.' },
+    ],
+  };
+}
+
+function normalizeAssistGroup(raw: unknown, forcedType: 'tip' | 'example'): AssistSuggestion[] {
+  if (!Array.isArray(raw)) return [];
+  const normalized = raw
+    .map((item) => normalizeAssistSuggestion(item, forcedType))
+    .filter((item): item is AssistSuggestion => Boolean(item));
+
+  const deduped: AssistSuggestion[] = [];
+  const seen = new Set<string>();
+  for (const item of normalized) {
+    const key = `${item.label.toLowerCase()}:${item.detail.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped.slice(0, 4);
+}
+
+function normalizeAssistResult(raw: unknown, hasContent: boolean, prompt: string, mappedAgeGroup: string): AssistResult {
+  const fallback = assistFallback(prompt, hasContent, mappedAgeGroup);
+  const tipsRaw = raw && typeof raw === 'object' ? (raw as { tips?: unknown }).tips : null;
+  const examplesRaw = raw && typeof raw === 'object' ? (raw as { examples?: unknown }).examples : null;
+
+  const tips = normalizeAssistGroup(tipsRaw, 'tip');
+  const examples = normalizeAssistGroup(examplesRaw, 'example');
+
+  return {
+    tips: [...tips, ...fallback.tips].slice(0, 4),
+    examples: [...examples, ...fallback.examples].slice(0, 4),
+  };
 }
 
 function mapAgeGroup(ageGroup?: string) {
@@ -385,6 +504,7 @@ function parseFeedback(raw: string): WritingFeedback | null {
 
 export async function POST(req: Request) {
   let payload: {
+    assistMode?: boolean;
     content?: string;
     category?: string;
     prompt?: string;
@@ -395,7 +515,54 @@ export async function POST(req: Request) {
 
   try {
     payload = await req.json();
-    const { content, category = 'writing', prompt, wordCount, ageGroup, writingExperienceScore = 0 } = payload;
+    const {
+      assistMode = false,
+      content,
+      category = 'writing',
+      prompt,
+      wordCount,
+      ageGroup,
+      writingExperienceScore = 0,
+    } = payload;
+
+    if (assistMode) {
+      const safeContent = content ?? '';
+      const safePrompt = prompt ?? '';
+      const hasContent = safeContent.trim().length > 0;
+
+      const userPrompt = [
+        `WRITING PROMPT:\n${safePrompt.trim() || '(No prompt provided)'}`,
+        `CURRENT STORY EXCERPT:\n${safeContent.trim() || '(Empty)'}`,
+        'Return only JSON.',
+      ].join('\n\n');
+
+      try {
+        const { default: OpenAI } = await import('openai');
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          throw new Error('Missing OPENAI_API_KEY.');
+        }
+
+        const client = new OpenAI({ apiKey });
+        const model = process.env.AI_ASSIST_MODEL || process.env.AI_FAST_MODEL || 'gpt-4.1';
+        const completion = await client.chat.completions.create({
+          model,
+          temperature: 0.7,
+          max_tokens: 1100,
+          messages: [
+            { role: 'system', content: AI_ASSIST_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+        });
+        const rawAssist = completion.choices[0]?.message?.content ?? '[]';
+        const parsedAssist = JSON.parse(extractJSON(rawAssist)) as unknown;
+        const result = normalizeAssistResult(parsedAssist, hasContent, safePrompt);
+        return NextResponse.json(result);
+      } catch (assistError) {
+        console.error('ai-assist via ai-feedback route error:', assistError);
+        return NextResponse.json(normalizeAssistResult({}, hasContent, safePrompt));
+      }
+    }
 
     if (!content || content.trim().length < 5) {
       return NextResponse.json({ error: 'No content provided' }, { status: 400 });
