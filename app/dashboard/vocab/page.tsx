@@ -77,7 +77,7 @@ const SENTENCE_FEEDBACK_STYLE: Record<SentenceFeedbackGrade, { accent: string; b
     background: tone('#c96a16', 10),
     border: tone('#c96a16', 24),
     icon: tone('#c96a16', 18),
-    label: 'Mostly incorrect',
+    label: 'Mostly wrong',
   },
   incorrect: {
     accent: 'var(--t-danger)',
@@ -225,14 +225,12 @@ function StructuredSentenceFeedback({
   feedback,
   feedbackStyle,
   feedbackGrade,
-  showPolishingHint = false,
   sentenceText = '',
   targetWord = '',
 }: {
   feedback: SentenceFeedback;
   feedbackStyle?: { accent: string; background: string; border: string; icon: string; label: string } | null;
   feedbackGrade: SentenceFeedbackGrade;
-  showPolishingHint?: boolean;
   sentenceText?: string;
   targetWord?: string;
 }) {
@@ -281,15 +279,9 @@ function StructuredSentenceFeedback({
         </div>
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)' }}>Draftora AI Feedback</p>
         <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: feedbackStyle?.accent ?? 'var(--t-acc)', background: tone(feedbackStyle?.accent ?? 'var(--t-acc)', 10), border: `1px solid ${feedbackStyle?.border ?? 'var(--t-brd-a)'}`, borderRadius: 999, padding: '3px 8px' }}>
-          Detailed
+          {feedbackStyle?.label ?? SENTENCE_FEEDBACK_STYLE[feedbackGrade].label}
         </span>
       </div>
-
-      {showPolishingHint && (
-        <p style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 600, paddingLeft: 2 }}>
-          AI feedback is coming in a moment...
-        </p>
-      )}
 
       <div style={{ overflowY: 'visible', paddingRight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ background: tone(feedbackStyle?.accent ?? 'var(--t-acc)', 7), border: `1px solid ${tone(feedbackStyle?.accent ?? 'var(--t-acc)', 18)}`, borderRadius: 12, padding: '10px 12px' }}>
@@ -385,8 +377,69 @@ type DrillResult = { word: string; challengeType: DrillChallenge['type']; correc
 const SENTENCE_FEEDBACK_TIMEOUT_MS = 20000;
 const VOCAB_SAVE_TIMEOUT_MS = 25000;
 const DAILY_VOCAB_BASE_COUNT = 3;
-const DAILY_VOCAB_MAX_COUNT = 6;
-const DAILY_VOCAB_MAX_BONUS = DAILY_VOCAB_MAX_COUNT - DAILY_VOCAB_BASE_COUNT;
+
+type DailyVocabEntry = ReturnType<typeof getVocabPool>[number];
+
+function getDailyVocabDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDailyVocabStorageKey(userId: string, ageGroup: string) {
+  return `draftora:daily-vocab-v2:${userId}:${ageGroup || 'default'}:${getDailyVocabDateKey()}`;
+}
+
+function normalizeDailyVocabEntry(entry: DailyVocabEntry): DailyVocabEntry {
+  return {
+    word: entry.word,
+    meaning: simplifyMeaning(entry.meaning),
+    example: entry.example,
+  };
+}
+
+function dedupeDailyVocabEntries(entries: DailyVocabEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = entry.word.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function readStoredDailyVocab(userId: string, ageGroup: string) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(getDailyVocabStorageKey(userId, ageGroup));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    const entries = parsed.filter((entry): entry is DailyVocabEntry => (
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as DailyVocabEntry).word === 'string' &&
+      typeof (entry as DailyVocabEntry).meaning === 'string' &&
+      typeof (entry as DailyVocabEntry).example === 'string'
+    ));
+    return dedupeDailyVocabEntries(entries.map(normalizeDailyVocabEntry));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDailyVocab(userId: string, ageGroup: string, entries: DailyVocabEntry[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      getDailyVocabStorageKey(userId, ageGroup),
+      JSON.stringify(dedupeDailyVocabEntries(entries.map(normalizeDailyVocabEntry))),
+    );
+  } catch {
+    // Daily word persistence is best-effort.
+  }
+}
 const WORD_BANK_VISIBLE_ROWS = 8;
 const WORD_BANK_ROW_HEIGHT = 76;
 const VOCAB_FALLBACK_SELECT = [
@@ -443,72 +496,6 @@ function extractMeaningKeywords(text: string) {
   return tokenizeSentence(text).filter(token => token.length > 3 && !stopwords.has(token));
 }
 
-function buildQuickSentenceFeedback(word: string, meaning: string, sentence: string): SentenceFeedback {
-  const trimmed = sentence.trim();
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  const includesWord = sentenceUsesTargetWord(trimmed, word);
-  const hasEndingPunctuation = /[.!?]$/.test(trimmed);
-  const meaningKeywords = extractMeaningKeywords(meaning);
-  const meaningHits = meaningKeywords.filter(keyword => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(trimmed));
-  const meaningOverlap = meaningKeywords.length ? meaningHits.length / meaningKeywords.length : 0;
-  const isDetailed = words.length >= 8;
-
-  if (!includesWord) {
-    if (meaningOverlap >= 0.35 || (meaningOverlap >= 0.2 && words.length >= 5)) {
-      return {
-        grade: 'mostly incorrect',
-        correct: false,
-        strengths: 'You captured part of the idea.',
-        improvements: `Try using "${word}" more directly so the meaning is clearer.`,
-        summary: 'Close, but not quite.',
-        suggestion: '',
-      };
-    }
-
-    return {
-      grade: 'incorrect',
-      correct: false,
-      strengths: 'Your sentence is saved and ready for feedback.',
-      improvements: `Make sure the target word "${word}" (or a natural form like "${word}s" or "${word}ed") appears in your sentence so the checker can judge how you used it.`,
-      summary: 'Add the target word and try again.',
-      suggestion: `Try: "${word}" can be used in a clear sentence that shows its meaning.`,
-    };
-  }
-
-  if (!isDetailed) {
-    return {
-      grade: 'mostly correct',
-      correct: true,
-      strengths: `Nice start. You used "${word}" in a clear sentence.`,
-      improvements: 'Add a little more detail so the meaning feels stronger and more natural in context.',
-      summary: 'Quick feedback is ready while the AI does a deeper check.',
-      suggestion: '',
-    };
-  }
-
-  if (!hasEndingPunctuation) {
-    return {
-      grade: 'mostly correct',
-      correct: true,
-      strengths: `Good job using "${word}" in a full idea.`,
-      improvements: 'Add ending punctuation to make the sentence feel complete and polished.',
-      summary: 'Quick feedback is ready while the AI does a deeper check.',
-      suggestion: '',
-    };
-  }
-
-  return {
-    grade: meaningOverlap >= 0.3 ? 'correct' : 'mostly correct',
-    correct: true,
-    strengths: `Strong start. You used "${word}" in a complete sentence with clear context.`,
-    improvements: meaningOverlap >= 0.3
-      ? ''
-      : 'If you want to level it up, add one vivid detail that makes the meaning even more precise.',
-    summary: 'Quick feedback is ready while the AI does a deeper check.',
-    suggestion: '',
-  };
-}
-
 function normalizeVocabWord(word: Partial<VocabWord> & Pick<VocabWord, 'id' | 'user_id' | 'word' | 'meaning' | 'example_sentence' | 'created_at'>): VocabWord {
   const hasSentence = Boolean(word.user_sentence?.trim());
   return {
@@ -557,11 +544,9 @@ export default function VocabPage() {
   const vocabBusy = submitting !== null;
   const deferredSearch = useDeferredValue(search);
 
-  const [bonusCount, setBonusCount] = useState(0);
-
   const ageGroup   = profile?.age_group ?? '';
   const vocabPool  = getVocabPool(ageGroup);
-  const dailyWords = getDailyWords(ageGroup, Math.min(DAILY_VOCAB_BASE_COUNT + bonusCount, DAILY_VOCAB_MAX_COUNT));
+  const [dailyWords, setDailyWords] = useState<DailyVocabEntry[]>([]);
 
   // ─── WEEKLY TEST STATE ───
   const [testOpen, setTestOpen] = useState(false);
@@ -576,6 +561,33 @@ export default function VocabPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const vocabMutationLock = useRef(false);
   const vocabReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!profileId) return;
+
+    const storedDailyWords = readStoredDailyVocab(profileId, ageGroup);
+    const nextDailyWords = storedDailyWords && storedDailyWords.length >= DAILY_VOCAB_BASE_COUNT
+      ? storedDailyWords
+      : getDailyWords(ageGroup, DAILY_VOCAB_BASE_COUNT).map(normalizeDailyVocabEntry);
+
+    setDailyWords(nextDailyWords);
+    writeStoredDailyVocab(profileId, ageGroup, nextDailyWords);
+    setExpandedCard(null);
+  }, [ageGroup, profileId]);
+
+  const addDailyWord = useCallback(() => {
+    if (!profileId) return;
+
+    setDailyWords(prev => {
+      const selected = new Set(prev.map(entry => entry.word.trim().toLowerCase()));
+      const nextWord = vocabPool.find(entry => !selected.has(entry.word.trim().toLowerCase()));
+      if (!nextWord) return prev;
+
+      const next = [...prev, normalizeDailyVocabEntry(nextWord)];
+      writeStoredDailyVocab(profileId, ageGroup, next);
+      return next;
+    });
+  }, [ageGroup, profileId, vocabPool]);
 
   // ─── WORD BANK DRILL STATE ───
   const [drillOpen, setDrillOpen] = useState(false);
@@ -751,18 +763,16 @@ export default function VocabPage() {
       }
     } catch (error) {
       if (error instanceof FetchTimeoutError) {
-        // Keep quick feedback — just append a note to the summary
         setFeedback(prev => {
-          const existing = prev[index];
-          if (!existing) return prev;
-          return { ...prev, [index]: { ...existing, summary: 'AI feedback timed out. Your sentence has been saved.' } };
+          const next = { ...prev };
+          delete next[index];
+          return next;
         });
       }
     } finally {
       setChecking(current => current === index ? null : current);
     }
 
-    // Only overwrite quick feedback if AI returned something meaningful
     if (nextFeedback) {
       setFeedback(prev => ({ ...prev, [index]: nextFeedback! }));
     }
@@ -796,7 +806,7 @@ export default function VocabPage() {
 
   // After words load: mark daily cards as saved + pre-fill sentences + restore feedback
   useEffect(() => {
-    if (!words.length) return;
+    if (!dailyWords.length) return;
     const alreadySaved = new Set<number>();
     const restoredSentences: Record<number, string> = {};
     const restoredFeedback: Record<number, SentenceFeedback> = {};
@@ -815,12 +825,12 @@ export default function VocabPage() {
     setSentences(prev => ({ ...restoredSentences, ...prev })); // don't overwrite live typing
     setFeedback(prev => ({ ...restoredFeedback, ...prev }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [words]);
+  }, [dailyWords, words]);
 
   const submitWord = async (i: number) => {
     const dw = dailyWords[i];
     const sentence = sentences[i]?.trim();
-    if (!profile || !sentence) return;
+    if (!profile || !dw || !sentence) return;
     setSubmitting(i);
 
     // ── 1. Save/update word in bank with the user's sentence ──
@@ -922,11 +932,6 @@ export default function VocabPage() {
       setSubmitting(current => current === i ? null : current);
       // Don't clear checking here — requestSentenceFeedback manages it
     }, 500);
-
-    setFeedback(prev => ({
-      ...prev,
-      [i]: buildQuickSentenceFeedback(dw.word, dw.meaning, sentence),
-    }));
 
     void (async () => {
       try {
@@ -1212,19 +1217,22 @@ export default function VocabPage() {
           if (res.ok) {
             fb = normalizeSentenceFeedback(await res.json());
           }
-          if (!fb) {
-            fb = buildQuickSentenceFeedback(challenge.word, challenge.meaning, answer);
+          if (fb) {
+            feedbackGrade = fb.grade ?? (fb.correct ? 'correct' : 'incorrect');
+            correct = fb.correct;
+            message = fb.strengths || fb.improvements || (correct ? 'Good sentence!' : 'Try to use the word more clearly.');
+            tip = fb.improvements && fb.grade !== 'incorrect' ? fb.improvements : undefined;
+          } else {
+            feedbackGrade = 'incorrect';
+            correct = false;
+            message = 'Feedback was unavailable. Try this sentence again.';
+            tip = 'The checker needs the real AI response for sentence practice.';
           }
-          feedbackGrade = fb.grade ?? (fb.correct ? 'correct' : 'incorrect');
-          correct = fb.correct;
-          message = fb.strengths || fb.improvements || (correct ? 'Good sentence!' : 'Try to use the word more clearly.');
-          tip = fb.improvements && fb.grade !== 'incorrect' ? fb.improvements : undefined;
         } catch {
-          fb = buildQuickSentenceFeedback(challenge.word, challenge.meaning, answer);
-          feedbackGrade = fb.grade ?? (fb.correct ? 'correct' : 'incorrect');
-          correct = fb.correct;
-          message = fb.strengths || fb.improvements || (correct ? 'Good sentence!' : 'Try to use the word more clearly.');
-          tip = fb.improvements && fb.grade !== 'incorrect' ? fb.improvements : undefined;
+          feedbackGrade = 'incorrect';
+          correct = false;
+          message = 'Feedback was unavailable. Try this sentence again.';
+          tip = 'The checker needs the real AI response for sentence practice.';
         }
       }
     }
@@ -2103,10 +2111,15 @@ export default function VocabPage() {
                         feedback={fb}
                         feedbackStyle={fbStyle}
                         feedbackGrade={fbGrade}
-                        showPolishingHint={checking === i}
                         sentenceText={typedSentence || storedSentence}
                         targetWord={dw.word}
                       />
+                    )}
+                    {!fb && checking === i && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 16, padding: '12px 14px', color: 'var(--t-acc)' }}>
+                        <Sparkles style={{ width: 15, height: 15, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Feedback loading</span>
+                      </div>
                     )}
                     {/* Single Submit button — disabled until sentence written */}
                     <button
@@ -2138,10 +2151,10 @@ export default function VocabPage() {
           </div>
 
           {/* "Get more words" — shown after all base 3 words are submitted */}
-          {[0, 1, 2].every(i => saved.has(i)) && bonusCount < DAILY_VOCAB_MAX_BONUS && (
+          {[0, 1, 2].every(i => saved.has(i)) && dailyWords.length < vocabPool.length && (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
               <button
-                onClick={() => setBonusCount(prev => Math.min(prev + 1, DAILY_VOCAB_MAX_BONUS))}
+                onClick={addDailyWord}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8,
                   background: 'var(--t-acc-a)', border: '1.5px solid var(--t-brd-a)',
@@ -2154,9 +2167,9 @@ export default function VocabPage() {
               </button>
             </div>
           )}
-          {[0, 1, 2].every(i => saved.has(i)) && bonusCount >= DAILY_VOCAB_MAX_BONUS && (
+          {[0, 1, 2].every(i => saved.has(i)) && dailyWords.length >= vocabPool.length && (
             <p style={{ textAlign: 'center', marginTop: 8, color: 'var(--t-tx3)', fontSize: 13 }}>
-              You have reached today&apos;s vocab limit of {DAILY_VOCAB_MAX_COUNT} words.
+              You have used every word in today&apos;s vocab pool.
             </p>
           )}
         </div>

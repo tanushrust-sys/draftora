@@ -1,11 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Award,
-  BookMarked,
   BookOpen,
   CheckCircle2,
   FileText,
@@ -21,7 +19,6 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { supabase } from '@/app/lib/supabase';
 import { getTitleForLevel, getXPProgress } from '@/app/types/database';
 import type { DailyStats } from '@/app/types/database';
-import { CATEGORIES, getDailyPrompt, getPromptDifficulty } from '@/app/data/prompts';
 import { getWeekWords } from '@/app/lib/vocab-utils';
 import { getLocalDateKey, msUntilNextLocalMidnight } from '@/app/lib/xp';
 import { pageCache } from '@/app/lib/page-cache';
@@ -35,60 +32,6 @@ type DashCache = {
 };
 
 type DashboardRole = 'student' | 'teacher' | 'parent';
-type EditorPreference = {
-  category?: string | null;
-  prompt?: string | null;
-};
-
-function getEditorPreferenceKey(userId: string) {
-  return `draftora:writing-editor-preference:${userId}`;
-}
-
-function readEditorPreferredCategory(userId: string | undefined | null) {
-  if (!userId || typeof window === 'undefined') return null;
-  try {
-    const rawPreference = window.localStorage.getItem(getEditorPreferenceKey(userId));
-    if (!rawPreference) return null;
-
-    try {
-      const parsedPreference = JSON.parse(rawPreference) as EditorPreference | string;
-      if (typeof parsedPreference === 'string') {
-        const legacyCategory = parsedPreference.trim();
-        return CATEGORIES.includes(legacyCategory) ? legacyCategory : null;
-      }
-
-      const preferredCategory = (parsedPreference?.category || '').trim();
-      return CATEGORIES.includes(preferredCategory) ? preferredCategory : null;
-    } catch {
-      const legacyCategory = rawPreference.trim();
-      return CATEGORIES.includes(legacyCategory) ? legacyCategory : null;
-    }
-  } catch {
-    return null;
-  }
-}
-
-function persistEditorPreference(userId: string | undefined | null, nextPreference: EditorPreference) {
-  if (!userId || typeof window === 'undefined') return;
-  const nextCategory = (nextPreference.category || '').trim();
-  if (!nextCategory || !CATEGORIES.includes(nextCategory)) return;
-
-  const nextPrompt = typeof nextPreference.prompt === 'string'
-    ? nextPreference.prompt.trim()
-    : '';
-
-  try {
-    window.localStorage.setItem(
-      getEditorPreferenceKey(userId),
-      JSON.stringify({
-        category: nextCategory,
-        prompt: nextPrompt || null,
-      }),
-    );
-  } catch {
-    // Preference save is best-effort only.
-  }
-}
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -105,30 +48,14 @@ export default function DashboardPage() {
         : profile?.account_type === 'parent'
           ? 'parent'
           : 'student';
-  const dashboardLabel = accountType === 'teacher'
-    ? 'Teacher dashboard'
-    : accountType === 'parent'
-      ? 'Parent dashboard'
-      : 'Student dashboard';
-
   const cacheKey = profile ? `dash-v2-${profile.id}-${ageGroup || 'default'}` : '';
   const cached = cacheKey ? pageCache.get<DashCache>(cacheKey) : null;
 
   const [todayStats, setTodayStats]             = useState<DailyStats | null>(cached?.stats ?? null);
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
-  const [showCategories, setShowCategories]     = useState(false);
   const [weekVocabSaved, setWeekVocabSaved]     = useState(cached?.vocabSaved ?? 0);
   const [vocabMastered, setVocabMastered]       = useState(cached?.vocabMastered ?? 0);
   const [vocabTotal, setVocabTotal]             = useState(cached?.vocabTotal ?? 0);
   const [weekStats, setWeekStats]               = useState<DailyStats[]>(cached?.weekStats ?? []);
-
-  useEffect(() => {
-    if (!profile?.id) return;
-    const preferredCategory = readEditorPreferredCategory(profile.id);
-    if (preferredCategory) {
-      setSelectedCategory(preferredCategory);
-    }
-  }, [profile?.id]);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -172,14 +99,6 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [loadData, profile?.id]);
 
-  const promptText = getDailyPrompt(selectedCategory, ageGroup);
-  const difficulty = getPromptDifficulty();
-
-  const startWriting = () => {
-    persistEditorPreference(profile?.id, { category: selectedCategory, prompt: promptText });
-    router.push('/dashboard/writings');
-  };
-
   if (!profile) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-bg)' }}>
@@ -219,8 +138,6 @@ export default function DashboardPage() {
   const wordsTone   = 'var(--t-mod-write)';
   const vocabTone   = 'var(--t-mod-vocab)';
 
-  const diffColor = difficulty === 'beginner' ? 'var(--t-success)' : difficulty === 'intermediate' ? 'var(--t-warning)' : 'var(--t-danger)';
-  const isFreshStart = (profile.xp ?? 0) === 0 && (profile.streak ?? 0) === 0 && words === 0 && vocabTotal === 0;
   const isDarkTheme = theme === 'midnight-blue' || theme === 'midnight-bloom';
 
   const greetingLine = activeDays === 7
@@ -260,35 +177,39 @@ export default function DashboardPage() {
           <div style={{ position: 'absolute', top: -90, right: -60, width: 260, height: 260, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-acc) 26%, transparent)', filter: 'blur(26px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', bottom: -95, left: -20, width: 220, height: 220, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-acc-light) 18%, transparent)', filter: 'blur(24px)', pointerEvents: 'none' }} />
 
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.7rem' }}>
-            {profile.streak > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `linear-gradient(180deg, color-mix(in srgb, ${streakTone} 22%, white) 0%, color-mix(in srgb, ${streakTone} 14%, var(--t-card2)) 100%)`, border: `1px solid color-mix(in srgb, ${streakTone} 30%, transparent)`, borderRadius: 99, padding: '6px 14px' }}>
-                <Flame style={{ width: 12, height: 12, color: streakTone }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: streakTone }}>{profile.streak}-day streak</span>
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.4rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 360px', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: '0.7rem' }}>
+                {profile.streak > 0 && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `linear-gradient(180deg, color-mix(in srgb, ${streakTone} 22%, white) 0%, color-mix(in srgb, ${streakTone} 14%, var(--t-card2)) 100%)`, border: `1px solid color-mix(in srgb, ${streakTone} 30%, transparent)`, borderRadius: 99, padding: '6px 14px' }}>
+                    <Flame style={{ width: 12, height: 12, color: streakTone }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: streakTone }}>{profile.streak}-day streak</span>
+                  </div>
+                )}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 24%, white) 0%, color-mix(in srgb, var(--t-acc) 14%, var(--t-card2)) 100%)', border: '1px solid color-mix(in srgb, var(--t-acc) 34%, transparent)', borderRadius: 99, padding: '6px 14px' }}>
+                  <Award style={{ width: 12, height: 12, color: 'var(--t-acc)' }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-acc)' }}>Level {profile.level} · {title}</span>
+                </div>
+              </div>
+
+              <h1 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.08, color: 'var(--t-tx)', marginBottom: '0.75rem', textShadow: '0 6px 18px color-mix(in srgb, var(--t-shadow) 18%, transparent)' }}>
+                Welcome back, <span className="themed-shimmer" style={{ textTransform: 'capitalize' }}>{profile.username}</span>
+              </h1>
+              <p style={{ color: 'var(--t-tx2)', fontSize: 15, lineHeight: 1.6, maxWidth: 500, marginBottom: 0 }}>{roleLine}</p>
+            </div>
+
+            {xp && (
+              <div style={{ flex: '0 1 420px', width: 'min(100%, 420px)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 86%, black 14%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '0.65rem 0.8rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <span style={{ color: 'var(--t-tx3)', fontSize: 12, fontWeight: 600 }}>Level {profile.level} → {profile.level + 1}</span>
+                  <span style={{ color: 'var(--t-acc)', fontSize: 12, fontWeight: 700 }}>{xp.current} / {xp.needed} XP</span>
+                </div>
+                <div style={{ height: 10, background: 'color-mix(in srgb, var(--t-xp-track) 84%, white 16%)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 80%, #ffffff) 0%, color-mix(in srgb, var(--t-acc-light) 70%, #ffffff) 100%)', borderRadius: 99, transition: 'width 0.6s ease' }} />
+                </div>
               </div>
             )}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 24%, white) 0%, color-mix(in srgb, var(--t-acc) 14%, var(--t-card2)) 100%)', border: '1px solid color-mix(in srgb, var(--t-acc) 34%, transparent)', borderRadius: 99, padding: '6px 14px' }}>
-              <Award style={{ width: 12, height: 12, color: 'var(--t-acc)' }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-acc)' }}>Level {profile.level} · {title}</span>
-            </div>
           </div>
-
-          <h1 style={{ position: 'relative', zIndex: 1, fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.08, color: 'var(--t-tx)', marginBottom: '0.75rem', textShadow: '0 6px 18px color-mix(in srgb, var(--t-shadow) 18%, transparent)' }}>
-            Welcome back, <span className="themed-shimmer" style={{ textTransform: 'capitalize' }}>{profile.username}</span>
-          </h1>
-          <p style={{ position: 'relative', zIndex: 1, color: 'var(--t-tx2)', fontSize: 15, lineHeight: 1.6, maxWidth: 500, marginBottom: '1rem' }}>{roleLine}</p>
-
-          {xp && (
-            <div style={{ position: 'relative', zIndex: 1, maxWidth: 420, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 86%, black 14%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '0.65rem 0.8rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: 'var(--t-tx3)', fontSize: 12, fontWeight: 600 }}>Level {profile.level} → {profile.level + 1}</span>
-                <span style={{ color: 'var(--t-acc)', fontSize: 12, fontWeight: 700 }}>{xp.current} / {xp.needed} XP</span>
-              </div>
-              <div style={{ height: 10, background: 'color-mix(in srgb, var(--t-xp-track) 84%, white 16%)', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 80%, #ffffff) 0%, color-mix(in srgb, var(--t-acc-light) 70%, #ffffff) 100%)', borderRadius: 99, transition: 'width 0.6s ease' }} />
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ── 4 STAT CARDS ── */}
@@ -344,92 +265,53 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* ── PROMPT ── */}
+        {/* ── QUICK NAV ── */}
         <div style={{
           ...cardSurface,
-          borderRadius: 30,
-          padding: '2rem 2.1rem',
+          borderRadius: 26,
+          padding: '1.35rem',
           position: 'relative',
           overflow: 'hidden',
           background: 'linear-gradient(165deg, color-mix(in srgb, var(--t-card) 90%, var(--t-acc) 10%) 0%, color-mix(in srgb, var(--t-card) 78%, var(--t-acc) 22%) 100%)',
         }}>
-          <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', top: -130, right: -70, background: 'color-mix(in srgb, var(--t-acc) 20%, transparent)', filter: 'blur(24px)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', width: 180, height: 180, borderRadius: '50%', bottom: -90, left: -40, background: 'color-mix(in srgb, var(--t-mod-write) 14%, transparent)', filter: 'blur(18px)', pointerEvents: 'none' }} />
-
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 10, background: 'color-mix(in srgb, var(--t-acc) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--t-acc) 34%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <BookMarked style={{ width: 14, height: 14, color: 'var(--t-acc)' }} />
+          <div style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+            {([
+              { href: '/dashboard/writings', label: 'Writing', phrase: 'Check your drafts and start something new.', Icon: PenLine, tone: wordsTone },
+              { href: '/dashboard/vocab', label: 'Vocab', phrase: 'Learn new vocab and master saved words.', Icon: BookOpen, tone: vocabTone },
+              { href: '/dashboard/coach', label: 'Coach', phrase: 'Get feedback and sharpen your next piece.', Icon: Sparkles, tone: 'var(--t-acc)' },
+              { href: '/dashboard/rewards', label: 'Rewards', phrase: 'Look at your XP bar and unlocks.', Icon: Star, tone: xpTone },
+              { href: '/dashboard/settings', label: 'Settings', phrase: 'Tune your goals and daily practice.', Icon: Target, tone: 'var(--t-success)' },
+            ] as const).map(({ href, label, phrase, Icon, tone }) => (
+              <button
+                key={href}
+                type="button"
+                onClick={() => router.push(href)}
+                style={{
+                  minHeight: 136,
+                  borderRadius: 18,
+                  padding: '1rem',
+                  background: isDarkTheme
+                    ? `linear-gradient(165deg, color-mix(in srgb, ${tone} 20%, var(--t-card2)) 0%, color-mix(in srgb, var(--t-card2) 86%, black 14%) 100%)`
+                    : `linear-gradient(165deg, color-mix(in srgb, ${tone} 13%, var(--t-card2)) 0%, color-mix(in srgb, var(--t-card2) 84%, white 16%) 100%)`,
+                  border: `1px solid color-mix(in srgb, ${tone} 28%, var(--t-brd))`,
+                  boxShadow: '0 12px 26px color-mix(in srgb, var(--t-shadow) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.32)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  textAlign: 'left',
+                  gap: 14,
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ width: 42, height: 42, borderRadius: 14, background: `color-mix(in srgb, ${tone} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${tone} 34%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon style={{ width: 19, height: 19, color: tone }} />
                 </div>
-                <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase' }}>Prompt of the day</p>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ background: 'color-mix(in srgb, var(--t-acc) 14%, transparent)', color: 'var(--t-acc)', border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)', borderRadius: 99, padding: '5px 14px', fontSize: 12, fontWeight: 800 }}>{selectedCategory}</span>
-                <span style={{ background: `color-mix(in srgb, ${diffColor} 14%, transparent)`, color: diffColor, border: `1px solid color-mix(in srgb, ${diffColor} 26%, transparent)`, borderRadius: 99, padding: '5px 14px', fontSize: 12, fontWeight: 800, textTransform: 'capitalize' }}>{difficulty}</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowCategories(true)}
-              style={{
-                background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 78%, black 22%) 100%)',
-                color: 'var(--t-tx2)',
-                border: '1px solid color-mix(in srgb, var(--t-brd) 62%, transparent)',
-                borderRadius: 999,
-                padding: '10px 20px',
-                fontSize: 13,
-                fontWeight: 800,
-                cursor: 'pointer',
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-                boxShadow: '0 10px 24px color-mix(in srgb, var(--t-shadow) 16%, transparent), inset 0 1px 0 rgba(255,255,255,0.35)',
-              }}
-            >
-              Browse
-            </button>
-          </div>
-
-          <div style={{ position: 'relative', zIndex: 1, background: 'color-mix(in srgb, var(--t-card2) 74%, transparent)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 22, padding: '1.15rem 1.3rem', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.24)', display: 'flex', justifyContent: 'center' }}>
-            <p style={{ color: 'var(--t-tx)', fontSize: 20, lineHeight: 1.72, margin: 0, width: '100%', maxWidth: '100%', textAlign: 'center', fontWeight: 540 }}>{promptText}</p>
-          </div>
-
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={startWriting}
-              className="auth-primary-btn"
-              style={{
-                minHeight: 52,
-                fontSize: 16,
-                fontWeight: 850,
-                borderRadius: 16,
-                padding: '0 2.1rem',
-                flex: '1 1 320px',
-                boxShadow: '0 14px 30px color-mix(in srgb, var(--t-acc) 22%, transparent)',
-              }}
-            >
-              Start writing
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCategories(true)}
-              className="auth-secondary-btn-modern"
-              style={{
-                minHeight: 52,
-                fontSize: 14,
-                fontWeight: 800,
-                borderRadius: 16,
-                padding: '0 1.5rem',
-                flex: '1 1 260px',
-                background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 96%, white 4%) 0%, color-mix(in srgb, var(--t-card2) 82%, black 18%) 100%)',
-                border: '1px solid color-mix(in srgb, var(--t-brd) 68%, transparent)',
-                boxShadow: '0 10px 24px color-mix(in srgb, var(--t-shadow) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.3)',
-              }}
-            >
-              Change prompt
-            </button>
+                <div>
+                  <h3 style={{ color: 'var(--t-tx)', fontSize: 17, fontWeight: 900, letterSpacing: '-0.02em', marginBottom: 6 }}>{label}</h3>
+                  <p style={{ color: 'var(--t-tx2)', fontSize: 12.5, fontWeight: 650, lineHeight: 1.45 }}>{phrase}</p>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -516,38 +398,6 @@ export default function DashboardPage() {
         </div>
 
       </div>
-
-      {/* ── Category modal ── */}
-      {showCategories && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-overlay)', backdropFilter: 'blur(12px)', padding: 16 }}
-          onClick={() => setShowCategories(false)}
-        >
-          <div
-            style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 96%, var(--t-acc) 4%) 0%, var(--t-card) 100%)', border: '1px solid color-mix(in srgb, var(--t-acc) 12%, var(--t-brd))', borderRadius: 24, padding: '1.7rem', width: '100%', maxWidth: 400, boxShadow: '0 24px 70px rgba(0,0,0,0.25)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <p style={{ color: 'var(--t-acc)', fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', marginBottom: 6 }}>Browse prompts</p>
-            <h2 style={{ color: 'var(--t-tx)', fontSize: 22, fontWeight: 900, letterSpacing: '-0.04em', marginBottom: 18 }}>Pick a category</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {CATEGORIES.map(category => (
-                <button key={category} type="button"
-                  onClick={() => { setSelectedCategory(category); setShowCategories(false); }}
-                  style={{
-                    background: selectedCategory === category ? 'var(--t-acc)' : 'var(--t-card2)',
-                    color: selectedCategory === category ? 'var(--t-btn-color)' : 'var(--t-tx2)',
-                    border: `1px solid ${selectedCategory === category ? 'var(--t-acc)' : 'var(--t-brd)'}`,
-                    borderRadius: 14, padding: '0.85rem 1.25rem',
-                    textAlign: 'left', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}>
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

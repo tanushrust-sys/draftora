@@ -175,6 +175,7 @@ function buildHeuristicFeedback(word: string, meaning: string, sentence: string,
   const meaningKeywords = extractKeywords(meaning);
   const meaningHits = meaningKeywords.filter(keyword => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(trimmed));
   const meaningOverlap = meaningKeywords.length ? meaningHits.length / meaningKeywords.length : 0;
+  const hasContext = tokens.length >= 7 || meaningOverlap >= 0.3;
   const clearAttempt = tokens.length >= 6 || includesWord || meaningOverlap >= 0.2;
   const isYoungLearner = ageGroup === '5-7' || ageGroup === '8-10' || ageGroup === '11-13';
 
@@ -183,15 +184,15 @@ function buildHeuristicFeedback(word: string, meaning: string, sentence: string,
   }
 
   if (includesWord) {
-    if (tokens.length < 5) {
-      return createFeedback('mostly correct', `Good start using "${word}" correctly.`, 'Add one more detail to make the idea clearer.', 'Good start!');
+    if (tokens.length < 5 || !hasContext) {
+      return createFeedback('mostly correct', `You included "${word}" in a sentence.`, 'Add context that proves you understand what the word means.', 'Good start.');
     }
 
-    if (!hasEndingPunctuation || tokens.length < 8 || uniqueRatio < 0.5) {
-      return createFeedback('mostly correct', `"${word}" fits well in your sentence.`, 'Add a little more detail or punctuation to make it polished.', 'Almost there!');
+    if (!hasEndingPunctuation || tokens.length < 10 || uniqueRatio < 0.5) {
+      return createFeedback('mostly correct', `"${word}" is used in a sensible way.`, 'Add one specific detail and finish the sentence cleanly.', 'Almost there.');
     }
 
-    return createFeedback('correct', `Lovely sentence — "${word}" is used naturally and clearly.`, '', 'Well done!');
+    return createFeedback('correct', `"${word}" is used naturally with enough context to show the meaning.`, '', 'Well done.');
   }
 
   if (meaningOverlap >= 0.4 || (clearAttempt && meaningOverlap >= 0.2)) {
@@ -396,19 +397,19 @@ async function generateFeedback(word: string, meaning: string, sentence: string,
   const isTeen = ageGroup === '11-13' || ageGroup === '14-17';
 
   const lenientRules = isYoung
-    ? `IMPORTANT — Age leniency rules for young learners (${mappedAgeGroup}):
-- Accept ANY answer that captures the general idea of the word, even if it is not perfectly precise. For example, if the word means "full of anticipation" and the student says "waiting for something", mark as CORRECT.
-- Accept simplified, child-friendly paraphrases as correct. The student does not need to use formal language.
-- Only mark incorrect if the student's answer is completely unrelated to the word's meaning, or if the sentence is gibberish.
-- Be extremely generous. When in doubt, mark as correct and gently guide toward a more complete sentence.`
+    ? `Age rules for young learners (${mappedAgeGroup}):
+- Be kind, but do not mark weak sentences as fully correct.
+- A sentence that only places the target word in a basic frame, such as "He was ${word}", is at most "mostly correct" unless it adds context that proves meaning.
+- Accept simplified, child-friendly sentences as correct only when they clearly show the meaning in context.
+- Mark gibberish, unrelated usage, or missing target word as mostly incorrect or incorrect.`
     : isTeen
     ? `Age leniency rules for teens (${mappedAgeGroup}):
 - Accept answers that show the student understands the core concept, even if they do not use precise vocabulary.
-- Minor imprecisions or informal phrasing should still be marked correct.
-- Only mark incorrect if the meaning is genuinely wrong or the sentence is nonsensical.`
+- Minor imprecisions can be mostly correct, but full correct requires clear context and natural usage.
+- Do not mark short template sentences as correct unless they prove the meaning.`
     : `Age leniency rules for adults (${mappedAgeGroup}):
 - Expect reasonable accuracy in usage but allow natural, informal phrasing.
-- Minor imprecision is fine. Only mark incorrect if the word is clearly misused.`;
+- Full correct requires clear context, accurate usage, and a complete sentence.`;
 
   const basePrompt = `You are a warm, supportive vocabulary coach who celebrates effort and guides improvement with kindness.
 
@@ -425,11 +426,12 @@ Respond with ONLY valid JSON. No markdown, no backticks, no extra text.
 Core rules:
 - Judge whether the student shows they understand the word — not whether they use it perfectly.
 - Use this four-step grading scale:
-  - "correct" = the sentence uses the word naturally, clearly, and accurately.
+  - "correct" = the sentence uses the word naturally, clearly, accurately, and with enough context to prove the meaning.
   - "mostly correct" = the student clearly understands the word, but the sentence is a little thin, awkward, or slightly unfinished.
   - "mostly incorrect" = the student has some idea or partial connection, but the usage is off or unclear.
   - "incorrect" = the sentence is wrong, unrelated, or gibberish.
-- If the sentence is even a teeny bit correct, prefer "mostly correct" or "correct" over "incorrect".
+- Do not give "correct" just because the target word appears.
+- Very short sentences with little context are at most "mostly correct", even if grammatically valid.
 - If the sentence has an idea but is not quite right, prefer "mostly incorrect" instead of harshly marking it fully wrong.
 - "strengths": if the sentence shows any understanding, write one specific thing done well (max 20 words). If completely wrong, leave as empty string "".
 - "improvements": if there is something worth improving, write one kind coaching tip (max 20 words). If sentence is strong, leave as empty string "".
@@ -457,7 +459,7 @@ Return exactly this JSON structure:
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await chat({
       tier: 'fast',
-      system: `Return strict JSON with keys: grade, correct, strengths, improvements, summary, suggestion, vocabularySuggestions. Be warm and encouraging. Use the four-step grading scale exactly: correct, mostly correct, mostly incorrect, incorrect. Grade generously — reward understanding of the concept, not perfect precision. For young learners (ages 5-10) be extremely lenient: if the student shows any grasp of the meaning, prefer mostly correct or correct. strengths: one genuine polite strength max 20 words, or empty string. improvements: one kind coaching tip max 20 words, or empty string if strong. summary: max 5 words upbeat. suggestion: always empty string. vocabularySuggestions: exactly 4 single-word upgrade words, not used in the student sentence and not equal to the target word.`,
+      system: `Return strict JSON with keys: grade, correct, strengths, improvements, summary, suggestion, vocabularySuggestions. Be warm but honest. Use the four-step grading scale exactly: correct, mostly correct, mostly incorrect, incorrect. Full correct requires accurate usage plus enough context to prove meaning. Do not mark short template sentences as correct just because the target word appears. strengths: one genuine polite strength max 20 words, or empty string. improvements: one useful coaching tip max 20 words, or empty string if strong. summary: max 5 words. suggestion: always empty string. vocabularySuggestions: exactly 4 single-word upgrade words, not used in the student sentence and not equal to the target word.`,
       maxTokens: 160,
       messages: [{ role: 'user', content: basePrompt }],
     });

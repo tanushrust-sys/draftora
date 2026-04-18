@@ -219,7 +219,6 @@ export default function CoachPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
-  const initialConversationHydrated = useRef(false);
   const deletedConversationIdsRef = useRef<Set<string>>(new Set());
 
   const trainer = getTrainer(trainerType);
@@ -352,12 +351,6 @@ export default function CoachPage() {
     setCoachError('');
   }, []);
 
-  useEffect(() => {
-    if (initialConversationHydrated.current || activeId || messages.length > 0 || conversations.length === 0) return;
-    initialConversationHydrated.current = true;
-    loadSession(conversations[0]);
-  }, [activeId, conversations, loadSession, messages.length]);
-
   const send = async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || !profile) return;
@@ -472,7 +465,6 @@ export default function CoachPage() {
   }, [loading, queuedMessages]);
 
   const startNewChat = () => {
-    initialConversationHydrated.current = true;
     setMessages([]);
     setActiveId(null);
     setMode('thinking');
