@@ -2,7 +2,7 @@
 // Switch providers with: AI_PROVIDER=openai | anthropic  (defaults to openai)
 // OpenAI routing defaults:
 // - nano/fast -> gpt-5.4-nano (vocab + low-cost high-volume tasks)
-// - smart     -> gpt-5-mini   (feedback/coach/reports)
+// - smart     -> gpt-5.4-mini (feedback/coach/reports)
 // Anthropic defaults to Haiku 4.5 across tiers for cost control; override via AI_*_MODEL.
 //
 // Fast tier  → cheap / quick tasks (vocab, sentence check, progress)
@@ -23,7 +23,7 @@ export interface ChatOptions {
 
 // Default model names per provider — override via env vars if needed
 const DEFAULT_MODELS = {
-  openai:    { nano: 'gpt-5.4-nano', fast: 'gpt-5.4-nano', smart: 'gpt-5-mini' },
+  openai:    { nano: 'gpt-5.4-nano', fast: 'gpt-5.4-nano', smart: 'gpt-5.4-mini' },
   anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-haiku-4-5-20251001' },
 };
 
@@ -32,6 +32,21 @@ function getModel(provider: string, tier: 'nano' | 'fast' | 'smart'): string {
   if (process.env[envKey]) return process.env[envKey]!;
   return DEFAULT_MODELS[provider as keyof typeof DEFAULT_MODELS]?.[tier]
     ?? DEFAULT_MODELS.openai[tier];
+}
+
+function isModelResolutionError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('model') &&
+    (
+      msg.includes('not found') ||
+      msg.includes('does not exist') ||
+      msg.includes('unsupported') ||
+      msg.includes('not available') ||
+      msg.includes('access') ||
+      msg.includes('permission')
+    )
+  );
 }
 
 /**
@@ -85,12 +100,38 @@ export async function chat({ tier, system, messages, maxTokens = 500, jsonMode =
     ...messages,
   ];
 
-  const res = await client.chat.completions.create({
-    model,
-    max_tokens: maxTokens,
-    messages: openaiMessages,
-    ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-  });
+  const fallbackCandidates = [
+    process.env.AI_FALLBACK_MODEL,
+    'gpt-5-mini',
+    'gpt-4.1-mini',
+  ].filter((m): m is string => Boolean(m && m.trim()));
+
+  const modelsToTry = [model, ...fallbackCandidates.filter((m) => m !== model)];
+
+  let res: Awaited<ReturnType<typeof client.chat.completions.create>> | null = null;
+  let lastError: unknown = null;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const candidate = modelsToTry[i];
+    try {
+      res = await client.chat.completions.create({
+        model: candidate,
+        max_tokens: maxTokens,
+        messages: openaiMessages,
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+      });
+      break;
+    } catch (err) {
+      lastError = err;
+      const canFallback = i < modelsToTry.length - 1 && isModelResolutionError(err);
+      if (!canFallback) throw err;
+      console.warn(`AI model fallback: "${candidate}" failed, trying next candidate.`);
+    }
+  }
+
+  if (!res) {
+    throw lastError instanceof Error ? lastError : new Error('AI request failed for all candidate models.');
+  }
 
   return res.choices[0]?.message?.content ?? '';
 }

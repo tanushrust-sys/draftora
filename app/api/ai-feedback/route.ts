@@ -33,6 +33,21 @@ type AssistResult = {
 const AI_FEEDBACK_UNAVAILABLE_MESSAGE =
   'AI feedback is unavailable right now. Your writing was received, so please try again in a moment.';
 
+function isModelResolutionError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('model') &&
+    (
+      msg.includes('not found') ||
+      msg.includes('does not exist') ||
+      msg.includes('unsupported') ||
+      msg.includes('not available') ||
+      msg.includes('access') ||
+      msg.includes('permission')
+    )
+  );
+}
+
 const AI_ASSIST_SYSTEM_PROMPT = `You are a creative writing coach.
 Read the writing prompt and the user's current story excerpt.
 Return ONLY a valid JSON object with exactly 2 keys:
@@ -545,16 +560,42 @@ export async function POST(req: Request) {
         }
 
         const client = new OpenAI({ apiKey });
-        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5-mini';
-        const completion = await client.chat.completions.create({
-          model,
-          temperature: 0.7,
-          max_tokens: 1100,
-          messages: [
-            { role: 'system', content: AI_ASSIST_SYSTEM_PROMPT },
-            { role: 'user', content: userPrompt },
-          ],
-        });
+        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5.4-mini';
+        const fallbackCandidates = [
+          process.env.AI_FALLBACK_MODEL,
+          'gpt-5-mini',
+          'gpt-4.1-mini',
+        ].filter((m): m is string => Boolean(m && m.trim()));
+        const modelsToTry = [model, ...fallbackCandidates.filter((m) => m !== model)];
+
+        let completion: Awaited<ReturnType<typeof client.chat.completions.create>> | null = null;
+        let lastError: unknown = null;
+
+        for (let i = 0; i < modelsToTry.length; i++) {
+          const candidate = modelsToTry[i];
+          try {
+            completion = await client.chat.completions.create({
+              model: candidate,
+              temperature: 0.7,
+              max_tokens: 1100,
+              messages: [
+                { role: 'system', content: AI_ASSIST_SYSTEM_PROMPT },
+                { role: 'user', content: userPrompt },
+              ],
+            });
+            break;
+          } catch (err) {
+            lastError = err;
+            const canFallback = i < modelsToTry.length - 1 && isModelResolutionError(err);
+            if (!canFallback) throw err;
+            console.warn(`AI assist model fallback: "${candidate}" failed, trying next candidate.`);
+          }
+        }
+
+        if (!completion) {
+          throw lastError instanceof Error ? lastError : new Error('AI assist failed for all candidate models.');
+        }
+
         const rawAssist = completion.choices[0]?.message?.content ?? '[]';
         const parsedAssist = JSON.parse(extractJSON(rawAssist)) as unknown;
         const result = normalizeAssistResult(parsedAssist, hasContent, safePrompt, mappedAgeGroup);
