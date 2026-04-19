@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useDeferredValue, useMemo } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
+import { authFetchJson } from '@/app/lib/auth-fetch';
 import { FetchTimeoutError, fetchWithTimeout } from '@/app/lib/fetch-with-timeout';
 import { PromiseTimeoutError, withPromiseTimeout } from '@/app/lib/promise-with-timeout';
 import { isMissingVocabSentenceColumnError } from '@/app/lib/supabase-schema-errors';
@@ -10,10 +11,11 @@ import {
   hydrateVocabWordWithStoredProgress,
   writeStoredVocabProgress,
 } from '@/app/lib/vocab-progress-storage';
-import { awardXP, XP_REWARDS } from '@/app/lib/xp';
+import { awardXP, updateDailyStats, XP_REWARDS } from '@/app/lib/xp';
 import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import { getDailyWords, getWeekWords, getVocabPool, simplifyMeaning } from '@/app/lib/vocab-utils';
+import type { HomeworkTaskItem } from '@/app/lib/homework';
 import type { VocabWord } from '@/app/types/database';
 import {
   GraduationCap, BookOpen, Trophy, Star, Search, PenLine,
@@ -366,6 +368,20 @@ function normalizeSentenceFeedback(value: unknown): SentenceFeedback | null {
   };
 }
 
+function buildFallbackSentenceFeedback(targetWord: string, timedOut: boolean): SentenceFeedback {
+  return {
+    grade: 'mostly incorrect',
+    correct: false,
+    strengths: `Nice attempt using "${targetWord}".`,
+    improvements: timedOut
+      ? 'AI took too long, so this quick feedback loaded. Add one clearer detail and try again.'
+      : 'Add one clearer context detail so the meaning is obvious.',
+    summary: timedOut ? 'Quick feedback loaded.' : 'Good attempt.',
+    suggestion: '',
+    vocabularySuggestions: ['precise', 'vivid', 'descriptive', 'compelling'],
+  };
+}
+
 // ─── Word Bank Drill types ───
 type DrillChallenge =
   | { type: 'recall';    word: string; meaning: string }
@@ -373,6 +389,12 @@ type DrillChallenge =
   | { type: 'odd-one-out'; word: string; meaning: string; options: string[]; correctIndex: number };
 
 type DrillResult = { word: string; challengeType: DrillChallenge['type']; correct: boolean; userAnswer: string };
+type StudentHomeworkResponse = {
+  today: string;
+  overallPct: number;
+  todayTasks: HomeworkTaskItem[];
+  upcoming: HomeworkTaskItem[];
+};
 
 const SENTENCE_FEEDBACK_TIMEOUT_MS = 20000;
 const VOCAB_SAVE_TIMEOUT_MS = 25000;
@@ -389,6 +411,32 @@ function getDailyVocabDateKey(date = new Date()) {
 
 function getDailyVocabStorageKey(userId: string, ageGroup: string) {
   return `draftora:daily-vocab-v2:${userId}:${ageGroup || 'default'}:${getDailyVocabDateKey()}`;
+}
+
+function getDailyHomeworkVocabProgressKey(userId: string) {
+  return `draftora:homework-vocab-progress:${userId}:${getDailyVocabDateKey()}`;
+}
+
+function markHomeworkVocabWordCountedOnce(userId: string, word: string) {
+  if (typeof window === 'undefined') return true;
+  const normalizedWord = word.trim().toLowerCase();
+  if (!normalizedWord) return false;
+
+  try {
+    const key = getDailyHomeworkVocabProgressKey(userId);
+    const raw = window.localStorage.getItem(key);
+    const existing = raw ? JSON.parse(raw) : [];
+    const counted = Array.isArray(existing)
+      ? existing.filter((item): item is string => typeof item === 'string').map(item => item.trim().toLowerCase())
+      : [];
+
+    if (counted.includes(normalizedWord)) return false;
+    counted.push(normalizedWord);
+    window.localStorage.setItem(key, JSON.stringify(counted));
+    return true;
+  } catch {
+    return true;
+  }
 }
 
 function normalizeDailyVocabEntry(entry: DailyVocabEntry): DailyVocabEntry {
@@ -541,6 +589,7 @@ export default function VocabPage() {
   const [sentences, setSentences] = useState<Record<number, string>>({});
   const [checking, setChecking] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<Record<number, SentenceFeedback>>({});
+  const [todayHomework, setTodayHomework] = useState<StudentHomeworkResponse | null>(null);
   const vocabBusy = submitting !== null;
   const deferredSearch = useDeferredValue(search);
 
@@ -562,6 +611,22 @@ export default function VocabPage() {
   const vocabMutationLock = useRef(false);
   const vocabReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const loadTodayHomeworkSnapshot = useCallback(async () => {
+    if (!profile || profile.account_type !== 'student') {
+      setTodayHomework(null);
+      return;
+    }
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token ?? '';
+      if (!token) return;
+      const payload = await authFetchJson<StudentHomeworkResponse>('/api/homework', { token });
+      setTodayHomework(payload);
+    } catch {
+      // keep existing snapshot on transient errors
+    }
+  }, [profile]);
+
   useEffect(() => {
     if (!profileId) return;
 
@@ -574,6 +639,18 @@ export default function VocabPage() {
     writeStoredDailyVocab(profileId, ageGroup, nextDailyWords);
     setExpandedCard(null);
   }, [ageGroup, profileId]);
+
+  useEffect(() => {
+    void loadTodayHomeworkSnapshot();
+  }, [loadTodayHomeworkSnapshot]);
+
+  useEffect(() => {
+    if (!profile || profile.account_type !== 'student') return;
+    const interval = setInterval(() => {
+      void loadTodayHomeworkSnapshot();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [profile, loadTodayHomeworkSnapshot]);
 
   const addDailyWord = useCallback(() => {
     if (!profileId) return;
@@ -742,6 +819,7 @@ export default function VocabPage() {
     setChecking(index);
 
     let nextFeedback: SentenceFeedback | null = null;
+    let timedOut = false;
 
     try {
       const res = await fetchWithTimeout(
@@ -762,20 +840,16 @@ export default function VocabPage() {
         }
       }
     } catch (error) {
-      if (error instanceof FetchTimeoutError) {
-        setFeedback(prev => {
-          const next = { ...prev };
-          delete next[index];
-          return next;
-        });
-      }
+      timedOut = error instanceof FetchTimeoutError;
     } finally {
       setChecking(current => current === index ? null : current);
     }
 
-    if (nextFeedback) {
-      setFeedback(prev => ({ ...prev, [index]: nextFeedback! }));
+    if (!nextFeedback) {
+      nextFeedback = buildFallbackSentenceFeedback(word, timedOut);
     }
+
+    setFeedback(prev => ({ ...prev, [index]: nextFeedback }));
     if (nextFeedback) {
       try {
         writeStoredVocabProgress(profile.id, word, {
@@ -800,7 +874,7 @@ export default function VocabPage() {
           });
       }
     }
-  }, [loadWords, persistSentenceFeedback, profile]);
+  }, [persistSentenceFeedback, profile]);
 
   useEffect(() => { loadWords(); }, [loadWords]);
 
@@ -924,15 +998,6 @@ export default function VocabPage() {
     setChecking(i);
     setExpandedCard(i);
 
-    if (vocabReleaseTimer.current) {
-      clearTimeout(vocabReleaseTimer.current);
-    }
-    vocabReleaseTimer.current = setTimeout(() => {
-      vocabMutationLock.current = false;
-      setSubmitting(current => current === i ? null : current);
-      // Don't clear checking here — requestSentenceFeedback manages it
-    }, 500);
-
     void (async () => {
       try {
         try {
@@ -942,6 +1007,7 @@ export default function VocabPage() {
         }
 
         let wordId: string | null = null;
+        let didCountHomeworkProgress = false;
 
         if (!saved.has(i)) {
           const { data: inserted, error: insertError } = await withPromiseTimeout(
@@ -1010,6 +1076,11 @@ export default function VocabPage() {
             upsertLocalWord(normalizeVocabWord(inserted as Partial<VocabWord> & Pick<VocabWord, 'id' | 'user_id' | 'word' | 'meaning' | 'example_sentence' | 'created_at'>));
           }
           incrementProfileOverride(profile.id, 'vocab_words_saved', 1);
+          const shouldCountHomework = markHomeworkVocabWordCountedOnce(profile.id, dw.word);
+          if (shouldCountHomework) {
+            didCountHomeworkProgress = true;
+            void updateDailyStats(profile.id, { vocab_words_learned: 1 }).catch(() => {});
+          }
           void (async () => {
             try {
               await supabase.from('profiles')
@@ -1070,10 +1141,23 @@ export default function VocabPage() {
               user_sentence: sentence,
             });
           }
+          const shouldCountHomework = markHomeworkVocabWordCountedOnce(profile.id, dw.word);
+          if (shouldCountHomework) {
+            didCountHomeworkProgress = true;
+            void updateDailyStats(profile.id, { vocab_words_learned: 1 }).catch(() => {});
+          }
         }
 
         if (wordId) {
-          void requestSentenceFeedback(i, wordId, dw.word, dw.meaning, sentence);
+          await requestSentenceFeedback(i, wordId, dw.word, dw.meaning, sentence);
+        } else {
+          setFeedback(prev => ({
+            ...prev,
+            [i]: buildFallbackSentenceFeedback(dw.word, false),
+          }));
+        }
+        if (didCountHomeworkProgress) {
+          void loadTodayHomeworkSnapshot();
         }
 
         void persistWritingExperienceScore(
@@ -1087,6 +1171,7 @@ export default function VocabPage() {
           if (recoveredWord?.id) {
             setSaved(prev => new Set(prev).add(i));
             upsertLocalWord(recoveredWord);
+            void loadTodayHomeworkSnapshot();
           } else {
             setFeedback(prev => ({
               ...prev,
@@ -1111,6 +1196,14 @@ export default function VocabPage() {
             },
           }));
         }
+      } finally {
+        if (vocabReleaseTimer.current) {
+          clearTimeout(vocabReleaseTimer.current);
+          vocabReleaseTimer.current = null;
+        }
+        vocabMutationLock.current = false;
+        setChecking(current => current === i ? null : current);
+        setSubmitting(current => current === i ? null : current);
       }
     })();
   };
@@ -1436,6 +1529,21 @@ export default function VocabPage() {
     [thisWeekWords, wordsByNormalized],
   );
   const weekGoalTotal = thisWeekWords.length;
+  const parentAssignedVocabRequiredToday = useMemo(
+    () => (todayHomework?.todayTasks ?? []).reduce((sum, task) => sum + (task.breakdown.vocabRequired || 0), 0),
+    [todayHomework],
+  );
+  const parentAssignedVocabCompletedToday = useMemo(
+    () => (todayHomework?.todayTasks ?? []).reduce((sum, task) => (
+      sum + Math.min(task.breakdown.vocabCompleted || 0, task.breakdown.vocabRequired || 0)
+    ), 0),
+    [todayHomework],
+  );
+  const wordsDoneToday = Math.min(parentAssignedVocabCompletedToday, parentAssignedVocabRequiredToday);
+  const wordsRemainingToday = Math.max(0, parentAssignedVocabRequiredToday - wordsDoneToday);
+  const wordsProgressPct = parentAssignedVocabRequiredToday > 0
+    ? Math.round((wordsDoneToday / parentAssignedVocabRequiredToday) * 100)
+    : 0;
 
   // ─── WORD BANK DRILL OVERLAY ───
   if (drillOpen) {
@@ -1955,6 +2063,32 @@ export default function VocabPage() {
             <p style={{ color: 'var(--t-tx3)', fontSize: 14, marginTop: 2 }}>
               Learn new words, practise sentences, and build your word bank
             </p>
+            <p style={{ color: parentAssignedVocabRequiredToday === 0 ? 'var(--t-tx3)' : wordsRemainingToday === 0 ? 'var(--t-success)' : 'var(--t-acc)', fontSize: 12, fontWeight: 700, marginTop: 6 }}>
+              {parentAssignedVocabRequiredToday === 0
+                ? 'No parent vocab words assigned today'
+                : `${wordsRemainingToday} word${wordsRemainingToday === 1 ? '' : 's'} remaining today`}
+            </p>
+            <div style={{ marginTop: 6, maxWidth: 280 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t-tx3)', marginBottom: 4 }}>
+                <span>{parentAssignedVocabRequiredToday === 0 ? 'No homework set' : `${wordsDoneToday}/${parentAssignedVocabRequiredToday} done`}</span>
+                <span>{wordsProgressPct}%</span>
+              </div>
+              <div style={{ height: 7, borderRadius: 999, background: 'var(--t-xp-track)', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${wordsProgressPct}%`,
+                    background: parentAssignedVocabRequiredToday === 0
+                      ? 'var(--t-brd)'
+                      : wordsRemainingToday === 0
+                        ? 'var(--t-success)'
+                        : 'var(--t-acc)',
+                    borderRadius: 999,
+                    transition: 'width 0.25s ease',
+                  }}
+                />
+              </div>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
             {words.length >= 1 && (

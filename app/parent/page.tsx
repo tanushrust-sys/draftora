@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
   BadgePlus,
+  ClipboardCheck,
   BookOpen,
   Check,
   ChevronRight,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { RoleAppShell } from '@/app/components/role-app-shell';
 import { StudentReportPanel, type StudentReportData } from '@/app/components/student-report-panel';
+import { ParentHomeworkPanel } from '@/app/components/parent-homework-panel';
 import { useAuth } from '@/app/context/AuthContext';
 import { hardSignOut, supabase } from '@/app/lib/supabase';
 import { authFetchJson } from '@/app/lib/auth-fetch';
@@ -30,7 +32,7 @@ import { normalizeStudentCode } from '@/app/lib/student-code';
 import { getWorkspacePalette } from '@/app/lib/workspace-palette';
 import { readWorkspaceMode, writeWorkspaceMode, type WorkspaceMode } from '@/app/lib/workspace-mode';
 
-type ParentTab = 'report' | 'students' | 'settings';
+type ParentTab = 'report' | 'students' | 'homework' | 'settings';
 
 type ParentLink = {
   studentId: string;
@@ -66,7 +68,7 @@ function readStoredTab(): ParentTab {
   if (typeof window === 'undefined') return 'report';
   try {
     const stored = localStorage.getItem(TAB_STORAGE_KEY);
-    return stored === 'students' || stored === 'settings' ? stored : 'report';
+    return stored === 'students' || stored === 'settings' || stored === 'homework' ? stored : 'report';
   } catch {
     return 'report';
   }
@@ -337,6 +339,7 @@ export default function ParentPage() {
   const tabs = [
     { key: 'report', label: 'Report', description: '', icon: BarChart3 },
     { key: 'students', label: 'Students', description: '', icon: Users },
+    { key: 'homework', label: 'Homework', description: '', icon: ClipboardCheck },
     { key: 'settings', label: 'Settings', description: '', icon: Settings },
   ] as const;
 
@@ -1002,6 +1005,16 @@ export default function ParentPage() {
     </div>
   );
 
+  const renderHomeworkTab = () => (
+    <ParentHomeworkPanel
+      authToken={authToken}
+      links={links}
+      selectedStudentId={selectedStudentId}
+      onSelectStudent={(studentId) => setSelectedStudentId(studentId)}
+      mode={mode}
+    />
+  );
+
   return (
     <RoleAppShell
       roleLabel="Parent app"
@@ -1020,6 +1033,7 @@ export default function ParentPage() {
       <div style={{ display: 'grid', gap: 16 }}>
         {activeTab === 'report' ? renderReportTab() : null}
         {activeTab === 'students' ? renderStudentsTab() : null}
+        {activeTab === 'homework' ? renderHomeworkTab() : null}
         {activeTab === 'settings' ? renderSettingsTab() : null}
       </div>
     </RoleAppShell>

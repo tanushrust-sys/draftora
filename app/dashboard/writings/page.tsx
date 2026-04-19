@@ -9,6 +9,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { fetchWithTimeout, FetchTimeoutError } from '@/app/lib/fetch-with-timeout';
 import { PromiseTimeoutError, withPromiseTimeout } from '@/app/lib/promise-with-timeout';
 import { ensureActiveSessionGracefully, supabase } from '@/app/lib/supabase';
+import { authFetchJson } from '@/app/lib/auth-fetch';
 import {
   mergeStoredWritingHistory,
   readStoredWritingHistory,
@@ -19,6 +20,7 @@ import { awardXP, getLocalDateKey, msUntilNextLocalMidnight, updateDailyStats, u
 import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
+import type { HomeworkTaskItem } from '@/app/lib/homework';
 import type { Writing } from '@/app/types/database';
 import { getDailyPrompt, getPromptPool } from '@/app/data/prompts';
 import {
@@ -49,6 +51,12 @@ type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
 type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_version: string };
 type AssistSuggestion = { type: 'tip' | 'example'; label: string; detail: string };
 type AssistResponse = { tips?: AssistSuggestion[]; examples?: AssistSuggestion[] };
+type StudentHomeworkResponse = {
+  today: string;
+  overallPct: number;
+  todayTasks: HomeworkTaskItem[];
+  upcoming: HomeworkTaskItem[];
+};
 type EditorBackup = {
   writingId?: string | null;
   title?: string | null;
@@ -263,6 +271,7 @@ const JOURNAL_LOAD_TIMEOUT_MS = 20000;
 const WRITING_SAVE_TIMEOUT_MS = 20000;
 const PROFILE_REFRESH_TIMEOUT_MS = 20000;
 const AUTOSAVE_DELAY_MS = 1600;
+const WRITING_WORD_LIMIT = 3000;
 
 function writingStatusTheme(status: Writing['status']) {
   if (status === 'reviewed') {
@@ -341,7 +350,21 @@ function logSafeError(label: string, error: unknown) {
     console.error(label, errorMessage);
     return;
   }
-  console.error(label, error);
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    const keys = Object.keys(record);
+    if (keys.length === 0) {
+      console.warn(label, 'Unknown non-Error object');
+      return;
+    }
+    try {
+      console.warn(label, JSON.stringify(record));
+    } catch {
+      console.warn(label, errorMessage);
+    }
+    return;
+  }
+  console.warn(label, errorMessage);
 }
 
 function getRequestedTab(searchParams: URLSearchParams | null | undefined): ActiveTab {
@@ -376,6 +399,25 @@ function buildDraftSignature(input: {
   category: string;
 }) {
   return JSON.stringify(input);
+}
+
+function trimToWordLimit(text: string, wordLimit: number) {
+  if (wordLimit <= 0) return '';
+  const matcher = /\S+/g;
+  let match: RegExpExecArray | null = null;
+  let words = 0;
+  let endIndex = text.length;
+
+  while ((match = matcher.exec(text)) !== null) {
+    words += 1;
+    if (words === wordLimit) {
+      endIndex = match.index + match[0].length;
+    } else if (words > wordLimit) {
+      return text.slice(0, endIndex);
+    }
+  }
+
+  return text;
 }
 
 function resolvePromptForCategory(category: string, ageGroup?: string) {
@@ -691,6 +733,8 @@ function WritingsContent() {
   const [aiAssistCopied, setAiAssistCopied] = useState(false);
   const [todayWords, setTodayWords] = useState(0);
   const [weekWords, setWeekWords]   = useState(0);
+  const [todayHomework, setTodayHomework] = useState<StudentHomeworkResponse | null>(null);
+  const [homeworkError, setHomeworkError] = useState('');
   // (daily limit removed — users can write unlimited pieces per day up to their total cap)
 
   // ── Journal tab state ──
@@ -1080,6 +1124,36 @@ function WritingsContent() {
   useEffect(() => {
     setWordCount(content.trim() ? content.trim().split(/\s+/).length : 0);
   }, [content]);
+
+  useEffect(() => {
+    if (!profile || profile.account_type !== 'student') {
+      setTodayHomework(null);
+      setHomeworkError('');
+      return;
+    }
+
+    let active = true;
+    const run = async () => {
+      setHomeworkError('');
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token ?? '';
+        if (!token) throw new Error('Missing session.');
+        const res = await authFetchJson<StudentHomeworkResponse>('/api/homework', { token });
+        if (!active) return;
+        setTodayHomework(res);
+      } catch (err) {
+        if (!active) return;
+        setTodayHomework(null);
+        setHomeworkError(err instanceof Error ? err.message : 'Could not load homework.');
+      }
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [profile]);
 
   // ── Load daily + weekly progress ──
   const loadProgress = useCallback(async () => {
@@ -1668,8 +1742,8 @@ function WritingsContent() {
       setError('Your session is not ready right now. Refresh the page and try again.');
       return;
     }
-    if (wordCount < 20) {
-      setError('Write at least 20 words before submitting.');
+    if (wordCount < minimumWordsToSubmit) {
+      setError(`Write at least ${minimumWordsToSubmit} words before submitting.`);
       return;
     }
     if (wordCount >= 30 && uniqueWordRatio(content) < 0.12) {
@@ -1911,6 +1985,34 @@ function WritingsContent() {
     };
   }, []);
 
+  const activeWritingHomework = useMemo(() => {
+    if (!todayHomework?.todayTasks?.length) return null;
+    return todayHomework.todayTasks.find((task) => (
+      Boolean(task.writing) &&
+      task.breakdown.writingRequired > task.breakdown.writingCompleted
+    )) ?? null;
+  }, [todayHomework]);
+  const homeworkLockedCategory = useMemo(() => {
+    const config = activeWritingHomework?.writing;
+    if (!config) return null;
+    const candidate = Object.entries(config.piecesByType || {})
+      .find(([style, count]) => count > 0 && CATEGORIES.includes(style))?.[0];
+    return candidate ?? null;
+  }, [activeWritingHomework]);
+  const parentAssignedWordTarget = useMemo(() => {
+    const config = activeWritingHomework?.writing;
+    if (!config) return null;
+    if (homeworkLockedCategory) {
+      const byType = Number(config.minWordsByType?.[homeworkLockedCategory] ?? 0);
+      if (Number.isFinite(byType) && byType > 0) return byType;
+    }
+    const general = Number(config.minWordsGeneral ?? 0);
+    if (Number.isFinite(general) && general > 0) return general;
+    return null;
+  }, [activeWritingHomework, homeworkLockedCategory]);
+  const minimumWordsToSubmit = Math.max(20, parentAssignedWordTarget ?? 20);
+  const isStyleLockedByHomework = Boolean(homeworkLockedCategory && activeWritingHomework);
+
   const startFresh = () => {
     if (profile) {
       try {
@@ -1932,7 +2034,12 @@ function WritingsContent() {
     loadProgress();
   };
 
+  const handleContentChange = useCallback((nextValue: string) => {
+    setContent(trimToWordLimit(nextValue, WRITING_WORD_LIMIT));
+  }, []);
+
   const handleCategoryChange = useCallback((nextCategory: string) => {
+    if (isStyleLockedByHomework) return;
     const nextPrompt = resolvePromptForCategory(nextCategory, profile?.age_group ?? undefined);
     setCategory(nextCategory);
     setPrompt(nextPrompt);
@@ -1942,7 +2049,7 @@ function WritingsContent() {
     }
 
     clearPromptContextFromUrl();
-  }, [profile, clearPromptContextFromUrl]);
+  }, [profile, clearPromptContextFromUrl, isStyleLockedByHomework]);
 
   const getNewPrompt = useCallback(() => {
     const next = getAlternatePrompt(category, prompt, profile?.age_group ?? undefined);
@@ -2082,6 +2189,14 @@ function WritingsContent() {
   const bestScore = useMemo(() => (chartData.length > 0 ? Math.max(...chartData.map(d => d.score)) : 0), [chartData]);
   const reviewedWordTotal = useMemo(() => reviewedWritings.reduce((s, w) => s + (w.word_count || 0), 0), [reviewedWritings]);
   const trend = useMemo(() => (chartData.length >= 2 ? chartData[chartData.length - 1].score - chartData[0].score : 0), [chartData]);
+
+  useEffect(() => {
+    if (!isStyleLockedByHomework || !homeworkLockedCategory) return;
+    if (category === homeworkLockedCategory) return;
+    setCategory(homeworkLockedCategory);
+    setPrompt(resolvePromptForCategory(homeworkLockedCategory, profile?.age_group ?? undefined));
+  }, [isStyleLockedByHomework, homeworkLockedCategory, category, profile?.age_group]);
+
   if (!profile) return (
     <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, borderRadius: 16, background: 'var(--t-btn)', animation: 'pulse 1.5s infinite' }} />
@@ -2239,6 +2354,29 @@ function WritingsContent() {
                     </div>
                   </div>
                 )}
+                {isStyleLockedByHomework && (
+                  <div style={{
+                    borderBottom: '1px solid var(--t-brd)',
+                    background: 'color-mix(in srgb, var(--t-mod-write) 6%, var(--t-card) 94%)',
+                    padding: '10px 20px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                  }}>
+                    <p style={{ fontSize: 12, color: 'var(--t-mod-write)', fontWeight: 700 }}>
+                      Homework style locked: {homeworkLockedCategory}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--t-tx2)', fontWeight: 700 }}>
+                      Parent target: {minimumWordsToSubmit} words minimum
+                    </p>
+                  </div>
+                )}
+                {homeworkError && !isStyleLockedByHomework && (
+                  <div style={{ borderBottom: '1px solid var(--t-brd)', padding: '8px 20px', color: 'var(--t-danger)', fontSize: 12, fontWeight: 600 }}>
+                    Homework check unavailable right now. Writing still works normally.
+                  </div>
+                )}
 
                 {/* Toolbar */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '14px 20px', borderBottom: '1px solid var(--t-brd)' }}>
@@ -2254,6 +2392,7 @@ function WritingsContent() {
                     <select
                       value={category}
                       onChange={e => { handleCategoryChange(e.target.value); }}
+                      disabled={isStyleLockedByHomework}
                       style={{ background: 'var(--t-bg)', padding: '4px 10px', borderRadius: 8, border: '1px solid var(--t-brd)', color: 'var(--t-tx2)', fontSize: 12, outline: 'none', cursor: 'pointer' }}
                     >
                       {CATEGORIES.map(c => <option key={c}>{c}</option>)}
@@ -2279,8 +2418,8 @@ function WritingsContent() {
                       Get New Prompt
                     </button>
                   </div>
-                  <span style={{ color: wordCount > 3000 ? 'var(--t-danger)' : 'var(--t-tx3)', fontSize: 12, padding: '4px 10px', background: 'var(--t-bg)', borderRadius: 8, border: `1px solid ${wordCount > 3000 ? 'var(--t-danger)' : 'var(--t-brd)'}` }}>
-                    {wordCount} / 3000 words
+                  <span style={{ color: wordCount >= WRITING_WORD_LIMIT ? 'var(--t-danger)' : 'var(--t-tx3)', fontSize: 12, padding: '4px 10px', background: 'var(--t-bg)', borderRadius: 8, border: `1px solid ${wordCount >= WRITING_WORD_LIMIT ? 'var(--t-danger)' : 'var(--t-brd)'}` }}>
+                    {wordCount} / {WRITING_WORD_LIMIT} words
                   </span>
                   {wordCount > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
@@ -2295,7 +2434,7 @@ function WritingsContent() {
                 {/* Text area */}
                 <textarea
                   value={content}
-                  onChange={e => setContent(e.target.value)}
+                  onChange={e => handleContentChange(e.target.value)}
                   placeholder={prompt ? 'Write your response to the prompt above…' : 'Start writing here…'}
                   disabled={status !== 'idle'}
                   style={{
@@ -2315,7 +2454,9 @@ function WritingsContent() {
                     </div>
                   ) : (
                     <p style={{ color: 'var(--t-tx3)', fontSize: 12 }}>
-                      {wordCount >= 20 ? 'Ready to submit for AI feedback ✓' : `${20 - wordCount} more words needed`}
+                      {wordCount >= minimumWordsToSubmit
+                        ? 'Ready to submit for AI feedback ✓'
+                        : `${minimumWordsToSubmit - wordCount} more words needed`}
                     </p>
                   )}
                   <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
@@ -2348,7 +2489,7 @@ function WritingsContent() {
                       <Sparkles style={{ width: 15, height: 15 }} />
                       {aiAssistLoading ? 'Thinking…' : 'AI Assist'}
                     </button>
-                    <button onClick={submitForFeedbackSafe} disabled={status !== 'idle' || wordCount < 20} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 20px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: (status !== 'idle' || wordCount < 20) ? 0.4 : 1 }}>
+                    <button onClick={submitForFeedbackSafe} disabled={status !== 'idle' || wordCount < minimumWordsToSubmit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 20px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: (status !== 'idle' || wordCount < minimumWordsToSubmit) ? 0.4 : 1 }}>
                       {['submitting', 'reviewing'].includes(status)
                         ? <><Sparkles style={{ width: 15, height: 15 }} />{status === 'reviewing' ? 'Getting Feedback…' : 'Submitting…'}</>
                         : <><Send style={{ width: 15, height: 15 }} />Submit for Feedback</>

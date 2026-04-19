@@ -604,3 +604,88 @@ create policy "Teachers can read class student writings" on public.writings
         and tcs.student_id = writings.user_id
     )
   );
+
+-- =========================================================
+-- HOMEWORK (parent-assigned one-time tasks + weekly timetable)
+-- =========================================================
+create table if not exists public.parent_homework_assignments (
+  id uuid primary key default gen_random_uuid(),
+  parent_id uuid references public.profiles(id) on delete cascade not null,
+  student_id uuid references public.profiles(id) on delete cascade not null,
+  assigned_date date not null,
+  due_date date not null,
+  homework_payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (due_date >= assigned_date)
+);
+
+create index if not exists parent_homework_assignments_parent_idx on public.parent_homework_assignments(parent_id, student_id, due_date);
+create index if not exists parent_homework_assignments_student_idx on public.parent_homework_assignments(student_id, due_date);
+
+alter table public.parent_homework_assignments enable row level security;
+
+drop policy if exists "Parents can read own homework assignments" on public.parent_homework_assignments;
+create policy "Parents can read own homework assignments" on public.parent_homework_assignments
+  for select using (auth.uid() = parent_id);
+
+drop policy if exists "Parents can insert own homework assignments" on public.parent_homework_assignments;
+create policy "Parents can insert own homework assignments" on public.parent_homework_assignments
+  for insert with check (auth.uid() = parent_id);
+
+drop policy if exists "Parents can update own homework assignments" on public.parent_homework_assignments;
+create policy "Parents can update own homework assignments" on public.parent_homework_assignments
+  for update using (auth.uid() = parent_id) with check (auth.uid() = parent_id);
+
+drop policy if exists "Parents can delete own homework assignments" on public.parent_homework_assignments;
+create policy "Parents can delete own homework assignments" on public.parent_homework_assignments
+  for delete using (auth.uid() = parent_id);
+
+drop policy if exists "Students can read own homework assignments" on public.parent_homework_assignments;
+create policy "Students can read own homework assignments" on public.parent_homework_assignments
+  for select using (auth.uid() = student_id);
+
+create table if not exists public.parent_homework_timetables (
+  id uuid primary key default gen_random_uuid(),
+  parent_id uuid references public.profiles(id) on delete cascade not null,
+  student_id uuid references public.profiles(id) on delete cascade not null,
+  weekly_plan jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(parent_id, student_id)
+);
+
+create index if not exists parent_homework_timetables_parent_idx on public.parent_homework_timetables(parent_id, student_id);
+create index if not exists parent_homework_timetables_student_idx on public.parent_homework_timetables(student_id);
+
+alter table public.parent_homework_timetables enable row level security;
+
+drop policy if exists "Parents can read own homework timetables" on public.parent_homework_timetables;
+create policy "Parents can read own homework timetables" on public.parent_homework_timetables
+  for select using (auth.uid() = parent_id);
+
+drop policy if exists "Parents can insert own homework timetables" on public.parent_homework_timetables;
+create policy "Parents can insert own homework timetables" on public.parent_homework_timetables
+  for insert with check (auth.uid() = parent_id);
+
+drop policy if exists "Parents can update own homework timetables" on public.parent_homework_timetables;
+create policy "Parents can update own homework timetables" on public.parent_homework_timetables
+  for update using (auth.uid() = parent_id) with check (auth.uid() = parent_id);
+
+drop policy if exists "Parents can delete own homework timetables" on public.parent_homework_timetables;
+create policy "Parents can delete own homework timetables" on public.parent_homework_timetables
+  for delete using (auth.uid() = parent_id);
+
+drop policy if exists "Students can read own homework timetables" on public.parent_homework_timetables;
+create policy "Students can read own homework timetables" on public.parent_homework_timetables
+  for select using (auth.uid() = student_id);
+
+drop trigger if exists parent_homework_assignments_updated_at on public.parent_homework_assignments;
+create trigger parent_homework_assignments_updated_at
+before update on public.parent_homework_assignments
+for each row execute function public.update_updated_at();
+
+drop trigger if exists parent_homework_timetables_updated_at on public.parent_homework_timetables;
+create trigger parent_homework_timetables_updated_at
+before update on public.parent_homework_timetables
+for each row execute function public.update_updated_at();

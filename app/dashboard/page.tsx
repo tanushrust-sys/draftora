@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTheme } from '@/app/context/ThemeContext';
+import { StudentHomeworkWidget } from '@/app/components/student-homework-widget';
 import { supabase } from '@/app/lib/supabase';
 import { getTitleForLevel, getXPProgress } from '@/app/types/database';
 import type { DailyStats } from '@/app/types/database';
@@ -34,7 +35,7 @@ type DashCache = {
 type DashboardRole = 'student' | 'teacher' | 'parent';
 
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
@@ -153,6 +154,7 @@ export default function DashboardPage() {
     : accountType === 'parent'
       ? 'Track progress, encourage practice, and stay close to the journey.'
       : greetingLine;
+  const authToken = session?.access_token ?? '';
   const cardSurface = {
     background: 'linear-gradient(165deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, var(--t-card) 62%)',
     border: '1px solid color-mix(in srgb, var(--t-brd) 72%, var(--t-acc) 28%)',
@@ -355,46 +357,49 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Daily goals */}
-          <div style={{ ...cardSurface, borderRadius: 26, padding: '1.8rem 1.85rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.6rem' }}>
-              <div style={{ width: 42, height: 42, borderRadius: 14, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Target style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
+          {accountType === 'student' ? (
+            <StudentHomeworkWidget authToken={authToken} />
+          ) : (
+            <div style={{ ...cardSurface, borderRadius: 26, padding: '1.8rem 1.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.6rem' }}>
+                <div style={{ width: 42, height: 42, borderRadius: 14, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Target style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
+                </div>
+                <div>
+                  <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 3 }}>Today&apos;s goals</p>
+                  <h3 style={{ color: 'var(--t-tx)', fontSize: 16, fontWeight: 800 }}>Keep today balanced</h3>
+                </div>
               </div>
-              <div>
-                <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 3 }}>Today&apos;s goals</p>
-                <h3 style={{ color: 'var(--t-tx)', fontSize: 16, fontWeight: 800 }}>Keep today balanced</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
+                    <span style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 600 }}>Words written</span>
+                    <span style={{ color: wordPct >= 100 ? wordsTone : 'var(--t-tx)', fontSize: 13, fontWeight: 700 }}>{words} / {wordGoal}</span>
+                  </div>
+                  <div style={{ height: 8, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${wordPct}%`, background: wordsTone, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
+                    <span style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 600 }}>Weekly vocab</span>
+                    <span style={{ color: vocabPct >= 100 ? vocabTone : 'var(--t-tx)', fontSize: 13, fontWeight: 700 }}>{weekVocabSaved} / {weekGoalTotal}</span>
+                  </div>
+                  <div style={{ height: 8, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${vocabPct}%`, background: vocabTone, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                  </div>
+                </div>
+                <div style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 92%, white 8%) 0%, color-mix(in srgb, var(--t-card2) 82%, black 18%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '1rem 1.2rem', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                    <Sparkles style={{ color: 'var(--t-acc)', width: 13, height: 13, flexShrink: 0 }} />
+                    <span style={{ color: 'var(--t-tx2)', fontSize: 12, fontWeight: 700 }}>Custom goal</span>
+                    {todayStats?.custom_goal_completed && <CheckCircle2 style={{ width: 13, height: 13, color: 'var(--t-success)', marginLeft: 'auto' }} />}
+                  </div>
+                  <p style={{ color: 'var(--t-tx3)', fontSize: 12.5, lineHeight: 1.6 }}>{profile.custom_daily_goal || 'Set a custom goal in Settings.'}</p>
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
-                  <span style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 600 }}>Words written</span>
-                  <span style={{ color: wordPct >= 100 ? wordsTone : 'var(--t-tx)', fontSize: 13, fontWeight: 700 }}>{words} / {wordGoal}</span>
-                </div>
-                <div style={{ height: 8, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${wordPct}%`, background: wordsTone, borderRadius: 99, transition: 'width 0.5s ease' }} />
-                </div>
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
-                  <span style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 600 }}>Weekly vocab</span>
-                  <span style={{ color: vocabPct >= 100 ? vocabTone : 'var(--t-tx)', fontSize: 13, fontWeight: 700 }}>{weekVocabSaved} / {weekGoalTotal}</span>
-                </div>
-                <div style={{ height: 8, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${vocabPct}%`, background: vocabTone, borderRadius: 99, transition: 'width 0.5s ease' }} />
-                </div>
-              </div>
-              <div style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 92%, white 8%) 0%, color-mix(in srgb, var(--t-card2) 82%, black 18%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '1rem 1.2rem', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                  <Sparkles style={{ color: 'var(--t-acc)', width: 13, height: 13, flexShrink: 0 }} />
-                  <span style={{ color: 'var(--t-tx2)', fontSize: 12, fontWeight: 700 }}>Custom goal</span>
-                  {todayStats?.custom_goal_completed && <CheckCircle2 style={{ width: 13, height: 13, color: 'var(--t-success)', marginLeft: 'auto' }} />}
-                </div>
-                <p style={{ color: 'var(--t-tx3)', fontSize: 12.5, lineHeight: 1.6 }}>{profile.custom_daily_goal || 'Set a custom goal in Settings.'}</p>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
       </div>
