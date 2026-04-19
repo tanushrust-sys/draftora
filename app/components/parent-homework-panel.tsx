@@ -260,7 +260,7 @@ export function ParentHomeworkPanel({
   const [success, setSuccess] = useState('');
   const [data, setData] = useState<ParentHomeworkResponse | null>(null);
 
-  const [selectedDates, setSelectedDates] = useState<string[]>(() => [new Date().toISOString().slice(0, 10)]);
+  const [selectedDates, setSelectedDates] = useState<string[]>(() => [toYmd(new Date())]);
   const [writingOn, setWritingOn] = useState(false);
   const [vocabOn, setVocabOn] = useState(false);
   const [writingCfg, setWritingCfg] = useState<WritingHomeworkConfig>(() => createDefaultWritingConfig());
@@ -274,10 +274,10 @@ export function ParentHomeworkPanel({
 
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyHomeworkPlan>(() => createDefaultWeeklyPlan());
 
-  const assignedDate = selectedDates[0] ?? new Date().toISOString().slice(0, 10);
+  const assignedDate = selectedDates[0] ?? toYmd(new Date());
   const selectedDatesSorted = useMemo(() => [...selectedDates].sort(), [selectedDates]);
   const selectedDatesText = useMemo(() => selectedDatesSorted.map((date) => formatHomeworkDate(date)).join(', '), [selectedDatesSorted]);
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayKey = toYmd(new Date());
 
   const selectedStudent = useMemo(() => links.find((l) => l.studentId === selectedStudentId) ?? null, [links, selectedStudentId]);
   const selectedWritingTypes = useMemo(
@@ -290,7 +290,8 @@ export function ParentHomeworkPanel({
     setLoading(true);
     setError('');
     try {
-      const res = await authFetchJson<ParentHomeworkResponse>(`/api/homework?studentId=${encodeURIComponent(selectedStudentId)}`, { token: authToken });
+      const today = toYmd(new Date());
+      const res = await authFetchJson<ParentHomeworkResponse>(`/api/homework?studentId=${encodeURIComponent(selectedStudentId)}&today=${encodeURIComponent(today)}`, { token: authToken });
       setData(res);
       setWeeklyPlan(normalizeWeeklyPlan(res.timetable));
     } catch (e) {
@@ -423,7 +424,7 @@ export function ParentHomeworkPanel({
   };
 
   const openAssignModal = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toYmd(new Date());
     setActiveAction('assign');
     setAssignStep(1);
     setTimetableModalOpen(false);
@@ -521,8 +522,8 @@ export function ParentHomeworkPanel({
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <ActionButton icon={<ClipboardCheck style={{ width: 16, height: 16 }} />} title="Assign Homework" active={activeAction === 'assign'} onClick={openAssignModal} />
-            <ActionButton icon={<CalendarDays style={{ width: 16, height: 16 }} />} title="Timetable" active={activeAction === 'timetable'} onClick={openTimetableModal} />
+            <ActionButton icon={<ClipboardCheck style={{ width: 16, height: 16 }} />} title="Assign Homework" active={activeAction === 'assign'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('assign'); }} />
+            <ActionButton icon={<CalendarDays style={{ width: 16, height: 16 }} />} title="Timetable" active={activeAction === 'timetable'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('timetable'); }} />
             <ActionButton icon={<BarChart3 style={{ width: 16, height: 16 }} />} title="View Performance" active={activeAction === 'performance'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('performance'); }} />
           </div>
 
@@ -565,7 +566,6 @@ export function ParentHomeworkPanel({
               </div>
 
               <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 14, background: 'var(--workspace-surface2)', display: 'grid', gap: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 850 }}>Recently assigned</div>
                 {(data?.recentAssignments ?? []).length === 0 ? (
                   <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No homework has been assigned yet.</div>
                 ) : (
@@ -1365,12 +1365,29 @@ export function ParentHomeworkPanel({
                         <div style={{ fontSize: 13, fontWeight: 800 }}>{day.weekday}, {formatHomeworkDate(day.date)}</div>
                         <div style={{ fontSize: 12, fontWeight: 900, color: day.completionRate >= 80 ? '#4dd4a8' : day.completionRate > 0 ? '#fbbf24' : 'var(--workspace-text3)' }}>{day.completionRate}%</div>
                       </div>
-                      <div style={{ height: 6, borderRadius: 999, background: 'var(--workspace-border)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${day.completionRate}%`, background: day.completionRate >= 80 ? '#4dd4a8' : day.completionRate > 0 ? '#fbbf24' : '#64748b' }} />
+                      <div style={{ height: 6, borderRadius: 999, background: 'var(--workspace-border)', overflow: 'hidden', display: 'flex' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${day.writingRequired > 0 && day.vocabRequired > 0
+                              ? Math.round((day.writingCompleted / day.writingRequired) * 50)
+                              : Math.round((day.writingRequired > 0 ? day.writingCompleted / day.writingRequired : 0) * 100)}%`,
+                            background: '#3b82f6',
+                          }}
+                        />
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${day.writingRequired > 0 && day.vocabRequired > 0
+                              ? Math.round((day.vocabCompleted / day.vocabRequired) * 50)
+                              : Math.round((day.vocabRequired > 0 ? day.vocabCompleted / day.vocabRequired : 0) * 100)}%`,
+                            background: '#ef4444',
+                          }}
+                        />
                       </div>
                       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--workspace-text2)' }}>
-                        <span>Writing {day.writingCompleted}/{day.writingRequired}</span>
-                        <span>Vocab {day.vocabCompleted}/{day.vocabRequired}</span>
+                        <span style={{ color: '#3b82f6' }}>Writing {day.writingCompleted}/{day.writingRequired}</span>
+                        <span style={{ color: '#ef4444' }}>Vocab {day.vocabCompleted}/{day.vocabRequired}</span>
                         <span>{day.assigned.length} task{day.assigned.length === 1 ? '' : 's'}</span>
                       </div>
                     </div>

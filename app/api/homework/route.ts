@@ -52,23 +52,31 @@ type TimetablePayload = {
 
 type SplitKind = 'writing' | 'vocab';
 
-function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
+function getLocalDateKey(date = new Date()) {
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-');
 }
 
-function getDateRange(days: number) {
+function getTodayKey() {
+  return getLocalDateKey();
+}
+
+function getDateRange(days: number, anchorDate?: string) {
+  const anchor = anchorDate ? new Date(`${anchorDate}T00:00:00`) : new Date();
   return Array.from({ length: days }, (_, idx) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (days - 1 - idx));
-    return d.toISOString().slice(0, 10);
+    const d = new Date(anchor);
+    d.setDate(anchor.getDate() - (days - 1 - idx));
+    return getLocalDateKey(d);
   });
 }
 
-function getFutureDates(days: number, startOffset = 1) {
+function getFutureDates(days: number, startOffset = 1, anchorDate?: string) {
+  const anchor = anchorDate ? new Date(`${anchorDate}T00:00:00`) : new Date();
   return Array.from({ length: days }, (_, idx) => {
-    const d = new Date();
-    d.setDate(d.getDate() + startOffset + idx);
-    return d.toISOString().slice(0, 10);
+    const d = new Date(anchor);
+    d.setDate(anchor.getDate() + startOffset + idx);
+    return getLocalDateKey(d);
   });
 }
 
@@ -281,9 +289,9 @@ function buildTimetableTasks(date: string, dayPlan: DayHomeworkPlan): HomeworkTa
   }));
 }
 
-async function buildStudentHomeworkSnapshot(studentId: string) {
-  const today = getTodayKey();
-  const start14 = getDateRange(14)[0];
+async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: string) {
+  const today = todayOverride ?? getTodayKey();
+  const start14 = getDateRange(14, today)[0];
 
   const [statsRes, writingsRes, assignmentsRes, timetableRes] = await Promise.all([
     adminSupabase.from('daily_stats').select('date, words_written, vocab_words_learned, custom_goal_completed').eq('user_id', studentId).gte('date', start14),
@@ -385,7 +393,7 @@ async function buildStudentHomeworkSnapshot(studentId: string) {
     })),
   );
 
-  const upcomingFromTimetable = getFutureDates(7)
+  const upcomingFromTimetable = getFutureDates(7, 1, today)
     .flatMap((date) => {
       const dayKey = getHomeworkDayKey(new Date(`${date}T00:00:00`));
       const timetableTasks = buildTimetableTasks(date, weeklyPlan[dayKey]);
@@ -575,6 +583,11 @@ async function handleParentGet(request: NextRequest, userId: string) {
     return NextResponse.json({ error: 'You cannot view that student.' }, { status: 403 });
   }
 
+  const todayOverride = (() => {
+    const value = new URL(request.url).searchParams.get('today');
+    return typeof value === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) ? value : undefined;
+  })();
+
   const [studentRes, assignmentsRes, timetablePayload, snapshot] = await Promise.all([
     adminSupabase.from('profiles').select('id, username, level, streak, title, age_group').eq('id', studentId).maybeSingle(),
     (adminSupabase as any)
@@ -584,7 +597,7 @@ async function handleParentGet(request: NextRequest, userId: string) {
       .eq('student_id', studentId)
       .order('created_at', { ascending: false }),
     loadTimetable(userId, studentId),
-    buildStudentHomeworkSnapshot(studentId),
+    buildStudentHomeworkSnapshot(studentId, todayOverride),
   ]);
 
   if (studentRes.error || !studentRes.data || assignmentsRes.error) {
@@ -596,7 +609,7 @@ async function handleParentGet(request: NextRequest, userId: string) {
     homework_payload: normalizeHomeworkPayload(row.homework_payload),
   }));
 
-  const twoWeekDates = getDateRange(14);
+  const twoWeekDates = getDateRange(14, todayOverride);
   const performance = buildPerformance(twoWeekDates, timetablePayload.weeklyPlan, assignments, snapshot.statsByDate, snapshot.writingsByDate, timetablePayload.startDate);
 
   const recentAssignments = assignments.slice(0, 8).map((row) => ({
@@ -621,8 +634,8 @@ async function handleParentGet(request: NextRequest, userId: string) {
   });
 }
 
-async function handleStudentGet(userId: string) {
-  const snapshot = await buildStudentHomeworkSnapshot(userId);
+async function handleStudentGet(userId: string, todayOverride?: string) {
+  const snapshot = await buildStudentHomeworkSnapshot(userId, todayOverride);
   const overallPct = snapshot.todayTasks.length > 0
     ? Math.round(snapshot.todayTasks.reduce((sum, task) => sum + task.completionPct, 0) / snapshot.todayTasks.length)
     : 0;
@@ -642,11 +655,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const todayOverride = (() => {
+      const value = new URL(request.url).searchParams.get('today');
+      return typeof value === 'string' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) ? value : undefined;
+    })();
+
     if (auth.auth.profile.account_type === 'parent') {
       return await handleParentGet(request, auth.auth.userId);
     }
 
-    return await handleStudentGet(auth.auth.userId);
+    return await handleStudentGet(auth.auth.userId, todayOverride);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not load homework.' }, { status: 500 });
   }

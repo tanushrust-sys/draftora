@@ -17,6 +17,13 @@ export function StudentHomeworkWidget({ authToken }: { authToken: string }) {
   const [error, setError] = useState('');
   const [data, setData] = useState<StudentHomeworkResponse | null>(null);
 
+  function toYmd(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   useEffect(() => {
     if (!authToken) {
       setLoading(false);
@@ -28,7 +35,8 @@ export function StudentHomeworkWidget({ authToken }: { authToken: string }) {
       setLoading(true);
       setError('');
       try {
-        const res = await authFetchJson<StudentHomeworkResponse>('/api/homework', { token: authToken });
+        const today = toYmd(new Date());
+        const res = await authFetchJson<StudentHomeworkResponse>(`/api/homework?today=${encodeURIComponent(today)}`, { token: authToken });
         if (!active) return;
         setData(res);
       } catch (e) {
@@ -103,8 +111,8 @@ export function StudentHomeworkWidget({ authToken }: { authToken: string }) {
                 <div style={{ fontSize: 12, color: 'var(--t-tx3)', whiteSpace: 'nowrap' }}>{formatHomeworkDate(task.dueDate)}</div>
               </div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--t-tx2)' }}>
-                {task.writing ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><FileText style={{ width: 12, height: 12 }} /> Writing {task.breakdown.writingCompleted}/{task.breakdown.writingRequired}</span> : null}
-                {task.vocab ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><BookOpen style={{ width: 12, height: 12 }} /> Vocab {task.breakdown.vocabCompleted}/{task.breakdown.vocabRequired}</span> : null}
+                {task.writing ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#3b82f6' }}><FileText style={{ width: 12, height: 12 }} /> Writing {task.breakdown.writingCompleted}/{task.breakdown.writingRequired}</span> : null}
+                {task.vocab ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#ef4444' }}><BookOpen style={{ width: 12, height: 12 }} /> Vocab {task.breakdown.vocabCompleted}/{task.breakdown.vocabRequired}</span> : null}
                 {task.breakdown.drillRequired ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>{task.breakdown.drillCompleted ? <CheckCircle2 style={{ width: 12, height: 12, color: '#22c55e' }} /> : <Sparkles style={{ width: 12, height: 12, color: '#f59e0b' }} />} Drill</span> : null}
               </div>
               <div style={{ height: 6, borderRadius: 99, background: 'var(--t-xp-track)', overflow: 'hidden' }}>
