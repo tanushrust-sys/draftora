@@ -1,10 +1,12 @@
 // Universal AI provider adapter
 // Switch providers with: AI_PROVIDER=openai | anthropic  (defaults to openai)
-// OpenAI stays on gpt-4o-mini because it is the cheapest good OpenAI chat model.
+// OpenAI routing defaults:
+// - nano/fast -> gpt-5.4-nano (vocab + low-cost high-volume tasks)
+// - smart     -> gpt-5-mini   (feedback/coach/reports)
 // Anthropic defaults to Haiku 4.5 across tiers for cost control; override via AI_*_MODEL.
 //
-// Fast tier  → cheap / quick tasks (feedback, vocab, sentence check, progress)
-// Smart tier → richer reasoning    (coach chat)
+// Fast tier  → cheap / quick tasks (vocab, sentence check, progress)
+// Smart tier → higher-quality writing tasks (feedback, coach, reports)
 
 export type AIMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -21,7 +23,7 @@ export interface ChatOptions {
 
 // Default model names per provider — override via env vars if needed
 const DEFAULT_MODELS = {
-  openai:    { nano: 'gpt-4o-mini', fast: 'gpt-4o-mini', smart: 'gpt-4o-mini' },
+  openai:    { nano: 'gpt-5.4-nano', fast: 'gpt-5.4-nano', smart: 'gpt-5-mini' },
   anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-haiku-4-5-20251001' },
 };
 

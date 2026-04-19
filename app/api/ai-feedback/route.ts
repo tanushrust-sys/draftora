@@ -545,7 +545,7 @@ export async function POST(req: Request) {
         }
 
         const client = new OpenAI({ apiKey });
-        const model = process.env.AI_ASSIST_MODEL || process.env.AI_FAST_MODEL || 'gpt-4.1';
+        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5-mini';
         const completion = await client.chat.completions.create({
           model,
           temperature: 0.7,
@@ -617,7 +617,7 @@ ${trimmedContent}
 Return ONLY valid JSON with keys: overall, paragraph_feedback, rewritten_version.`;
 
     const raw = await chat({
-      tier: 'fast',
+      tier: 'smart',
       system,
       maxTokens: 2200,
       jsonMode: true,

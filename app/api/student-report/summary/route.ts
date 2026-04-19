@@ -93,7 +93,7 @@ Vocab:
 ${vocabLines}`;
 
   const summary = await chat({
-    tier: 'fast',
+    tier: 'smart',
     system: 'You write honest, specific, improvement-focused student progress notes for parents and teachers. Plain prose only.',
     messages: [{ role: 'user', content: prompt }],
     maxTokens: 240,

@@ -179,7 +179,7 @@ Return JSON:
 }`;
 
   const raw = await chat({
-    tier: 'fast',
+    tier: 'smart',
     system: 'You write structured student progress reports. Return only valid JSON, no markdown fences.',
     messages: [{ role: 'user', content: prompt }],
     maxTokens: 750,
