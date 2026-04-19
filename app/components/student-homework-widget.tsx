@@ -74,7 +74,7 @@ export function StudentHomeworkWidget({ authToken }: { authToken: string }) {
     <div style={{ borderRadius: 22, padding: '1.25rem', border: '1px solid color-mix(in srgb, var(--t-acc) 22%, var(--t-brd))', background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, color-mix(in srgb, var(--t-card) 86%, var(--t-acc) 14%) 100%)', boxShadow: '0 10px 24px color-mix(in srgb, var(--t-shadow) 16%, transparent)', display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
         <div>
-          <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 3 }}>You have homework to do</p>
+          <p style={{ color: 'var(--t-acc)', fontSize: 11, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 3 }}>Current homework</p>
           <h3 style={{ color: 'var(--t-tx)', fontSize: 34, fontWeight: 850, lineHeight: 1 }}>
             {totalToday > 0 ? `${totalToday} task${totalToday === 1 ? '' : 's'} today` : 'No required task today'}
           </h3>

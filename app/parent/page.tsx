@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
@@ -248,6 +248,13 @@ export default function ParentPage() {
   const [displayNameError, setDisplayNameError] = useState('');
   const [deleteState, setDeleteState] = useState<DeleteState>({ confirmText: '', busy: false, error: '' });
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const palette = useMemo(() => getWorkspacePalette(mode), [mode]);
   const savedDisplayName = useMemo(() => {
@@ -286,6 +293,7 @@ export default function ParentPage() {
     setLinksError('');
     try {
       const data = await authFetchJson<ParentLinksResponse>('/api/parent/links', { token: authToken });
+      if (!mountedRef.current) return;
       setLinks(data.links);
       setSelectedStudentId((current) => {
         const currentValid = current && data.links.some((link) => link.studentId === current);
@@ -293,9 +301,13 @@ export default function ParentPage() {
         return data.links[0]?.studentId ?? '';
       });
     } catch (error) {
-      setLinksError(error instanceof Error ? error.message : 'Could not load linked students.');
+      if (mountedRef.current) {
+        setLinksError(error instanceof Error ? error.message : 'Could not load linked students.');
+      }
     } finally {
-      setLinksLoading(false);
+      if (mountedRef.current) {
+        setLinksLoading(false);
+      }
     }
   }, [authToken]);
 
@@ -309,11 +321,16 @@ export default function ParentPage() {
       const data = await authFetchJson<StudentReportData>(`/api/student-report?studentId=${encodeURIComponent(studentId)}`, {
         token: authToken,
       });
+      if (!mountedRef.current) return;
       setReports((current) => ({ ...current, [studentId]: data }));
     } catch (error) {
-      setReportError(error instanceof Error ? error.message : 'Could not load the report.');
+      if (mountedRef.current) {
+        setReportError(error instanceof Error ? error.message : 'Could not load the report.');
+      }
     } finally {
-      setReportLoadingId((current) => (current === studentId ? '' : current));
+      if (mountedRef.current) {
+        setReportLoadingId((current) => (current === studentId ? '' : current));
+      }
     }
   }, [authToken, reports]);
 

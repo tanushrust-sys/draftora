@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminSupabase, requireRouteAuth } from '@/app/lib/server-auth';
 import { chat, extractJSON } from '@/app/lib/ai-provider';
 
-const REPORT_CACHE_VERSION = 2;
+const REPORT_CACHE_VERSION = 3;
 
 function getLastSevenDates() {
   return Array.from({ length: 7 }, (_, index) => {
@@ -140,7 +140,7 @@ async function generateAiFeedback(
     };
   }
 
-  const prompt = `You are generating a structured student writing progress report for a parent or teacher. Return ONLY valid JSON with exactly these four keys. Base everything strictly on the data provided — do not invent strengths or positives that are not supported by the actual writing.
+  const prompt = `You are generating a sharply focused student writing progress report for a parent or teacher. Return ONLY valid JSON with exactly these four keys. Base every sentence strictly on the data provided — do not invent strengths, skills, or positives that are not supported by the actual writing.
 
 Student data:
 - Name: ${profile.username}
@@ -163,12 +163,15 @@ Recent vocabulary:
 ${vocabLines}
 
 IMPORTANT RULES:
-- The top snapshot must be about 90-110 words, written as one thoughtful paragraph.
-- The snapshot should focus on writing quality, structure, originality, vocabulary, and recurring weaknesses.
-- Do not make the snapshot feel like a stats report. Mention numbers only when they help explain the writing.
-- "feedback" should be 3-4 short bullet-ready sentences about what is going well in the student's writing. Focus on craft: voice, detail, structure, sentence flow, imagery, dialogue, originality, and response to the prompt. Do not turn this into a stats summary.
-- "improvements" should be 3-4 short bullet-ready sentences with specific next steps for the writing craft.
-- Be direct and honest. A teacher or parent needs real information.
+- Return strictly valid JSON only. Do not include markdown, explanation, or extra keys.
+- The snapshot must be one paragraph, 90-110 words, and read like a teacher's honest, evidence-based summary of the student's writing quality.
+- The snapshot should emphasize craft, clarity, structure, voice, originality, vocabulary use, and recurring weaknesses.
+- Do not make the snapshot feel like a stats report. Mention numbers only when they explain a writing strength or weakness.
+- "feedback" must be 3-4 concise teacher-style sentences about what is truly going well in the writing. Focus on specific craft evidence, not general praise.
+- "improvements" must be 3-4 short, explicit next steps for the writing craft, based only on the actual data and writing evidence.
+- "improvementSummary" must be 200-240 words of tightly written prose describing the single most important things this student needs to improve. Be direct, constructive, and data-driven. No bullet points. No gamification or motivational fluff. Do not open with the student's name.
+- If the student has weak or minimal output, say so clearly and give a strong, concrete improvement recommendation.
+- Do not invent progress or positive trends that are not supported by the data.
 
 Return JSON:
 {

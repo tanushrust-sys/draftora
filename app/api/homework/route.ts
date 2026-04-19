@@ -42,6 +42,12 @@ type AssignmentRow = {
 
 type TimetableRow = {
   weekly_plan: WeeklyHomeworkPlan;
+  updated_at: string;
+};
+
+type TimetablePayload = {
+  weeklyPlan: WeeklyHomeworkPlan;
+  startDate: string | null;
 };
 
 type SplitKind = 'writing' | 'vocab';
@@ -231,16 +237,19 @@ async function canParentAccessStudent(parentId: string, studentId: string) {
   return Boolean(data);
 }
 
-async function loadTimetable(parentId: string, studentId: string) {
+async function loadTimetable(parentId: string, studentId: string): Promise<TimetablePayload> {
   const { data } = await (adminSupabase as any)
     .from('parent_homework_timetables')
-    .select('weekly_plan')
+    .select('weekly_plan, updated_at')
     .eq('parent_id', parentId)
     .eq('student_id', studentId)
     .maybeSingle();
 
   const row = (data ?? null) as TimetableRow | null;
-  return normalizeWeeklyPlan(row?.weekly_plan ?? createDefaultWeeklyPlan());
+  return {
+    weeklyPlan: normalizeWeeklyPlan(row?.weekly_plan ?? createDefaultWeeklyPlan()),
+    startDate: row?.updated_at ? row.updated_at.slice(0, 10) : null,
+  };
 }
 
 function buildTimetableTasks(date: string, dayPlan: DayHomeworkPlan): HomeworkTaskItem[] {
@@ -411,7 +420,7 @@ async function buildStudentHomeworkSnapshot(studentId: string) {
   };
 }
 
-function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assignments: AssignmentRow[], statsByDate: Map<string, DailyStatsRow>, writingsByDate: Map<string, WritingRow[]>) {
+function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assignments: AssignmentRow[], statsByDate: Map<string, DailyStatsRow>, writingsByDate: Map<string, WritingRow[]>, timetableStartDate: string | null) {
   const dayRows: HomeworkPerformanceDay[] = [];
 
   let totalRate = 0;
@@ -429,10 +438,12 @@ function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assign
     const dayPlan = weeklyPlan[dow];
     const dayTasks: HomeworkTaskItem[] = [];
 
-    const timetableTasks = buildTimetableTasks(date, dayPlan);
-    for (const timetableTask of timetableTasks) {
-      const breakdown = evaluateTaskProgress({ writing: timetableTask.writing, vocab: timetableTask.vocab }, statsByDate.get(date) ?? null, writingsByDate.get(date) ?? []);
-      dayTasks.push({ ...timetableTask, breakdown, completionPct: completionPctForBreakdown(breakdown) });
+    if (!timetableStartDate || date >= timetableStartDate) {
+      const timetableTasks = buildTimetableTasks(date, dayPlan);
+      for (const timetableTask of timetableTasks) {
+        const breakdown = evaluateTaskProgress({ writing: timetableTask.writing, vocab: timetableTask.vocab }, statsByDate.get(date) ?? null, writingsByDate.get(date) ?? []);
+        dayTasks.push({ ...timetableTask, breakdown, completionPct: completionPctForBreakdown(breakdown) });
+      }
     }
 
     const oneTimeTasks = assignments.filter((a) => a.due_date === date);
@@ -467,20 +478,29 @@ function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assign
     );
 
     const completionRate = (() => {
-      const total = assignedTotals.writingRequired + assignedTotals.vocabRequired;
-      const completed = assignedTotals.writingCompleted + assignedTotals.vocabCompleted;
-      if (total <= 0) return 0;
-      return Math.round((completed / total) * 100);
+      const writingRate = assignedTotals.writingRequired > 0
+        ? assignedTotals.writingCompleted / assignedTotals.writingRequired
+        : null;
+      const vocabRate = assignedTotals.vocabRequired > 0
+        ? assignedTotals.vocabCompleted / assignedTotals.vocabRequired
+        : null;
+
+      if (writingRate === null && vocabRate === null) return 0;
+      if (writingRate === null) return Math.round(vocabRate * 100);
+      if (vocabRate === null) return Math.round(writingRate * 100);
+      return Math.round((writingRate * 0.5 + vocabRate * 0.5) * 100);
     })();
 
-    if (dayTasks.length > 0) {
-      daysWithAssigned += 1;
-      totalRate += completionRate;
-      totalWritingRequired += assignedTotals.writingRequired;
-      totalWritingCompleted += assignedTotals.writingCompleted;
-      totalVocabRequired += assignedTotals.vocabRequired;
-      totalVocabCompleted += assignedTotals.vocabCompleted;
+    if (dayTasks.length === 0) {
+      continue;
     }
+
+    daysWithAssigned += 1;
+    totalRate += completionRate;
+    totalWritingRequired += assignedTotals.writingRequired;
+    totalWritingCompleted += assignedTotals.writingCompleted;
+    totalVocabRequired += assignedTotals.vocabRequired;
+    totalVocabCompleted += assignedTotals.vocabCompleted;
 
     if (completionRate >= 80) {
       runningStreak += 1;
@@ -555,7 +575,7 @@ async function handleParentGet(request: NextRequest, userId: string) {
     return NextResponse.json({ error: 'You cannot view that student.' }, { status: 403 });
   }
 
-  const [studentRes, assignmentsRes, timetable, snapshot] = await Promise.all([
+  const [studentRes, assignmentsRes, timetablePayload, snapshot] = await Promise.all([
     adminSupabase.from('profiles').select('id, username, level, streak, title, age_group').eq('id', studentId).maybeSingle(),
     (adminSupabase as any)
       .from('parent_homework_assignments')
@@ -577,7 +597,7 @@ async function handleParentGet(request: NextRequest, userId: string) {
   }));
 
   const twoWeekDates = getDateRange(14);
-  const performance = buildPerformance(twoWeekDates, timetable, assignments, snapshot.statsByDate, snapshot.writingsByDate);
+  const performance = buildPerformance(twoWeekDates, timetablePayload.weeklyPlan, assignments, snapshot.statsByDate, snapshot.writingsByDate, timetablePayload.startDate);
 
   const recentAssignments = assignments.slice(0, 8).map((row) => ({
     id: row.id,
@@ -590,7 +610,7 @@ async function handleParentGet(request: NextRequest, userId: string) {
 
   return NextResponse.json({
     student: studentRes.data,
-    timetable,
+    timetable: timetablePayload.weeklyPlan,
     recentAssignments,
     todayTasks: snapshot.todayTasks,
     upcoming: snapshot.upcoming,
@@ -640,8 +660,11 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
   const studentId = typeof body.studentId === 'string' ? body.studentId.trim() : '';
+  const rawAssignedDates = Array.isArray(body.assignedDates) ? body.assignedDates : [];
+  const assignedDates = Array.from(new Set(rawAssignedDates
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter((value) => value.length > 0)));
   const assignedDate = typeof body.assignedDate === 'string' ? body.assignedDate : getTodayKey();
-  const dueDate = typeof body.dueDate === 'string' ? body.dueDate : assignedDate;
   const payload = normalizeHomeworkPayload(body.payload);
 
   if (!studentId) {
@@ -652,6 +675,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Add at least one homework category.' }, { status: 400 });
   }
 
+  const datesToInsert = assignedDates.length > 0 ? assignedDates : [assignedDate];
+  const rowsToInsert = datesToInsert.map((date) => ({
+    parent_id: auth.auth.userId,
+    student_id: studentId,
+    assigned_date: date,
+    due_date: date,
+    homework_payload: payload,
+  }));
+
   const allowed = await canParentAccessStudent(auth.auth.userId, studentId);
   if (!allowed) {
     return NextResponse.json({ error: 'You cannot assign homework to that student.' }, { status: 403 });
@@ -659,13 +691,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await (adminSupabase as any)
     .from('parent_homework_assignments')
-    .insert({
-      parent_id: auth.auth.userId,
-      student_id: studentId,
-      assigned_date: assignedDate,
-      due_date: dueDate,
-      homework_payload: payload,
-    });
+    .insert(rowsToInsert);
 
   if (error) {
     return NextResponse.json({ error: error.message || 'Could not save homework assignment.' }, { status: 500 });

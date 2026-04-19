@@ -73,6 +73,7 @@ export default function TeacherPage() {
   const [expandedStudentId, setExpandedStudentId] = useState<string>('');
   const [reports, setReports] = useState<Record<string, StudentReportData>>({});
   const [reportLoadingId, setReportLoadingId] = useState('');
+  const mountedRef = useRef(true);
   const [bulkRows, setBulkRows] = useState<Array<{ firstName: string; lastName: string }>>(() => Array.from({ length: 9 }, () => ({ firstName: '', lastName: '' })));
   const [bulkClassMode, setBulkClassMode] = useState<'existing' | 'new'>('existing');
   const [bulkClassId, setBulkClassId] = useState('');
@@ -83,6 +84,11 @@ export default function TeacherPage() {
   const [copiedDetailsKey, setCopiedDetailsKey] = useState('');
   const copiedDetailsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'class'; classId: string; name: string } | { type: 'student'; classId: string; studentId: string; name: string } | null>(null);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => readPrefs());
   const palette = useMemo(() => getWorkspacePalette(mode), [mode]);
   const paletteStyle = {
@@ -124,6 +130,7 @@ export default function TeacherPage() {
       authFetchJson<{ classes: TeacherClass[] }>('/api/teacher/classes', { token: authToken }),
     ])
       .then(([studentsResult, classesResult]) => {
+        if (!mountedRef.current) return;
         const loadedStudents = studentsResult.status === 'fulfilled' ? studentsResult.value.students : [];
         const loadedClasses = classesResult.status === 'fulfilled' ? classesResult.value.classes : [];
 
@@ -147,7 +154,9 @@ export default function TeacherPage() {
           setWorkspaceError(studentMessage || classMessage || 'Could not load the teacher workspace.');
         }
       })
-      .finally(() => setLoadingWorkspace(false));
+      .finally(() => {
+        if (mountedRef.current) setLoadingWorkspace(false);
+      });
   }, [authToken]);
 
   const loadReport = useCallback(async (studentId: string) => {
@@ -155,9 +164,12 @@ export default function TeacherPage() {
     setReportLoadingId(studentId);
     try {
       const report = await authFetchJson<StudentReportData>(`/api/student-report?studentId=${encodeURIComponent(studentId)}`, { token: authToken });
+      if (!mountedRef.current) return;
       setReports((current) => ({ ...current, [studentId]: report }));
     } finally {
-      setReportLoadingId('');
+      if (mountedRef.current) {
+        setReportLoadingId('');
+      }
     }
   }, [authToken, reports]);
   useEffect(() => { void loadReport(selectedStudentId); }, [loadReport, selectedStudentId]);

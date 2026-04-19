@@ -260,7 +260,7 @@ export function ParentHomeworkPanel({
   const [success, setSuccess] = useState('');
   const [data, setData] = useState<ParentHomeworkResponse | null>(null);
 
-  const [assignedDate, setAssignedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDates, setSelectedDates] = useState<string[]>(() => [new Date().toISOString().slice(0, 10)]);
   const [writingOn, setWritingOn] = useState(false);
   const [vocabOn, setVocabOn] = useState(false);
   const [writingCfg, setWritingCfg] = useState<WritingHomeworkConfig>(() => createDefaultWritingConfig());
@@ -273,6 +273,11 @@ export function ParentHomeworkPanel({
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => startOfMonth(new Date()));
 
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyHomeworkPlan>(() => createDefaultWeeklyPlan());
+
+  const assignedDate = selectedDates[0] ?? new Date().toISOString().slice(0, 10);
+  const selectedDatesSorted = useMemo(() => [...selectedDates].sort(), [selectedDates]);
+  const selectedDatesText = useMemo(() => selectedDatesSorted.map((date) => formatHomeworkDate(date)).join(', '), [selectedDatesSorted]);
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const selectedStudent = useMemo(() => links.find((l) => l.studentId === selectedStudentId) ?? null, [links, selectedStudentId]);
   const selectedWritingTypes = useMemo(
@@ -324,8 +329,7 @@ export function ParentHomeworkPanel({
         method: 'POST',
         body: {
           studentId: selectedStudentId,
-          assignedDate,
-          dueDate: assignedDate,
+          assignedDates: selectedDatesSorted,
           payload,
         },
       });
@@ -419,6 +423,7 @@ export function ParentHomeworkPanel({
   };
 
   const openAssignModal = () => {
+    const today = new Date().toISOString().slice(0, 10);
     setActiveAction('assign');
     setAssignStep(1);
     setTimetableModalOpen(false);
@@ -427,8 +432,9 @@ export function ParentHomeworkPanel({
     setWritingCfg(createDefaultWritingConfig());
     setVocabCfg(createDefaultVocabConfig());
     setParentNotes('');
+    setSelectedDates([today]);
     setAssignModalOpen(true);
-    setCalendarMonth(startOfMonth(fromYmd(assignedDate)));
+    setCalendarMonth(startOfMonth(fromYmd(today)));
     setError('');
     setSuccess('');
   };
@@ -448,7 +454,14 @@ export function ParentHomeworkPanel({
   };
 
   const selectCalendarDay = (date: Date) => {
-    setAssignedDate(toYmd(date));
+    const value = toYmd(date);
+    if (value < todayKey) return;
+    setSelectedDates((current) => {
+      if (current.includes(value)) {
+        return current.length > 1 ? current.filter((d) => d !== value) : current;
+      }
+      return [...current, value];
+    });
   };
 
   const calendarDays = useMemo(() => {
@@ -646,7 +659,10 @@ export function ParentHomeworkPanel({
 
                 {assignStep === 1 ? (
                   <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 12 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900 }}>Step 1: Date and schedule</div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ fontSize: 15, fontWeight: 900 }}>Step 1: Date and schedule</div>
+                      <div style={{ fontSize: 13, color: 'var(--workspace-text3)', lineHeight: 1.4 }}>You can pick one or more days for this assignment.</div>
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
                       <div
                         style={{
@@ -658,8 +674,8 @@ export function ParentHomeworkPanel({
                           textAlign: 'left',
                         }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--workspace-text3)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Assigned date</div>
-                        <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900 }}>{formatHomeworkDate(assignedDate)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--workspace-text3)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{selectedDates.length > 1 ? 'Assigned dates' : 'Assigned date'}</div>
+                        <div style={{ marginTop: 4, fontSize: 15, fontWeight: 900 }}>{selectedDatesText}</div>
                       </div>
                     </div>
 
@@ -693,25 +709,31 @@ export function ParentHomeworkPanel({
                         {calendarDays.map((day) => {
                           const value = toYmd(day);
                           const inCurrentMonth = day.getMonth() === calendarMonth.getMonth();
-                          const isAssigned = value === assignedDate;
+                          const isAssigned = selectedDates.includes(value);
+                          const isDisabled = value < todayKey;
                           return (
                             <button
                               key={value}
                               type="button"
                               onClick={() => selectCalendarDay(day)}
+                              disabled={isDisabled}
                               style={{
                                 borderRadius: 10,
                                 border: isAssigned ? '1px solid rgba(77,212,168,0.54)' : '1px solid var(--workspace-border)',
                                 background: isAssigned
                                   ? 'linear-gradient(135deg, rgba(77,212,168,0.24), rgba(103,232,249,0.16))'
-                                  : 'var(--workspace-surface2)',
-                                color: inCurrentMonth
-                                    ? 'var(--workspace-text)'
-                                    : 'var(--workspace-text3)',
+                                  : isDisabled
+                                    ? 'rgba(226,232,240,0.8)'
+                                    : 'var(--workspace-surface2)',
+                                color: isDisabled
+                                    ? 'var(--workspace-text3)'
+                                    : inCurrentMonth
+                                      ? 'var(--workspace-text)'
+                                      : 'var(--workspace-text3)',
                                 fontSize: 13,
                                 fontWeight: isAssigned ? 900 : 700,
                                 height: 36,
-                                cursor: 'pointer',
+                                cursor: isDisabled ? 'not-allowed' : 'pointer',
                               }}
                               title={formatHomeworkDate(value)}
                             >
@@ -892,7 +914,7 @@ export function ParentHomeworkPanel({
                   <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 12 }}>
                     <div style={{ fontSize: 15, fontWeight: 900 }}>Step 4: Review and assign</div>
                     <div style={{ borderRadius: 14, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface)', display: 'grid', gap: 8 }}>
-                      <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}><strong>Assigned:</strong> {formatHomeworkDate(assignedDate)}</div>
+                      <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}><strong>{selectedDates.length > 1 ? 'Assigned dates' : 'Assigned' }:</strong> {selectedDatesText}</div>
                       <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}><strong>Categories:</strong> {[writingOn ? 'Writing' : null, vocabOn ? 'Vocab' : null].filter(Boolean).join(' + ') || 'None'}</div>
                     </div>
                     <label style={{ display: 'grid', gap: 6 }}>
@@ -1377,7 +1399,7 @@ export function ParentHomeworkPanel({
           {data && activeAction !== 'performance' ? (
             <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 12, display: 'grid', gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 850 }}>Student-facing visibility</div>
-              <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>The child homepage now shows these as "You have homework to do" tasks with progress bars and upcoming due dates.</div>
+              <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>The child homepage now shows these as "Current homework" tasks with progress bars and upcoming due dates.</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {(data.todayTasks.length === 0 ? data.upcoming.slice(0, 2) : data.todayTasks.slice(0, 2)).map((task) => (
                   <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 10, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
