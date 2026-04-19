@@ -321,7 +321,9 @@ FINAL RESPONSE RULES
 - Be concrete, specific, and honest.
 - If there are real strengths, acknowledge them briefly before returning to the main coaching work.
 - If there are no real strengths, say so clearly.
-- Push the user toward a better rewrite, not empty reassurance.`;
+- Push the user toward a better rewrite, not empty reassurance.
+- Use emojis naturally where they fit, selected only from: 😀🔥🎯💪👏✔️⭐💯🥇🏆💛✨🌟⚡️💫😂🤣🤪😁
+- Do not spam emojis and do not stack them at the end.`;
 }
 
 export async function POST(req: Request) {

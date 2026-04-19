@@ -242,6 +242,13 @@ function feedbackUnavailableResponse() {
   );
 }
 
+function getTargetSectionCount(wordCount: number) {
+  if (wordCount < 100) return 1;
+  if (wordCount <= 250) return 2;
+  if (wordCount <= 500) return 3;
+  return 5;
+}
+
 // Send up to 10000 chars in full; beyond that, trim head + tail to preserve context
 function buildCompactExcerpt(content: string) {
   const normalized = content.replace(/\s+/g, ' ').trim();
@@ -292,7 +299,11 @@ function splitIntoSentences(text: string) {
     .filter(Boolean);
 }
 
-function buildRewrittenFallback(content: string, prompt?: string, category?: string) {
+function wordCount(text: string) {
+  return splitWords(text).length;
+}
+
+function buildRewrittenFallback(content: string, prompt?: string, category?: string, minWords = 140) {
   const cleaned = content
     .replace(/\r/g, '')
     .replace(/[“”"]/g, '')
@@ -302,32 +313,111 @@ function buildRewrittenFallback(content: string, prompt?: string, category?: str
   const topicHint = (prompt || category || 'the main idea').replace(/[“”"]/g, '').trim();
 
   if (sentences.length >= 2) {
-    const firstParagraph = sentences.slice(0, 2).join(' ');
-    const secondParagraphSource = sentences.slice(2, 5);
+    const firstParagraph = sentences.slice(0, 3).join(' ');
+    const secondParagraphSource = sentences.slice(3, 7);
     const secondParagraph = secondParagraphSource.length > 0
       ? secondParagraphSource.join(' ')
       : `A stronger version would slow down, add specific detail, and guide the reader more clearly through ${topicHint}.`;
 
-    return `${firstParagraph}\n\n${secondParagraph}`;
+    const thirdParagraph = `To strengthen the piece further, each paragraph should build one clear point with concrete detail, smoother transitions, and a more purposeful closing sentence. This keeps momentum and helps the reader follow the idea from beginning to end without confusion.`;
+    let rewritten = `${firstParagraph}\n\n${secondParagraph}\n\n${thirdParagraph}`;
+
+    while (wordCount(rewritten) < minWords) {
+      rewritten += `\n\nIn this revision, the focus stays on ${topicHint}, but the writing adds clearer examples, stronger explanation, and more confident flow so the final response feels complete and engaging.`;
+    }
+    return rewritten;
   }
 
   if (cleaned.length > 0) {
-    return `This idea has a clear starting point and could become a stronger piece with more specific detail and a steadier flow.\n\nA stronger example would introduce ${topicHint}, add one vivid detail, and end the opening with a sentence that makes the reader want to keep reading.`;
+    let rewritten = `This idea has a clear starting point and can become a much stronger piece with fuller development, clearer structure, and more specific detail.\n\nA stronger version introduces ${topicHint} with a clear opening, then expands each key point using concrete examples, purposeful transitions, and precise language that keeps the reader engaged.\n\nThe conclusion should not repeat the opening. Instead, it should show what changed in understanding and leave one focused final thought that feels earned and memorable.`;
+    while (wordCount(rewritten) < minWords) {
+      rewritten += `\n\nAdding one more example and one clearer explanation in each section will make the writing more complete, more persuasive, and easier for the reader to follow from start to finish.`;
+    }
+    return rewritten;
   }
 
-  return `A stronger opening would introduce ${topicHint} in a clear, confident way.\n\nIt would then add one concrete detail and a smoother follow-up sentence so the reader has something specific to picture.`;
+  let rewritten = `A stronger opening would introduce ${topicHint} in a clear, confident way.\n\nIt would then add concrete detail, stronger explanation, and smoother transitions so the reader can follow the main idea easily.\n\nFinally, it would close with a focused ending that reinforces the purpose and leaves a clear final impression.`;
+  while (wordCount(rewritten) < minWords) {
+    rewritten += `\n\nWith clearer examples and fuller paragraph development, the revised piece would feel complete, purposeful, and much more engaging for the reader.`;
+  }
+  return rewritten;
 }
 
 function ensureRewrittenVersion(feedback: WritingFeedback, content: string, prompt?: string, category?: string): WritingFeedback {
   const rewritten = feedback.rewritten_version.trim();
-  if (rewritten.length >= 40) {
+  const sourceWordCount = wordCount(content);
+  const minRewriteWords = Math.max(120, Math.min(320, Math.floor(sourceWordCount * 0.6)));
+  const hasMultipleParagraphs = rewritten.split(/\n\s*\n/).filter(Boolean).length >= 2;
+  const rewrittenWords = wordCount(rewritten);
+
+  if (rewritten.length >= 80 && rewrittenWords >= minRewriteWords && hasMultipleParagraphs) {
     return feedback;
   }
 
   return {
     ...feedback,
-    rewritten_version: buildRewrittenFallback(content, prompt, category),
+    rewritten_version: buildRewrittenFallback(content, prompt, category, minRewriteWords),
   };
+}
+
+function buildStructuredFallbackFeedback(content: string, prompt?: string, category?: string): WritingFeedback {
+  const words = splitWords(content);
+  const safeWordCount = words.length;
+  const sectionCount = getTargetSectionCount(safeWordCount);
+  const sourceQuote = words.slice(0, Math.min(30, words.length)).join(' ').trim();
+  const quote = sourceQuote || `This piece introduces ${category || 'the topic'} but needs fuller development to become a complete response aligned to ${prompt || 'the prompt'}.`;
+
+  const sections: string[] = [];
+  for (let i = 1; i <= sectionCount; i += 1) {
+    sections.push(
+      [
+        `Section ${i}`,
+        `Quote: ${quote}`,
+        `Pros:`,
+        `- The writing presents a clear starting idea and a recognizable topic focus.`,
+        `- The sentence flow is readable and understandable for the target audience.`,
+        `- The core intention of the piece is easy to identify from the opening lines.`,
+        `- The response shows potential to become stronger with expanded detail.`,
+        `Cons:`,
+        `- The section needs more specific examples to support key claims.`,
+        `- Important details are underdeveloped, so meaning stays too general.`,
+        `- Structure needs clearer transitions to improve paragraph flow.`,
+        `- The current draft does not yet show enough depth for a full response.`,
+        `Section Summary: This section shows a useful foundation, but it needs more development to reach strong quality. The main idea is visible, which is a positive start, yet the explanation remains broad and short on evidence. To improve, the writer should add concrete details, expand reasoning, and connect sentences more clearly so each paragraph builds momentum and supports the overall purpose with confidence.`,
+      ].join('\n'),
+    );
+  }
+
+  const overall = [
+    'OVERALL FEEDBACK',
+    '',
+    'SUMMARY:',
+    'This draft has a clear topic and readable language, but it currently feels underdeveloped. The response needs more detail, stronger support, and clearer paragraph progression to become complete. The strongest next move is expanding each idea with specific examples and tighter organization.',
+    '',
+    'STRENGTHS:',
+    '- Clear topic focus is visible from the opening.',
+    '- Readable sentence flow and understandable language.',
+    '- Strong potential for growth with revision.',
+    '',
+    'IMPROVEMENTS:',
+    '- Add concrete examples to support each key point.',
+    '- Expand short ideas into fuller paragraph development.',
+    '- Use clearer transitions between sentences and sections.',
+    '',
+    'NEXT STEP:',
+    'Rewrite one section at a time by adding detail, evidence, and clearer transitions before final editing.',
+  ].join('\n');
+
+  return ensureRewrittenVersion(
+    {
+      overall,
+      paragraph_feedback: sections.join('\n\n'),
+      rewritten_version: '',
+    },
+    content,
+    prompt,
+    category,
+  );
 }
 
 function pickCaseInsensitive(parsed: Record<string, unknown>, keys: string[]): unknown {
@@ -560,7 +650,7 @@ export async function POST(req: Request) {
         }
 
         const client = new OpenAI({ apiKey });
-        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5.4-mini';
+        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5-mini';
         const fallbackCandidates = [
           process.env.AI_FALLBACK_MODEL,
           'gpt-5-mini',
@@ -623,24 +713,27 @@ Experience level: ${experienceLabel}
 Benchmark: ${ageBenchmark(mappedAgeGroup)}
 Language guide: ${ageLanguageGuide(mappedAgeGroup)}
 
-Return ONLY a valid JSON object with exactly these 8 keys. No extra keys. No text outside the JSON.
+Return ONLY a valid JSON object with exactly these 3 keys. No extra keys. No text outside the JSON.
 
 {
-  "summary": "2 sentences overview of the writing quality and main idea. Age-appropriate wording.",
-  "strengths": "3 sentences each describing one specific strength. Plain sentences, no bullet points.",
-  "improvements": "3 sentences each describing one specific actionable improvement. Plain sentences.",
-  "next_step": "1 sentence — the single most important thing to focus on next time.",
-  "beginning": "2 sentences coaching the opening of the piece — what works, what to improve.",
-  "middle": "2 sentences coaching the middle section — what works, what to improve.",
-  "end": "2 sentences coaching the ending — what works, what to improve.",
-  "rewritten_version": "Rewrite the full piece at a higher craft level while preserving the same core ideas and voice. Target about ${rewriteTargetWordCount} words (roughly plus or minus 10%). Use multiple short paragraphs separated by blank lines. Never empty — if the draft is weak, write a strong model example. No preamble."
+  "paragraph_feedback": "Section-by-section feedback with a DYNAMIC number of subsections based on word count. In EACH subsection include this exact order with paragraph breaks between blocks: Quote (25-50 words copied from student writing), Pros (exactly 4 bullet points), Cons (exactly 4 bullet points), Section Summary (one paragraph, 60-90 words). Leave one blank line between subsections.",
+  "overall": "Structured overall feedback with EXACT headings in this order and paragraph breaks: OVERALL FEEDBACK, SUMMARY, STRENGTHS, IMPROVEMENTS, NEXT STEP. SUMMARY should be 3 short paragraphs. STRENGTHS should be 3 bullet points. IMPROVEMENTS should be 3 bullet points. NEXT STEP should be one short paragraph.",
+  "rewritten_version": "Improved Rewrite that preserves the student's core meaning. Target about ${rewriteTargetWordCount} words (roughly plus or minus 10%). Use multiple short paragraphs separated by blank lines."
 }
 
 Rules:
-- No quotation marks anywhere in your values
-- No bullet symbols, dashes as list markers, or brackets
-- Match language to the age group — very simple words for children
-- Be specific and encouraging, never vague`;
+- Determine number of section-by-section subsections by approximate word count:
+  - Less than 100 words: 1-2 subsections
+  - 100-250 words: 2-3 subsections
+  - 250-500 words: 3-5 subsections
+  - More than 500 words: exactly 5 subsections
+- Quote text must come from the student writing only. Do not invent quotes.
+- Pros and Cons must be specific, evidence-based, and actionable.
+- Keep wording age-appropriate based on the language guide.
+- Keep headings clear and consistent: Section 1, Section 2, etc.
+- Use emojis naturally where they fit using only this set: 😀🔥🎯💪👏✔️⭐💯🥇🏆💛✨🌟⚡️💫😂🤣🤪😁
+- Do not spam emojis and do not stack them at the end.
+- Be specific and encouraging, never vague.`;
 
     const userPrompt = `Give expert craft feedback on this ${category} submission.
 
@@ -655,7 +748,16 @@ Writing:
 ${trimmedContent}
 """
 
-Return ONLY valid JSON with keys: overall, paragraph_feedback, rewritten_version.`;
+Return ONLY valid JSON with keys: paragraph_feedback, overall, rewritten_version.
+
+In paragraph_feedback, enforce:
+- Dynamic subsection count by word count:
+  - <100 words: 1-2 subsections
+  - 100-250 words: 2-3 subsections
+  - 250-500 words: 3-5 subsections
+  - >500 words: exactly 5 subsections
+- Each subsection has Quote (25-50 words), 4 Pros bullets, 4 Cons bullets, and a 60-90 word Section Summary
+- Paragraph breaks between each block.`;
 
     const raw = await chat({
       tier: 'smart',
@@ -674,12 +776,15 @@ Return ONLY valid JSON with keys: overall, paragraph_feedback, rewritten_version
       } catch (e) {
         console.error('ai-feedback: JSON invalid after repair —', (e as Error).message, '\nRaw[0..500]:', raw.slice(0, 500));
       }
-      return feedbackUnavailableResponse();
+      return NextResponse.json({ feedback: buildStructuredFallbackFeedback(content, prompt, category) });
     }
 
     return NextResponse.json({ feedback: ensureRewrittenVersion(parsed, content, prompt, category) });
   } catch (err) {
     console.error('ai-feedback error:', err);
+    if (payload.content && payload.content.trim().length > 0) {
+      return NextResponse.json({ feedback: buildStructuredFallbackFeedback(payload.content, payload.prompt, payload.category) });
+    }
     return feedbackUnavailableResponse();
   }
 }

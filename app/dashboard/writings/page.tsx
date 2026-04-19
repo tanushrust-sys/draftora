@@ -62,6 +62,178 @@ type EditorPreference = {
   prompt?: string | null;
 };
 
+type OverallSectionLabel = 'SUMMARY' | 'STRENGTHS' | 'IMPROVEMENTS' | 'NEXT STEP' | 'OVERALL FEEDBACK';
+type ParsedOverallSection = { label: OverallSectionLabel; body: string };
+type ParsedSectionFieldLabel = 'QUOTE' | 'PROS' | 'CONS' | 'SECTION SUMMARY';
+type ParsedSectionBySectionBlock = {
+  title: string;
+  fields: Array<{ label: ParsedSectionFieldLabel; body: string }>;
+};
+
+const OVERALL_SECTION_ORDER: OverallSectionLabel[] = [
+  'OVERALL FEEDBACK',
+  'SUMMARY',
+  'STRENGTHS',
+  'IMPROVEMENTS',
+  'NEXT STEP',
+];
+
+function parseOverallFeedbackSections(raw: string): ParsedOverallSection[] {
+  const cleaned = raw
+    .replace(/\r/g, '\n')
+    .replace(/[“”"]/g, '')
+    .replace(/[•\[\]]/g, '')
+    .replace(/\t/g, ' ')
+    .replace(/[ ]{2,}/g, ' ')
+    .trim();
+
+  if (!cleaned) return [];
+
+  const headingRegex = /(OVERALL FEEDBACK|SUMMARY|STRENGTHS|IMPROVEMENTS|NEXT STEP)\s*:?/gi;
+  const matches = Array.from(cleaned.matchAll(headingRegex));
+
+  if (matches.length === 0) {
+    return [{ label: 'SUMMARY', body: cleaned }];
+  }
+
+  const parsed: ParsedOverallSection[] = [];
+  for (let i = 0; i < matches.length; i += 1) {
+    const match = matches[i];
+    const label = (match[1] || '').toUpperCase() as OverallSectionLabel;
+    const start = (match.index ?? 0) + match[0].length;
+    const end = i + 1 < matches.length ? (matches[i + 1].index ?? cleaned.length) : cleaned.length;
+    const body = cleaned.slice(start, end).trim();
+    if (body) parsed.push({ label, body });
+  }
+
+  if (parsed.length === 0) return [{ label: 'SUMMARY', body: cleaned }];
+
+  const hasExplicitSummary = parsed.some((section) => section.label === 'SUMMARY');
+  const normalized = parsed
+    .map((section) => (
+      section.label === 'OVERALL FEEDBACK' && !hasExplicitSummary
+        ? { ...section, label: 'SUMMARY' as OverallSectionLabel }
+        : section
+    ))
+    .filter((section) => section.label !== 'OVERALL FEEDBACK');
+
+  if (normalized.length === 0) return [{ label: 'SUMMARY', body: cleaned }];
+
+  return normalized.sort(
+    (a, b) => OVERALL_SECTION_ORDER.indexOf(a.label) - OVERALL_SECTION_ORDER.indexOf(b.label),
+  );
+}
+
+function splitOverallSectionBody(body: string) {
+  const normalized = body.replace(/[ ]{2,}/g, ' ').trim();
+  if (!normalized) return [];
+
+  const lineChunks = normalized
+    .split(/\n+/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  if (lineChunks.length > 1) return lineChunks;
+
+  return normalized
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+}
+
+function parseListLikeField(body: string) {
+  const normalized = body
+    .replace(/[\r\t]/g, ' ')
+    .replace(/^\s*\[/, '')
+    .replace(/\]\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!normalized) return [];
+
+  const byLine = normalized
+    .split(/\n+/)
+    .map((line) => line.replace(/^[\-\*\d\.\)\s]+/, '').trim())
+    .filter(Boolean);
+  if (byLine.length > 1) return byLine;
+
+  return normalized
+    .split(/\s*,\s*/)
+    .map((item) => item.replace(/^[\-\*\d\.\)\s]+/, '').trim())
+    .filter(Boolean);
+}
+
+function parseSectionBySectionFeedback(raw: string): ParsedSectionBySectionBlock[] {
+  const cleaned = raw
+    .replace(/\r/g, '\n')
+    .replace(/[“”"]/g, '')
+    .replace(/[{}]/g, ' ')
+    .replace(/\t/g, ' ')
+    .replace(/^\s*sectionbysection\s*:?\s*/i, '')
+    .trim();
+
+  if (!cleaned) return [];
+
+  const sectionHeadingRegex = /(?:^|\n)\s*(Section\s*\d+)\s*:?\s*/gi;
+  const sectionMatches = Array.from(cleaned.matchAll(sectionHeadingRegex));
+  const sectionChunks: Array<{ title: string; body: string }> = [];
+
+  if (sectionMatches.length > 0) {
+    for (let i = 0; i < sectionMatches.length; i += 1) {
+      const match = sectionMatches[i];
+      const title = (match[1] || `Section ${i + 1}`).trim();
+      const start = (match.index ?? 0) + match[0].length;
+      const end = i + 1 < sectionMatches.length ? (sectionMatches[i + 1].index ?? cleaned.length) : cleaned.length;
+      const body = cleaned.slice(start, end).trim();
+      sectionChunks.push({ title, body });
+    }
+  } else {
+    // Fallback: infer multiple sections from repeated Quote labels when
+    // the model omitted explicit "Section N" headings.
+    const quoteHeadingRegex = /(?:^|\n)\s*Quote\s*:/gi;
+    const quoteMatches = Array.from(cleaned.matchAll(quoteHeadingRegex));
+    if (quoteMatches.length > 1) {
+      for (let i = 0; i < quoteMatches.length; i += 1) {
+        const start = quoteMatches[i].index ?? 0;
+        const end = i + 1 < quoteMatches.length ? (quoteMatches[i + 1].index ?? cleaned.length) : cleaned.length;
+        const body = cleaned.slice(start, end).trim();
+        sectionChunks.push({ title: `Section ${i + 1}`, body });
+      }
+    } else {
+      sectionChunks.push({ title: 'Section 1', body: cleaned });
+    }
+  }
+
+  const fieldRegex = /(Quote|Pros|Cons|Section Summary)\s*:/gi;
+  const parsed = sectionChunks.map((chunk, idx) => {
+    const matches = Array.from(chunk.body.matchAll(fieldRegex));
+    if (matches.length === 0) {
+      return {
+        title: chunk.title || `Section ${idx + 1}`,
+        fields: [{ label: 'SECTION SUMMARY' as ParsedSectionFieldLabel, body: chunk.body }],
+      };
+    }
+
+    const fields: Array<{ label: ParsedSectionFieldLabel; body: string }> = [];
+    for (let i = 0; i < matches.length; i += 1) {
+      const match = matches[i];
+      const rawLabel = (match[1] || '').toUpperCase();
+      const label = rawLabel === 'SECTION SUMMARY'
+        ? 'SECTION SUMMARY'
+        : (rawLabel as ParsedSectionFieldLabel);
+      const start = (match.index ?? 0) + match[0].length;
+      const end = i + 1 < matches.length ? (matches[i + 1].index ?? chunk.body.length) : chunk.body.length;
+      const body = chunk.body.slice(start, end).trim();
+      if (body) fields.push({ label, body });
+    }
+
+    return {
+      title: chunk.title || `Section ${idx + 1}`,
+      fields: fields.length > 0 ? fields : [{ label: 'SECTION SUMMARY', body: chunk.body }],
+    };
+  });
+
+  return parsed;
+}
+
 function isUnavailableFeedback(feedback: WritingFeedback | null | undefined) {
   if (!feedback) return false;
   const overall = feedback.overall.toLowerCase();
@@ -2343,20 +2515,16 @@ function WritingsContent() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, alignItems: 'start' }}>
                       {/* Overall Feedback — structured */}
                       {(() => {
-                        const clean = (s: string) => s.replace(/"/g, '').replace(/[•\[\]]/g, '').replace(/\s{2,}/g, ' ').trim();
-                        const toParas = (s: string) => clean(s).split(/\n+|(?<=[.!?])\s+(?=[A-Z])/).map(l => l.trim()).filter(Boolean);
-                        const blocks = feedback.overall.split(/\n(?=SUMMARY:|STRENGTHS:|IMPROVEMENTS:|NEXT STEP:)/);
+                        const sections = parseOverallFeedbackSections(feedback.overall);
                         return (
                           <div style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column' }}>
                             <p style={{ color: 'var(--t-tx3)', fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10, flexShrink: 0 }}>Overall Feedback</p>
                             <div style={{ overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: '18rem' }}>
-                              {blocks.map((block, i) => {
-                                const colonIdx = block.indexOf(':');
-                                if (colonIdx === -1) return <p key={i} style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--t-tx2)', margin: 0 }}>{clean(block)}</p>;
-                                const label = block.slice(0, colonIdx).trim();
-                                const rawBody = block.slice(colonIdx + 1).trim();
+                              {sections.map((section, i) => {
+                                const label = section.label;
+                                const rawBody = section.body;
                                 const labelColor = label === 'STRENGTHS' ? 'var(--t-success)' : label === 'IMPROVEMENTS' ? 'var(--t-warning)' : label === 'NEXT STEP' ? 'var(--t-acc)' : 'var(--t-tx2)';
-                                const paras = toParas(rawBody);
+                                const paras = splitOverallSectionBody(rawBody);
                                 return (
                                   <div key={i} style={{ paddingTop: i > 0 ? 14 : 0, marginTop: i > 0 ? 14 : 0, borderTop: i > 0 ? '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)' : 'none' }}>
                                     <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', color: labelColor, textTransform: 'uppercase', marginBottom: 7 }}>{label}</p>
@@ -2368,6 +2536,9 @@ function WritingsContent() {
                                   </div>
                                 );
                               })}
+                              {sections.length === 0 && (
+                                <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--t-tx2)', margin: 0 }}>{feedback.overall.replace(/"/g, '').trim()}</p>
+                              )}
                             </div>
                           </div>
                         );
@@ -2377,13 +2548,38 @@ function WritingsContent() {
                       <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column' }}>
                         <p style={{ color: 'var(--t-acc)', fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10, flexShrink: 0 }}>Section by Section</p>
                         <div style={{ overflowY: 'auto', paddingRight: 4, maxHeight: '18rem' }}>
-                          {feedback.paragraph_feedback.replace(/"/g, '').split(/\n\s*\n/).map((section, i, arr) => (
-                            <div key={i} style={{ marginBottom: i < arr.length - 1 ? '1rem' : 0 }}>
-                              {section.trim().split(/(?<=[.!?])\s+(?=[A-Z])/).map((sent, j) => (
-                                <p key={j} style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--t-tx2)', margin: 0, marginBottom: 6 }}>{sent.trim()}</p>
-                              ))}
-                            </div>
-                          ))}
+                          {(() => {
+                            const parsedSections = parseSectionBySectionFeedback(feedback.paragraph_feedback);
+                            if (parsedSections.length === 0) {
+                              return <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--t-tx3)', margin: 0 }}>No section-by-section notes available.</p>;
+                            }
+
+                            return parsedSections.map((section, i) => (
+                              <div key={i} style={{ paddingTop: i > 0 ? 14 : 0, marginTop: i > 0 ? 14 : 0, borderTop: i > 0 ? '1px solid color-mix(in srgb, var(--t-brd-a) 60%, transparent)' : 'none' }}>
+                                <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--t-acc)', textTransform: 'uppercase', marginBottom: 7 }}>{section.title.toUpperCase()}</p>
+                                {section.fields.map((field, j) => {
+                                  const labelColor = field.label === 'PROS'
+                                    ? 'var(--t-success)'
+                                    : field.label === 'CONS'
+                                      ? 'var(--t-warning)'
+                                      : 'var(--t-tx2)';
+                                  const items = (field.label === 'PROS' || field.label === 'CONS')
+                                    ? parseListLikeField(field.body)
+                                    : splitOverallSectionBody(field.body);
+                                  return (
+                                    <div key={j} style={{ marginBottom: j < section.fields.length - 1 ? 10 : 0 }}>
+                                      <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', color: labelColor, textTransform: 'uppercase', marginBottom: 6 }}>{field.label}</p>
+                                      {items.map((item, k) => (
+                                        <p key={k} style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--t-tx2)', margin: 0, marginBottom: 6 }}>
+                                          {(field.label === 'PROS' || field.label === 'CONS') ? `• ${item}` : item}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ));
+                          })()}
                         </div>
                       </div>
 
@@ -2579,24 +2775,17 @@ function WritingsContent() {
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, alignItems: 'start' }}>
                               {(() => {
-                                const clean = (s: string) => s.replace(/"/g, '').replace(/[•\[\]]/g, '').replace(/\s{2,}/g, ' ').trim();
-                                const toParas = (s: string) => clean(s).split(/\n+|(?<=[.!?])\s+(?=[A-Z])/).map(l => l.trim()).filter(Boolean);
-                                const blocks = w.feedback.split(/\n(?=SUMMARY:|STRENGTHS:|IMPROVEMENTS:|NEXT STEP:)/);
+                                const sections = parseOverallFeedbackSections(w.feedback);
 
                                 return (
                                   <div style={{ background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column' }}>
                                     <p style={{ color: 'var(--t-tx3)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8, flexShrink: 0 }}>Overall Feedback</p>
                                     <div style={{ overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column', gap: 0, maxHeight: '18rem' }}>
-                                      {blocks.map((block, i) => {
-                                        const colonIdx = block.indexOf(':');
-                                        if (colonIdx === -1) {
-                                          return <p key={i} style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--t-tx2)', margin: 0 }}>{clean(block)}</p>;
-                                        }
-
-                                        const label = block.slice(0, colonIdx).trim();
-                                        const rawBody = block.slice(colonIdx + 1).trim();
+                                      {sections.map((section, i) => {
+                                        const label = section.label;
+                                        const rawBody = section.body;
                                         const labelColor = label === 'STRENGTHS' ? 'var(--t-success)' : label === 'IMPROVEMENTS' ? 'var(--t-warning)' : label === 'NEXT STEP' ? 'var(--t-acc)' : 'var(--t-tx2)';
-                                        const paras = toParas(rawBody);
+                                        const paras = splitOverallSectionBody(rawBody);
 
                                         return (
                                           <div key={i} style={{ paddingTop: i > 0 ? 12 : 0, marginTop: i > 0 ? 12 : 0, borderTop: i > 0 ? '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)' : 'none' }}>
@@ -2609,6 +2798,9 @@ function WritingsContent() {
                                           </div>
                                         );
                                       })}
+                                      {sections.length === 0 && (
+                                        <p style={{ fontSize: 13, lineHeight: 1.72, color: 'var(--t-tx2)', margin: 0 }}>{(w.feedback || '').replace(/"/g, '').trim()}</p>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -2617,14 +2809,38 @@ function WritingsContent() {
                               <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column' }}>
                                 <p style={{ color: 'var(--t-acc)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8, flexShrink: 0 }}>Section by Section</p>
                                 <div style={{ overflowY: 'auto', paddingRight: 4, maxHeight: '18rem' }}>
-                                  {(w.improvements || '').replace(/"/g, '').split(/\n\s*\n/).filter(Boolean).map((section, i, arr) => (
-                                    <div key={i} style={{ marginBottom: i < arr.length - 1 ? '1rem' : 0 }}>
-                                      {section.trim().split(/(?<=[.!?])\s+(?=[A-Z])/).map((sent, j) => (
-                                        <p key={j} style={{ fontSize: 13, lineHeight: 1.72, color: 'var(--t-tx2)', margin: 0, marginBottom: 6 }}>{sent.trim()}</p>
-                                      ))}
-                                    </div>
-                                  ))}
-                                  {!w.improvements && <p style={{ fontSize: 13, lineHeight: 1.72, color: 'var(--t-tx3)', margin: 0 }}>No section-by-section notes saved.</p>}
+                                  {(() => {
+                                    const parsedSections = parseSectionBySectionFeedback(w.improvements || '');
+                                    if (parsedSections.length === 0) {
+                                      return <p style={{ fontSize: 13, lineHeight: 1.72, color: 'var(--t-tx3)', margin: 0 }}>No section-by-section notes saved.</p>;
+                                    }
+
+                                    return parsedSections.map((section, i) => (
+                                      <div key={i} style={{ paddingTop: i > 0 ? 12 : 0, marginTop: i > 0 ? 12 : 0, borderTop: i > 0 ? '1px solid color-mix(in srgb, var(--t-brd-a) 60%, transparent)' : 'none' }}>
+                                        <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', color: 'var(--t-acc)', textTransform: 'uppercase', marginBottom: 6 }}>{section.title.toUpperCase()}</p>
+                                        {section.fields.map((field, j) => {
+                                          const labelColor = field.label === 'PROS'
+                                            ? 'var(--t-success)'
+                                            : field.label === 'CONS'
+                                              ? 'var(--t-warning)'
+                                              : 'var(--t-tx2)';
+                                          const items = (field.label === 'PROS' || field.label === 'CONS')
+                                            ? parseListLikeField(field.body)
+                                            : splitOverallSectionBody(field.body);
+                                          return (
+                                            <div key={j} style={{ marginBottom: j < section.fields.length - 1 ? 10 : 0 }}>
+                                              <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', color: labelColor, textTransform: 'uppercase', marginBottom: 6 }}>{field.label}</p>
+                                              {items.map((item, k) => (
+                                                <p key={k} style={{ fontSize: 13, lineHeight: 1.72, color: 'var(--t-tx2)', margin: 0, marginBottom: 6 }}>
+                                                  {(field.label === 'PROS' || field.label === 'CONS') ? `• ${item}` : item}
+                                                </p>
+                                              ))}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ));
+                                  })()}
                                 </div>
                               </div>
 

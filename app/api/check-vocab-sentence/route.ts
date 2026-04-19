@@ -112,6 +112,61 @@ function parseVocabularySuggestions(value: unknown): string[] {
   return output;
 }
 
+function stableBucket10(input: string) {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % 10;
+}
+
+function getMeaningOverlap(meaning: string, sentence: string) {
+  const keywords = extractKeywords(meaning);
+  if (!keywords.length) return 0;
+  const hits = keywords.filter((keyword) => new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(sentence));
+  return hits.length / keywords.length;
+}
+
+function hasPartialUnderstanding(word: string, meaning: string, sentence: string) {
+  const trimmed = sentence.trim();
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  const includesWord = sentenceUsesTargetWord(trimmed, word);
+  const overlap = getMeaningOverlap(meaning, trimmed);
+  return includesWord || overlap >= 0.1 || tokens.length >= 6;
+}
+
+function applyPartialUnderstandingBias(
+  feedback: SentenceFeedback,
+  word: string,
+  meaning: string,
+  sentence: string,
+  lowQualityHint: SentenceFeedback,
+) {
+  const partial = hasPartialUnderstanding(word, meaning, sentence);
+  if (!partial) return feedback;
+
+  // Keep clearly low-quality/gibberish attempts strict.
+  if (lowQualityHint.grade === 'incorrect' && !sentenceUsesTargetWord(sentence, word)) {
+    return feedback;
+  }
+
+  if (feedback.grade === 'correct' || feedback.grade === 'mostly correct') {
+    return feedback;
+  }
+
+  // Bias toward mostly correct in a stable 60/40 split for partial understanding.
+  const bucket = stableBucket10(`${word}::${meaning}::${sentence}`);
+  const promoteToMostlyCorrect = bucket < 6;
+  return {
+    ...feedback,
+    grade: promoteToMostlyCorrect ? 'mostly correct' : 'mostly incorrect',
+    correct: promoteToMostlyCorrect,
+    strengths: feedback.strengths || `You showed part of the meaning for "${word}".`,
+    improvements: feedback.improvements || `Nice attempt—add one clearer detail to prove the meaning of "${word}".`,
+    summary: feedback.summary || (promoteToMostlyCorrect ? 'Good partial understanding.' : 'Close attempt.'),
+  };
+}
+
 function buildVocabularySuggestions(word: string, meaning: string, sentence: string, seed: string[] = [], limit = 4) {
   const usedWords = toWordSet(sentence);
   const target = normalizeSuggestionWord(word);
@@ -425,6 +480,7 @@ Respond with ONLY valid JSON. No markdown, no backticks, no extra text.
 
 Core rules:
 - Judge whether the student shows they understand the word — not whether they use it perfectly.
+- If the student shows even partial understanding, favor "mostly correct" over "mostly incorrect" in approximately a 60/40 balance.
 - Use this four-step grading scale:
   - "correct" = the sentence uses the word naturally, clearly, accurately, and with enough context to prove the meaning.
   - "mostly correct" = the student clearly understands the word, but the sentence is a little thin, awkward, or slightly unfinished.
@@ -437,6 +493,8 @@ Core rules:
 - "improvements": if there is something worth improving, write one kind coaching tip (max 20 words). If sentence is strong, leave as empty string "".
 - At least one of strengths or improvements must be non-empty.
 - "summary" must be 5 words or fewer.
+- Use emojis naturally where they fit, chosen only from: 😀🔥🎯💪👏✔️⭐💯🥇🏆💛✨🌟⚡️💫😂🤣🤪😁
+- Do not spam emojis and do not stack them at the end.
 - "suggestion" leave as empty string always.
 - "vocabularySuggestions": return exactly 4 single-word upgraded vocabulary options the student could use next time.
 - Each vocabulary suggestion must be a real word (not a phrase, not categories, not labels).
@@ -459,24 +517,31 @@ Return exactly this JSON structure:
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await chat({
       tier: 'fast',
-      system: `Return strict JSON with keys: grade, correct, strengths, improvements, summary, suggestion, vocabularySuggestions. Be warm but honest. Use the four-step grading scale exactly: correct, mostly correct, mostly incorrect, incorrect. Full correct requires accurate usage plus enough context to prove meaning. Do not mark short template sentences as correct just because the target word appears. strengths: one genuine polite strength max 20 words, or empty string. improvements: one useful coaching tip max 20 words, or empty string if strong. summary: max 5 words. suggestion: always empty string. vocabularySuggestions: exactly 4 single-word upgrade words, not used in the student sentence and not equal to the target word.`,
+      system: `Return strict JSON with keys: grade, correct, strengths, improvements, summary, suggestion, vocabularySuggestions. Be warm but honest. Use the four-step grading scale exactly: correct, mostly correct, mostly incorrect, incorrect. Full correct requires accurate usage plus enough context to prove meaning. If there is partial understanding, prefer mostly correct about 60% of the time and mostly incorrect about 40% of the time. Do not mark short template sentences as correct just because the target word appears. strengths: one genuine polite strength max 20 words, or empty string. improvements: one useful coaching tip max 20 words, or empty string if strong. summary: max 5 words. Use emojis naturally where they fit from this set only: 😀🔥🎯💪👏✔️⭐💯🥇🏆💛✨🌟⚡️💫😂🤣🤪😁. Do not spam emojis and do not stack them at the end. suggestion: always empty string. vocabularySuggestions: exactly 4 single-word upgrade words, not used in the student sentence and not equal to the target word.`,
       maxTokens: 160,
       messages: [{ role: 'user', content: basePrompt }],
     });
 
     const normalized = normalizeFeedback(parseFeedbackPayload(raw));
     if (normalized) {
-      if (lowQualityHint.grade === 'incorrect') {
-        normalized.strengths = '';
-      }
-      normalized.vocabularySuggestions = buildVocabularySuggestions(
+      const biased = applyPartialUnderstandingBias(
+        normalized,
         word,
         meaning,
         sentence,
-        normalized.vocabularySuggestions,
+        lowQualityHint,
+      );
+      if (lowQualityHint.grade === 'incorrect') {
+        biased.strengths = '';
+      }
+      biased.vocabularySuggestions = buildVocabularySuggestions(
+        word,
+        meaning,
+        sentence,
+        biased.vocabularySuggestions,
         4,
       );
-      return normalized;
+      return biased;
     }
   }
 
