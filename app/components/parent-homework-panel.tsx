@@ -1399,7 +1399,7 @@ export function ParentHomeworkPanel({
           {data && activeAction !== 'performance' ? (
             <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 12, display: 'grid', gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 850 }}>Student-facing visibility</div>
-              <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>The child homepage now shows these as "Current homework" tasks with progress bars and upcoming due dates.</div>
+              <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>current homework</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {(data.todayTasks.length === 0 ? data.upcoming.slice(0, 2) : data.todayTasks.slice(0, 2)).map((task) => (
                   <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 10, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
