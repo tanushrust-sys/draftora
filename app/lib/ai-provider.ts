@@ -2,7 +2,7 @@
 // Switch providers with: AI_PROVIDER=openai | anthropic  (defaults to openai)
 // OpenAI routing defaults:
 // - nano/fast -> gpt-5.4-nano (vocab + low-cost high-volume tasks)
-// - smart     -> gpt-5-mini   (feedback/coach/reports)
+// - smart     -> gpt-4.1-mini (feedback/coach/reports; lower cost, similar quality)
 // Anthropic defaults to Haiku 4.5 across tiers for cost control; override via AI_*_MODEL.
 //
 // Fast tier  → cheap / quick tasks (vocab, sentence check, progress)
@@ -23,7 +23,7 @@ export interface ChatOptions {
 
 // Default model names per provider — override via env vars if needed
 const DEFAULT_MODELS = {
-  openai:    { nano: 'gpt-5.4-nano', fast: 'gpt-5.4-nano', smart: 'gpt-5-mini' },
+  openai:    { nano: 'gpt-5.4-nano', fast: 'gpt-5.4-nano', smart: 'gpt-4.1-mini' },
   anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-haiku-4-5-20251001' },
 };
 

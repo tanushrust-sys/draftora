@@ -382,7 +382,7 @@ export async function POST(req: Request) {
         vocab,
       ),
       messages,
-      maxTokens: 900,
+      maxTokens: 650,
     });
 
     return NextResponse.json({ response: text });

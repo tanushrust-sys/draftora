@@ -650,7 +650,7 @@ export async function POST(req: Request) {
         }
 
         const client = new OpenAI({ apiKey });
-        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5-mini';
+        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-4.1-mini';
         const fallbackCandidates = [
           process.env.AI_FALLBACK_MODEL,
           'gpt-5-mini',
@@ -667,7 +667,7 @@ export async function POST(req: Request) {
             completion = await client.chat.completions.create({
               model: candidate,
               temperature: 0.7,
-              max_tokens: 1100,
+              max_tokens: 700,
               messages: [
                 { role: 'system', content: AI_ASSIST_SYSTEM_PROMPT },
                 { role: 'user', content: userPrompt },
@@ -759,10 +759,18 @@ In paragraph_feedback, enforce:
 - Each subsection has Quote (25-50 words), 4 Pros bullets, 4 Cons bullets, and a 60-90 word Section Summary
 - Paragraph breaks between each block.`;
 
+    const feedbackMaxTokens = safeWordCount < 120
+      ? 950
+      : safeWordCount < 260
+        ? 1200
+        : safeWordCount < 520
+          ? 1500
+          : 1750;
+
     const raw = await chat({
       tier: 'smart',
       system,
-      maxTokens: 2200,
+      maxTokens: feedbackMaxTokens,
       jsonMode: true,
       messages: [{ role: 'user', content: userPrompt }],
     });
