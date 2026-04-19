@@ -486,8 +486,8 @@ function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assign
         : null;
 
       if (writingRate === null && vocabRate === null) return 0;
-      if (writingRate === null) return Math.round(vocabRate * 100);
-      if (vocabRate === null) return Math.round(writingRate * 100);
+      if (writingRate === null) return Math.round((vocabRate ?? 0) * 100);
+      if (vocabRate === null) return Math.round((writingRate ?? 0) * 100);
       return Math.round((writingRate * 0.5 + vocabRate * 0.5) * 100);
     })();
 
@@ -662,8 +662,8 @@ export async function POST(request: NextRequest) {
   const studentId = typeof body.studentId === 'string' ? body.studentId.trim() : '';
   const rawAssignedDates = Array.isArray(body.assignedDates) ? body.assignedDates : [];
   const assignedDates = Array.from(new Set(rawAssignedDates
-    .map((value) => (typeof value === 'string' ? value.trim() : ''))
-    .filter((value) => value.length > 0)));
+    .map((value: unknown) => (typeof value === 'string' ? value.trim() : ''))
+    .filter((value: string) => value.length > 0)));
   const assignedDate = typeof body.assignedDate === 'string' ? body.assignedDate : getTodayKey();
   const payload = normalizeHomeworkPayload(body.payload);
 
