@@ -203,7 +203,7 @@ function parseSectionBySectionFeedback(raw: string): ParsedSectionBySectionBlock
   }
 
   const fieldRegex = /(Quote|Pros|Cons|Section Summary)\s*:/gi;
-  const parsed = sectionChunks.map((chunk, idx) => {
+  const parsed: ParsedSectionBySectionBlock[] = sectionChunks.map((chunk, idx) => {
     const matches = Array.from(chunk.body.matchAll(fieldRegex));
     if (matches.length === 0) {
       return {
@@ -216,7 +216,7 @@ function parseSectionBySectionFeedback(raw: string): ParsedSectionBySectionBlock
     for (let i = 0; i < matches.length; i += 1) {
       const match = matches[i];
       const rawLabel = (match[1] || '').toUpperCase();
-      const label = rawLabel === 'SECTION SUMMARY'
+      const label: ParsedSectionFieldLabel = rawLabel === 'SECTION SUMMARY'
         ? 'SECTION SUMMARY'
         : (rawLabel as ParsedSectionFieldLabel);
       const start = (match.index ?? 0) + match[0].length;
@@ -227,7 +227,7 @@ function parseSectionBySectionFeedback(raw: string): ParsedSectionBySectionBlock
 
     return {
       title: chunk.title || `Section ${idx + 1}`,
-      fields: fields.length > 0 ? fields : [{ label: 'SECTION SUMMARY', body: chunk.body }],
+      fields: fields.length > 0 ? fields : [{ label: 'SECTION SUMMARY' as ParsedSectionFieldLabel, body: chunk.body }],
     };
   });
 
