@@ -1398,7 +1398,7 @@ export function ParentHomeworkPanel({
 
           {data && activeAction !== 'performance' ? (
             <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 12, display: 'grid', gap: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 850 }}>students current homework</div>
+              <div style={{ fontSize: 13, fontWeight: 850 }}>Students current homework</div>
               <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>student facing visibility</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {(data.todayTasks.length === 0 ? data.upcoming.slice(0, 2) : data.todayTasks.slice(0, 2)).map((task) => (
