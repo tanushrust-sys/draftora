@@ -216,6 +216,7 @@ export default function CoachPage() {
   const [conversationTitles, setConversationTitles] = useState<Record<string, string>>({});
   const [activeId, setActiveId]           = useState<string | null>(null);
   const [goalData, setGoalData]           = useState<GoalData | null>(null);
+  const [showTrainerLabels, setShowTrainerLabels] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
@@ -271,6 +272,14 @@ export default function CoachPage() {
   }, [profile]);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => setShowTrainerLabels(window.innerWidth > 1100);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   useEffect(() => {
     if (!profile || conversations.length === 0) return;
@@ -760,7 +769,7 @@ export default function CoachPage() {
                     }}
                   >
                     <TI style={{ width: 13, height: 13 }} />
-                    <span style={{ display: window?.innerWidth > 1100 ? undefined : 'none' }}>{t.label}</span>
+                    <span style={{ display: showTrainerLabels ? undefined : 'none' }}>{t.label}</span>
                   </button>
                 );
               })}
