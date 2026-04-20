@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, CalendarClock, CheckCircle2, FileText, Loader2, Sparkles } from 'lucide-react';
 import { authFetchJson } from '@/app/lib/auth-fetch';
 import { formatHomeworkDate, type HomeworkTaskItem } from '@/app/lib/homework';
@@ -24,34 +24,51 @@ export function StudentHomeworkWidget({ authToken }: { authToken: string }) {
     return `${year}-${month}-${day}`;
   }
 
-  useEffect(() => {
+  const loadHomeworkSnapshot = useCallback(async (silent = false) => {
     if (!authToken) {
       setLoading(false);
       return;
     }
-    let active = true;
-
-    const run = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const today = toYmd(new Date());
-        const res = await authFetchJson<StudentHomeworkResponse>(`/api/homework?today=${encodeURIComponent(today)}`, { token: authToken });
-        if (!active) return;
-        setData(res);
-      } catch (e) {
-        if (!active) return;
-        setError(e instanceof Error ? e.message : 'Could not load homework.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    void run();
-    return () => {
-      active = false;
-    };
+    if (!silent) setLoading(true);
+    setError('');
+    try {
+      const today = toYmd(new Date());
+      const res = await authFetchJson<StudentHomeworkResponse>(`/api/homework?today=${encodeURIComponent(today)}&_ts=${Date.now()}`, { token: authToken });
+      setData(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load homework.');
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [authToken]);
+
+  useEffect(() => {
+    void loadHomeworkSnapshot(false);
+  }, [loadHomeworkSnapshot]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    const interval = setInterval(() => {
+      void loadHomeworkSnapshot(true);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [authToken, loadHomeworkSnapshot]);
+
+  useEffect(() => {
+    if (!authToken || typeof window === 'undefined') return;
+    const onFocus = () => {
+      void loadHomeworkSnapshot(true);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void loadHomeworkSnapshot(true);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [authToken, loadHomeworkSnapshot]);
 
   const totalToday = data?.todayTasks.length ?? 0;
   const progressColor = useMemo(() => {

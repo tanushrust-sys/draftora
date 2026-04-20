@@ -307,60 +307,84 @@ function wordCount(text: string) {
   return splitWords(text).length;
 }
 
-function buildRewrittenFallback(content: string, prompt?: string, category?: string, minWords = 140) {
+function splitIntoParagraphs(text: string, sentencesPerParagraph = 3) {
+  const sentences = splitIntoSentences(text);
+  if (sentences.length === 0) return [] as string[];
+  const paragraphs: string[] = [];
+  for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
+    paragraphs.push(sentences.slice(i, i + sentencesPerParagraph).join(' '));
+  }
+  return paragraphs;
+}
+
+function sanitizeRewriteOnly(text: string) {
+  const cleaned = text
+    .replace(/\r/g, '')
+    .replace(/[“”]/g, '"')
+    .replace(/^\s*(rewritten version|rewrite|improved rewrite)\s*:?\s*/i, '')
+    .trim();
+
+  if (!cleaned) return '';
+
+  const metaStartPatterns = [
+    /^this idea\b/i,
+    /^a stronger version\b/i,
+    /^to strengthen\b/i,
+    /^in this revision\b/i,
+    /^the conclusion should\b/i,
+    /^a stronger opening\b/i,
+    /^this piece\b/i,
+    /^adding one more example\b/i,
+    /^with clearer examples\b/i,
+    /^(overall feedback|summary|strengths|improvements|next step)\b/i,
+  ];
+
+  const keptParagraphs = cleaned
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .filter((paragraph) => !metaStartPatterns.some((pattern) => pattern.test(paragraph)));
+
+  const joined = (keptParagraphs.length > 0 ? keptParagraphs.join('\n\n') : cleaned).trim();
+  return joined.replace(/[ \t]+\n/g, '\n').trim();
+}
+
+function buildRewrittenFallback(content: string, prompt?: string, category?: string) {
   const cleaned = content
     .replace(/\r/g, '')
     .replace(/[“”"]/g, '')
     .trim();
 
-  const sentences = splitIntoSentences(cleaned);
-  const topicHint = (prompt || category || 'the main idea').replace(/[“”"]/g, '').trim();
-
-  if (sentences.length >= 2) {
-    const firstParagraph = sentences.slice(0, 3).join(' ');
-    const secondParagraphSource = sentences.slice(3, 7);
-    const secondParagraph = secondParagraphSource.length > 0
-      ? secondParagraphSource.join(' ')
-      : `A stronger version would slow down, add specific detail, and guide the reader more clearly through ${topicHint}.`;
-
-    const thirdParagraph = `To strengthen the piece further, each paragraph should build one clear point with concrete detail, smoother transitions, and a more purposeful closing sentence. This keeps momentum and helps the reader follow the idea from beginning to end without confusion.`;
-    let rewritten = `${firstParagraph}\n\n${secondParagraph}\n\n${thirdParagraph}`;
-
-    while (wordCount(rewritten) < minWords) {
-      rewritten += `\n\nIn this revision, the focus stays on ${topicHint}, but the writing adds clearer examples, stronger explanation, and more confident flow so the final response feels complete and engaging.`;
-    }
-    return rewritten;
-  }
-
   if (cleaned.length > 0) {
-    let rewritten = `This idea has a clear starting point and can become a much stronger piece with fuller development, clearer structure, and more specific detail.\n\nA stronger version introduces ${topicHint} with a clear opening, then expands each key point using concrete examples, purposeful transitions, and precise language that keeps the reader engaged.\n\nThe conclusion should not repeat the opening. Instead, it should show what changed in understanding and leave one focused final thought that feels earned and memorable.`;
-    while (wordCount(rewritten) < minWords) {
-      rewritten += `\n\nAdding one more example and one clearer explanation in each section will make the writing more complete, more persuasive, and easier for the reader to follow from start to finish.`;
-    }
-    return rewritten;
+    const paragraphs = splitIntoParagraphs(cleaned, 3);
+    if (paragraphs.length > 0) return paragraphs.join('\n\n');
+    return cleaned;
   }
 
-  let rewritten = `A stronger opening would introduce ${topicHint} in a clear, confident way.\n\nIt would then add concrete detail, stronger explanation, and smoother transitions so the reader can follow the main idea easily.\n\nFinally, it would close with a focused ending that reinforces the purpose and leaves a clear final impression.`;
-  while (wordCount(rewritten) < minWords) {
-    rewritten += `\n\nWith clearer examples and fuller paragraph development, the revised piece would feel complete, purposeful, and much more engaging for the reader.`;
-  }
-  return rewritten;
+  const topicHint = (prompt || category || 'this topic').replace(/[“”"]/g, '').trim();
+  const fallback = [
+    `I took a breath and stepped into ${topicHint} with a clear plan and steady focus.`,
+    'Each moment built on the one before it, and every detail moved the idea forward with purpose.',
+    'By the end, the message felt complete, confident, and easy for the reader to follow.',
+  ].join('\n\n');
+
+  return fallback;
 }
 
 function ensureRewrittenVersion(feedback: WritingFeedback, content: string, prompt?: string, category?: string): WritingFeedback {
-  const rewritten = feedback.rewritten_version.trim();
-  const sourceWordCount = wordCount(content);
-  const minRewriteWords = Math.max(120, Math.min(320, Math.floor(sourceWordCount * 0.6)));
-  const hasMultipleParagraphs = rewritten.split(/\n\s*\n/).filter(Boolean).length >= 2;
+  const rewritten = sanitizeRewriteOnly(feedback.rewritten_version || '');
   const rewrittenWords = wordCount(rewritten);
 
-  if (rewritten.length >= 80 && rewrittenWords >= minRewriteWords && hasMultipleParagraphs) {
-    return feedback;
+  if (rewritten.length >= 40 && rewrittenWords >= 8) {
+    return {
+      ...feedback,
+      rewritten_version: rewritten,
+    };
   }
 
   return {
     ...feedback,
-    rewritten_version: buildRewrittenFallback(content, prompt, category, minRewriteWords),
+    rewritten_version: sanitizeRewriteOnly(buildRewrittenFallback(content, prompt, category)),
   };
 }
 
@@ -722,7 +746,7 @@ Return ONLY a valid JSON object with exactly these 3 keys. No extra keys. No tex
 {
   "paragraph_feedback": "Section-by-section feedback with a DYNAMIC number of subsections based on word count. In EACH subsection include this exact order with paragraph breaks between blocks: Quote (25-50 words copied from student writing), Pros (exactly 4 bullet points), Cons (exactly 4 bullet points), Section Summary (one paragraph, 60-90 words). Leave one blank line between subsections.",
   "overall": "Structured overall feedback with EXACT headings in this order and paragraph breaks: OVERALL FEEDBACK, SUMMARY, STRENGTHS, IMPROVEMENTS, NEXT STEP. SUMMARY should be 3 short paragraphs. STRENGTHS should be 3 bullet points. IMPROVEMENTS should be 3 bullet points. NEXT STEP should be one short paragraph.",
-  "rewritten_version": "Improved Rewrite that preserves the student's core meaning. Target about ${rewriteTargetWordCount} words (roughly plus or minus 10%). Use multiple short paragraphs separated by blank lines."
+  "rewritten_version": "ONLY the rewritten draft text. No coaching, no analysis, no labels, no headings, no mention of what to improve. Preserve the student's meaning. Target about ${rewriteTargetWordCount} words (roughly plus or minus 10%). Use multiple short paragraphs separated by blank lines."
 }
 
 Rules:
@@ -733,8 +757,14 @@ Rules:
   - More than 500 words: exactly 5 subsections
 - Quote text must come from the student writing only. Do not invent quotes.
 - Pros and Cons must be specific, evidence-based, and actionable.
+- In Pros, prioritize high-impact craft wins (clarity, specificity, structure, voice, flow), not generic praise.
+- In Cons, prioritize the biggest blockers first and describe the exact failure (vague evidence, weak transitions, unclear claim, repetition, flat diction, missing development).
 - Keep wording age-appropriate based on the language guide.
 - Keep headings clear and consistent: Section 1, Section 2, etc.
+- rewritten_version must read like a finished student draft only.
+- rewritten_version must NOT include phrases like "This idea has", "A stronger version", "To strengthen", or any instruction/explanation.
+- rewritten_version must be materially stronger in precision, rhythm, logic, and paragraph flow while preserving the original intent and tone.
+- Remove filler and vague wording in rewritten_version; replace with concrete detail and stronger verbs.
 - Use emojis naturally where they fit using only this set: 😀🔥🎯💪👏✔️⭐💯🥇🏆💛✨🌟⚡️💫😂🤣🤪😁
 - Do not spam emojis and do not stack them at the end.
 - Be specific and encouraging, never vague.`;
@@ -761,7 +791,21 @@ In paragraph_feedback, enforce:
   - 250-500 words: 3-5 subsections
   - >500 words: exactly 5 subsections
 - Each subsection has Quote (25-50 words), 4 Pros bullets, 4 Cons bullets, and a 60-90 word Section Summary
-- Paragraph breaks between each block.`;
+- Paragraph breaks between each block.
+- Pros bullets must point to concrete strengths found in the quote (not generic compliments).
+- Cons bullets must be direct and high-signal: name the issue and the exact upgrade move.
+- Section Summary must include one clear priority action for revision.
+
+In overall, enforce:
+- SUMMARY: diagnose the draft's true state directly (no sugarcoating, no filler), while staying respectful.
+- STRENGTHS: only meaningful strengths tied to craft impact.
+- IMPROVEMENTS: only highest-priority fixes, ordered by impact.
+- NEXT STEP: one focused action plan the student can execute immediately.
+
+In rewritten_version, enforce:
+- Output ONLY the rewrite text in paragraph form.
+- Keep length target; do not add meta commentary or labels.
+- Upgrade diction, clarity, flow, and specificity without changing the core meaning.`;
 
     const feedbackMaxTokens = safeWordCount < 120
       ? 950

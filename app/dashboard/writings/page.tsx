@@ -1129,31 +1129,57 @@ function WritingsContent() {
     if (!profile || profile.account_type !== 'student') {
       setTodayHomework(null);
       setHomeworkError('');
+    }
+  }, [profile]);
+
+  const loadTodayHomeworkSnapshot = useCallback(async (silent = false) => {
+    if (!profile || profile.account_type !== 'student') {
+      setTodayHomework(null);
+      if (!silent) setHomeworkError('');
       return;
     }
-
-    let active = true;
-    const run = async () => {
-      setHomeworkError('');
-      try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token ?? '';
-        if (!token) throw new Error('Missing session.');
-        const res = await authFetchJson<StudentHomeworkResponse>('/api/homework', { token });
-        if (!active) return;
-        setTodayHomework(res);
-      } catch (err) {
-        if (!active) return;
+    if (!silent) setHomeworkError('');
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token ?? '';
+      if (!token) throw new Error('Missing session.');
+      const res = await authFetchJson<StudentHomeworkResponse>(`/api/homework?_ts=${Date.now()}`, { token });
+      setTodayHomework(res);
+    } catch (err) {
+      if (!silent) {
         setTodayHomework(null);
         setHomeworkError(err instanceof Error ? err.message : 'Could not load homework.');
       }
-    };
-
-    void run();
-    return () => {
-      active = false;
-    };
+    }
   }, [profile]);
+
+  useEffect(() => {
+    void loadTodayHomeworkSnapshot(false);
+  }, [loadTodayHomeworkSnapshot]);
+
+  useEffect(() => {
+    if (!profile || profile.account_type !== 'student') return;
+    const interval = setInterval(() => {
+      void loadTodayHomeworkSnapshot(true);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [profile, loadTodayHomeworkSnapshot]);
+
+  useEffect(() => {
+    if (!profile || profile.account_type !== 'student' || typeof window === 'undefined') return;
+    const onFocus = () => {
+      void loadTodayHomeworkSnapshot(true);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void loadTodayHomeworkSnapshot(true);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [profile, loadTodayHomeworkSnapshot]);
 
   // ── Load daily + weekly progress ──
   const loadProgress = useCallback(async () => {

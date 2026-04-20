@@ -52,6 +52,18 @@ type TimetablePayload = {
 
 type SplitKind = 'writing' | 'vocab';
 
+function jsonNoStore(body: unknown, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
 function getLocalDateKey(date = new Date()) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
     .map((part) => String(part).padStart(2, '0'))
@@ -632,7 +644,7 @@ async function handleParentGet(request: NextRequest, userId: string) {
       dueLabel: formatHomeworkDate(row.due_date),
     }));
 
-  return NextResponse.json({
+  return jsonNoStore({
     student: studentRes.data,
     timetable: timetablePayload.weeklyPlan,
     recentAssignments,
@@ -651,7 +663,7 @@ async function handleStudentGet(userId: string, todayOverride?: string) {
     ? Math.round(snapshot.todayTasks.reduce((sum, task) => sum + task.completionPct, 0) / snapshot.todayTasks.length)
     : 0;
 
-  return NextResponse.json({
+  return jsonNoStore({
     today: snapshot.today,
     overallPct,
     todayTasks: snapshot.todayTasks,
