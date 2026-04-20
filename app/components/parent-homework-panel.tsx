@@ -1357,7 +1357,7 @@ export function ParentHomeworkPanel({
               </div>
 
               <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 900 }}>Past 14 days</div>
+                <div style={{ fontSize: 14, fontWeight: 900 }}>Past writings</div>
                 <div style={{ display: 'grid', gap: 8, maxHeight: 330, overflow: 'auto', paddingRight: 3 }}>
                   {(data?.performance.days ?? []).map((day) => (
                     <div key={day.date} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', padding: 10, background: 'var(--workspace-surface)', display: 'grid', gap: 7 }}>

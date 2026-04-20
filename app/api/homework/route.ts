@@ -612,14 +612,18 @@ async function handleParentGet(request: NextRequest, userId: string) {
   const twoWeekDates = getDateRange(14, todayOverride);
   const performance = buildPerformance(twoWeekDates, timetablePayload.weeklyPlan, assignments, snapshot.statsByDate, snapshot.writingsByDate, timetablePayload.startDate);
 
-  const recentAssignments = assignments.slice(0, 8).map((row) => ({
-    id: row.id,
-    assignedDate: row.assigned_date,
-    dueDate: row.due_date,
-    title: buildTaskTitle(row.homework_payload),
-    payload: row.homework_payload,
-    dueLabel: formatHomeworkDate(row.due_date),
-  }));
+  const currentDate = todayOverride ?? getTodayKey();
+  const recentAssignments = assignments
+    .filter((row) => row.due_date >= currentDate)
+    .slice(0, 8)
+    .map((row) => ({
+      id: row.id,
+      assignedDate: row.assigned_date,
+      dueDate: row.due_date,
+      title: buildTaskTitle(row.homework_payload),
+      payload: row.homework_payload,
+      dueLabel: formatHomeworkDate(row.due_date),
+    }));
 
   return NextResponse.json({
     student: studentRes.data,
