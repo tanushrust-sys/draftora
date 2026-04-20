@@ -28,7 +28,7 @@ import {
   RotateCcw, Tag, Save, TrendingUp, Calendar,
   BookMarked, Heart, Trash2, ChevronDown, ChevronUp,
   FileText, Clock, Filter, Eye, Star, BarChart2, Search,
-  Zap, BookOpen, Trophy, X,
+  Zap, BookOpen, Trophy, X, Play, Pause,
 } from 'lucide-react';
 
 /** Returns the ratio of unique words to total words (0–1).
@@ -272,6 +272,8 @@ const WRITING_SAVE_TIMEOUT_MS = 20000;
 const PROFILE_REFRESH_TIMEOUT_MS = 20000;
 const AUTOSAVE_DELAY_MS = 1600;
 const WRITING_WORD_LIMIT = 3000;
+const TIMER_MIN_TOTAL_SECONDS = 1;
+const TIMER_MAX_TOTAL_SECONDS = 3 * 60 * 60;
 
 function writingStatusTheme(status: Writing['status']) {
   if (status === 'reviewed') {
@@ -424,6 +426,29 @@ function countWords(text: string) {
   const normalized = text.trim();
   if (!normalized) return 0;
   return normalized.split(/\s+/).length;
+}
+
+function clampTimerSeconds(value: number) {
+  return Math.max(TIMER_MIN_TOTAL_SECONDS, Math.min(TIMER_MAX_TOTAL_SECONDS, Math.round(value)));
+}
+
+function formatClockDuration(totalMs: number) {
+  const clampedMs = Math.max(0, totalMs);
+  const totalSeconds = Math.ceil(clampedMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function splitTimerSeconds(totalSeconds: number) {
+  const clampedSeconds = clampTimerSeconds(totalSeconds);
+  const minutes = Math.floor(clampedSeconds / 60);
+  const seconds = clampedSeconds % 60;
+  return { minutes, seconds };
 }
 
 function resolvePromptForCategory(category: string, ageGroup?: string) {
@@ -741,6 +766,13 @@ function WritingsContent() {
   const [weekWords, setWeekWords]   = useState(0);
   const [todayHomework, setTodayHomework] = useState<StudentHomeworkResponse | null>(null);
   const [homeworkError, setHomeworkError] = useState('');
+  const [timerEnabled, setTimerEnabled] = useState(false);
+  const [timerDurationMs, setTimerDurationMs] = useState(15 * 60 * 1000);
+  const [timerRemainingMs, setTimerRemainingMs] = useState(15 * 60 * 1000);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerSetupOpen, setTimerSetupOpen] = useState(false);
+  const [timerSetupMinutes, setTimerSetupMinutes] = useState(15);
+  const [timerSetupSeconds, setTimerSetupSeconds] = useState(0);
   // (daily limit removed — users can write unlimited pieces per day up to their total cap)
 
   // ── Journal tab state ──
@@ -790,6 +822,8 @@ function WritingsContent() {
   const progressLoadedTokenRef = useRef(-1);
   const categoryPreferenceHydratedRef = useRef(false);
   const skipNextPreferencePersistRef = useRef(false);
+  const timerEndTimestampRef = useRef<number | null>(null);
+  const timerAutoSubmitTriggeredRef = useRef(false);
 
   const switchTab = useCallback((nextTab: ActiveTab) => {
     startTransition(() => {
@@ -1768,15 +1802,23 @@ function WritingsContent() {
 
   // (Legacy submitForFeedback removed — submitForFeedbackSafe is the active path)
 
-  const submitForFeedbackSafe = async () => {
+  const submitForFeedbackSafe = async (options?: { allowBelowMinimum?: boolean; source?: 'manual' | 'timer' }) => {
     if (writingMutationLock.current) return;
     if (!profile) {
       setError('Your session is not ready right now. Refresh the page and try again.');
       return;
     }
-    if (wordCount < minimumWordsToSubmit) {
+    const allowBelowMinimum = options?.allowBelowMinimum ?? false;
+    if (wordCount === 0) {
+      setError('Write a little first, then submit.');
+      return;
+    }
+    if (!allowBelowMinimum && wordCount < minimumWordsToSubmit) {
       setError(`Write at least ${minimumWordsToSubmit} words before submitting.`);
       return;
+    }
+    if (allowBelowMinimum && wordCount < minimumWordsToSubmit) {
+      setError(`Timer ended. Auto-submitting with ${wordCount} words.`);
     }
     if (wordCount >= 30 && uniqueWordRatio(content) < 0.12) {
       setError('Your writing looks repetitive, but I am still sending it for feedback so you can improve it.');
@@ -1952,6 +1994,23 @@ function WritingsContent() {
     }
   };
 
+  useEffect(() => {
+    if (!timerEnabled) return;
+    if (timerRunning) return;
+    if (timerRemainingMs > 0) return;
+    if (timerAutoSubmitTriggeredRef.current) return;
+
+    timerAutoSubmitTriggeredRef.current = true;
+    if (status !== 'idle') return;
+
+    if (!content.trim()) {
+      setError('Timer ended, but there is no writing to submit yet.');
+      return;
+    }
+
+    void submitForFeedbackSafe({ allowBelowMinimum: true, source: 'timer' });
+  }, [content, status, timerEnabled, timerRemainingMs, timerRunning, submitForFeedbackSafe]);
+
   const runAiAssist = useCallback(async () => {
     setAiAssistOpen(true);
     setAiAssistLoading(true);
@@ -2044,6 +2103,104 @@ function WritingsContent() {
   }, [activeWritingHomework, homeworkLockedCategory]);
   const minimumWordsToSubmit = Math.max(20, parentAssignedWordTarget ?? 20);
   const isStyleLockedByHomework = Boolean(homeworkLockedCategory && activeWritingHomework);
+  const timerConfiguredSeconds = Math.max(1, Math.round(timerDurationMs / 1000));
+  const timerConfiguredParts = splitTimerSeconds(timerConfiguredSeconds);
+
+  useEffect(() => {
+    if (!timerEnabled || !timerRunning) return;
+
+    const tick = () => {
+      const endTimestamp = timerEndTimestampRef.current;
+      if (!endTimestamp) return;
+      const remaining = Math.max(0, endTimestamp - Date.now());
+      setTimerRemainingMs(remaining);
+      if (remaining <= 0) {
+        setTimerRunning(false);
+        timerEndTimestampRef.current = null;
+      }
+    };
+
+    tick();
+    const intervalId = setInterval(tick, 250);
+    return () => clearInterval(intervalId);
+  }, [timerEnabled, timerRunning]);
+
+  useEffect(() => {
+    if (status === 'idle') return;
+    if (!timerRunning) return;
+    setTimerRunning(false);
+    timerEndTimestampRef.current = null;
+  }, [status, timerRunning]);
+
+  const openTimerSetup = useCallback(() => {
+    const sourceSeconds = timerEnabled
+      ? Math.max(1, Math.round(timerDurationMs / 1000))
+      : 15 * 60;
+    const parts = splitTimerSeconds(sourceSeconds);
+    setTimerSetupMinutes(parts.minutes);
+    setTimerSetupSeconds(parts.seconds);
+    setTimerSetupOpen(true);
+  }, [timerDurationMs, timerEnabled]);
+
+  const applyTimerSetup = useCallback(() => {
+    const safeMinutes = Math.max(0, Math.floor(Number.isFinite(timerSetupMinutes) ? timerSetupMinutes : 0));
+    const safeSeconds = Math.max(0, Math.floor(Number.isFinite(timerSetupSeconds) ? timerSetupSeconds : 0));
+    const totalSeconds = clampTimerSeconds((safeMinutes * 60) + safeSeconds);
+    const nextMs = totalSeconds * 1000;
+    setTimerEnabled(true);
+    setTimerDurationMs(nextMs);
+    setTimerRemainingMs(nextMs);
+    timerEndTimestampRef.current = Date.now() + nextMs;
+    setTimerRunning(true);
+    setTimerSetupOpen(false);
+    timerAutoSubmitTriggeredRef.current = false;
+  }, [timerSetupMinutes, timerSetupSeconds]);
+
+  const handleTimerToggle = useCallback(() => {
+    if (!timerEnabled) {
+      openTimerSetup();
+      return;
+    }
+
+    if (timerRunning) {
+      const endTimestamp = timerEndTimestampRef.current;
+      if (endTimestamp) {
+        setTimerRemainingMs(Math.max(0, endTimestamp - Date.now()));
+      }
+      setTimerRunning(false);
+      timerEndTimestampRef.current = null;
+      return;
+    }
+
+    const baseRemaining = timerRemainingMs > 0 ? timerRemainingMs : timerDurationMs;
+    timerEndTimestampRef.current = Date.now() + baseRemaining;
+    setTimerRemainingMs(baseRemaining);
+    setTimerRunning(true);
+    timerAutoSubmitTriggeredRef.current = false;
+  }, [openTimerSetup, timerDurationMs, timerEnabled, timerRemainingMs, timerRunning]);
+
+  const handleTimerRestart = useCallback(() => {
+    if (!timerEnabled) {
+      openTimerSetup();
+      return;
+    }
+    setTimerRemainingMs(timerDurationMs);
+    timerEndTimestampRef.current = Date.now() + timerDurationMs;
+    setTimerRunning(true);
+    timerAutoSubmitTriggeredRef.current = false;
+  }, [openTimerSetup, timerDurationMs, timerEnabled]);
+
+  const handleTimerDelete = useCallback(() => {
+    setTimerEnabled(false);
+    setTimerRunning(false);
+    setTimerSetupOpen(false);
+    setTimerSetupMinutes(15);
+    setTimerSetupSeconds(0);
+    setTimerDurationMs(15 * 60 * 1000);
+    setTimerRemainingMs(15 * 60 * 1000);
+    timerEndTimestampRef.current = null;
+    timerAutoSubmitTriggeredRef.current = false;
+  }, []);
 
   const startFresh = () => {
     if (profile) {
@@ -2063,6 +2220,11 @@ function WritingsContent() {
     setAiAssistExamples([]);
     setAiAssistCopied(false);
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
+    setTimerRunning(false);
+    setTimerSetupOpen(false);
+    setTimerRemainingMs(timerDurationMs);
+    timerEndTimestampRef.current = null;
+    timerAutoSubmitTriggeredRef.current = false;
     loadProgress();
   };
 
@@ -2422,21 +2584,163 @@ function WritingsContent() {
                     background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
                     borderBottom: '1px solid var(--t-brd-a)',
                     padding: '14px 20px',
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    display: 'flex', alignItems: 'flex-start', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap',
                   }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: 8,
-                      background: 'var(--t-acc-c)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0, marginTop: 1,
-                    }}>
-                      <Sparkles style={{ width: 14, height: 14, color: 'var(--t-acc)' }} />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 220 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 8,
+                        background: 'var(--t-acc-c)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0, marginTop: 1,
+                      }}>
+                        <Sparkles style={{ width: 14, height: 14, color: 'var(--t-acc)' }} />
+                      </div>
+                      <div>
+                        <p style={{ color: 'var(--t-acc)', fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 4 }}>
+                          Your Prompt
+                        </p>
+                        <p style={{ color: 'var(--t-tx)', fontSize: 14, lineHeight: 1.55, fontWeight: 500 }}>{prompt}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p style={{ color: 'var(--t-acc)', fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 4 }}>
-                        Your Prompt
+                    <div style={{
+                      marginLeft: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 12,
+                      border: '1px solid color-mix(in srgb, var(--t-acc) 16%, var(--t-brd) 84%)',
+                      background: 'color-mix(in srgb, var(--t-card) 88%, var(--t-acc-a) 12%)',
+                      boxShadow: '0 8px 22px rgba(0, 72, 162, 0.1)',
+                    }}>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)' }}>
+                        Session Timer
                       </p>
-                      <p style={{ color: 'var(--t-tx)', fontSize: 14, lineHeight: 1.55, fontWeight: 500 }}>{prompt}</p>
+                      {timerEnabled ? (
+                        <>
+                          <span style={{
+                            fontSize: 14,
+                            fontWeight: 900,
+                            color: timerRunning ? 'var(--t-acc)' : 'var(--t-tx)',
+                            minWidth: 62,
+                            textAlign: 'center',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}>
+                            {formatClockDuration(timerRemainingMs)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleTimerToggle}
+                            disabled={status !== 'idle'}
+                            style={{
+                              borderRadius: 8,
+                              border: '1px solid color-mix(in srgb, var(--t-acc) 45%, transparent)',
+                              background: 'color-mix(in srgb, var(--t-acc) 12%, var(--t-card) 88%)',
+                              color: 'var(--t-acc)',
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: status !== 'idle' ? 'not-allowed' : 'pointer',
+                              opacity: status !== 'idle' ? 0.5 : 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            {timerRunning ? <Pause style={{ width: 11, height: 11 }} /> : <Play style={{ width: 11, height: 11 }} />}
+                            {timerRunning ? 'Stop' : 'Start'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleTimerRestart}
+                            disabled={status !== 'idle'}
+                            style={{
+                              borderRadius: 8,
+                              border: '1px solid var(--t-brd)',
+                              background: 'var(--t-card)',
+                              color: 'var(--t-tx2)',
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: status !== 'idle' ? 'not-allowed' : 'pointer',
+                              opacity: status !== 'idle' ? 0.5 : 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <RotateCcw style={{ width: 11, height: 11 }} />
+                            Reset
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openTimerSetup}
+                            disabled={status !== 'idle'}
+                            style={{
+                              borderRadius: 8,
+                              border: '1px solid var(--t-brd)',
+                              background: 'var(--t-card)',
+                              color: 'var(--t-tx2)',
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: status !== 'idle' ? 'not-allowed' : 'pointer',
+                              opacity: status !== 'idle' ? 0.5 : 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <PenLine style={{ width: 11, height: 11 }} />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleTimerDelete}
+                            disabled={status !== 'idle'}
+                            style={{
+                              borderRadius: 8,
+                              border: '1px solid color-mix(in srgb, var(--t-danger) 40%, var(--t-brd) 60%)',
+                              background: 'color-mix(in srgb, var(--t-danger) 7%, var(--t-card) 93%)',
+                              color: 'var(--t-danger)',
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: status !== 'idle' ? 'not-allowed' : 'pointer',
+                              opacity: status !== 'idle' ? 0.5 : 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Trash2 style={{ width: 11, height: 11 }} />
+                            Delete
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={openTimerSetup}
+                          disabled={status !== 'idle'}
+                          style={{
+                            borderRadius: 8,
+                            border: '1px solid color-mix(in srgb, var(--t-acc) 45%, transparent)',
+                            background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 18%, #fff), color-mix(in srgb, var(--t-acc) 5%, var(--t-card)))',
+                            color: 'var(--t-acc)',
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: status !== 'idle' ? 'not-allowed' : 'pointer',
+                            opacity: status !== 'idle' ? 0.5 : 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                          }}
+                        >
+                          <Clock style={{ width: 11, height: 11 }} />
+                          Set Up Timer
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2577,7 +2881,7 @@ function WritingsContent() {
                       <Sparkles style={{ width: 15, height: 15 }} />
                       {aiAssistLoading ? 'Thinking…' : 'AI Assist'}
                     </button>
-                    <button onClick={submitForFeedbackSafe} disabled={status !== 'idle' || wordCount < minimumWordsToSubmit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 20px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: (status !== 'idle' || wordCount < minimumWordsToSubmit) ? 0.4 : 1 }}>
+                    <button onClick={() => { void submitForFeedbackSafe(); }} disabled={status !== 'idle' || wordCount < minimumWordsToSubmit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 20px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: (status !== 'idle' || wordCount < minimumWordsToSubmit) ? 0.4 : 1 }}>
                       {['submitting', 'reviewing'].includes(status)
                         ? <><Sparkles style={{ width: 15, height: 15 }} />{status === 'reviewing' ? 'Getting Feedback…' : 'Submitting…'}</>
                         : <><Send style={{ width: 15, height: 15 }} />Submit for Feedback</>
@@ -2840,6 +3144,156 @@ function WritingsContent() {
               </div>
             ))}
             </> {/* end normal content */}
+            {timerSetupOpen && (
+              <div
+                role="dialog"
+                aria-modal="true"
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(10, 20, 40, 0.44)',
+                  backdropFilter: 'blur(4px)',
+                  zIndex: 70,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 16,
+                }}
+              >
+                <div
+                  style={{
+                    width: 'min(420px, 100%)',
+                    borderRadius: 20,
+                    border: '1px solid color-mix(in srgb, var(--t-acc) 20%, var(--t-brd) 80%)',
+                    background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 88%, #fff 12%), color-mix(in srgb, var(--t-acc-a) 16%, var(--t-card) 84%))',
+                    boxShadow: '0 24px 60px rgba(3, 18, 45, 0.35)',
+                    padding: 18,
+                    display: 'grid',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.15em', color: 'var(--t-acc)', textTransform: 'uppercase' }}>
+                        Set Up Timer
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--t-tx3)' }}>
+                        Choose minutes and seconds. It auto-submits when time ends.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTimerSetupOpen(false)}
+                      style={{
+                        borderRadius: 9,
+                        border: '1px solid var(--t-brd)',
+                        background: 'var(--t-card)',
+                        color: 'var(--t-tx2)',
+                        width: 30,
+                        height: 30,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <X style={{ width: 14, height: 14 }} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <label style={{ display: 'grid', gap: 5 }}>
+                      <span style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 700 }}>Minutes</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={180}
+                        value={timerSetupMinutes}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          if (!Number.isFinite(next)) return;
+                          setTimerSetupMinutes(Math.max(0, Math.floor(next)));
+                        }}
+                        style={{
+                          border: '1px solid var(--t-brd)',
+                          borderRadius: 10,
+                          background: 'var(--t-card)',
+                          color: 'var(--t-tx)',
+                          fontSize: 14,
+                          padding: '9px 10px',
+                        }}
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 5 }}>
+                      <span style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 700 }}>Seconds</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={59}
+                        value={timerSetupSeconds}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          if (!Number.isFinite(next)) return;
+                          setTimerSetupSeconds(Math.min(59, Math.max(0, Math.floor(next))));
+                        }}
+                        style={{
+                          border: '1px solid var(--t-brd)',
+                          borderRadius: 10,
+                          background: 'var(--t-card)',
+                          color: 'var(--t-tx)',
+                          fontSize: 14,
+                          padding: '9px 10px',
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div style={{
+                    borderRadius: 12,
+                    border: '1px solid var(--t-brd-a)',
+                    background: 'var(--t-acc-a)',
+                    padding: '8px 10px',
+                    color: 'var(--t-tx2)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}>
+                    Current timer: {String(timerConfiguredParts.minutes).padStart(2, '0')}m {String(timerConfiguredParts.seconds).padStart(2, '0')}s
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setTimerSetupOpen(false)}
+                      style={{
+                        borderRadius: 10,
+                        border: '1px solid var(--t-brd)',
+                        background: 'var(--t-card)',
+                        color: 'var(--t-tx2)',
+                        padding: '8px 12px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyTimerSetup}
+                      style={{
+                        borderRadius: 10,
+                        border: '1px solid color-mix(in srgb, var(--t-acc) 50%, transparent)',
+                        background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 20%, #fff), color-mix(in srgb, var(--t-acc) 8%, var(--t-card)))',
+                        color: 'var(--t-acc)',
+                        padding: '8px 14px',
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Save & Start
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
