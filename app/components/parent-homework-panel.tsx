@@ -145,6 +145,41 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
+function cloneDayPlan(plan: WeeklyHomeworkPlan[HomeworkDayKey]): WeeklyHomeworkPlan[HomeworkDayKey] {
+  return {
+    writing: plan.writing
+      ? {
+          ...plan.writing,
+          piecesByType: { ...(plan.writing.piecesByType ?? {}) },
+          minWordsByType: { ...(plan.writing.minWordsByType ?? {}) },
+        }
+      : null,
+    vocab: plan.vocab ? { ...plan.vocab } : null,
+    notes: plan.notes ?? '',
+  };
+}
+
+function groupTasksByDueDate(tasks: HomeworkTaskItem[]) {
+  const grouped = new Map<string, HomeworkTaskItem[]>();
+  for (const task of tasks) {
+    const key = task.dueDate || '';
+    const list = grouped.get(key);
+    if (list) {
+      list.push(task);
+    } else {
+      grouped.set(key, [task]);
+    }
+  }
+
+  return Array.from(grouped.entries())
+    .sort(([a], [b]) => {
+      if (!a) return 1;
+      if (!b) return -1;
+      return a.localeCompare(b);
+    })
+    .map(([dueDate, items]) => ({ dueDate, items }));
+}
+
 function formatPerformanceDay(date: string) {
   return fromYmd(date).toLocaleDateString('en-US', {
     weekday: 'short',
@@ -384,7 +419,7 @@ export function ParentHomeworkPanel({
     }
   };
 
-  const deleteHomeworkAssignment = async (assignmentId: string) => {
+  const deleteHomeworkAssignment = async (assignmentId: string, splitKind?: 'writing' | 'vocab') => {
     if (!selectedStudentId || !assignmentId) return;
     setSaving(true);
     setError('');
@@ -396,9 +431,10 @@ export function ParentHomeworkPanel({
         body: {
           studentId: selectedStudentId,
           assignmentId,
+          splitKind,
         },
       });
-      setSuccess('Homework deleted.');
+      setSuccess(splitKind ? `${capitalizeFirst(splitKind)} task deleted.` : 'Homework deleted.');
       void fetchHomeworkData();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete homework.');
@@ -408,8 +444,11 @@ export function ParentHomeworkPanel({
   };
 
   const deleteHomeworkTask = async (task: HomeworkTaskItem) => {
+    const splitKindRaw = task.id.includes('::') ? task.id.split('::')[1] : '';
+    const splitKind = splitKindRaw === 'writing' || splitKindRaw === 'vocab' ? splitKindRaw : null;
+
     if (task.source === 'one_time') {
-      await deleteHomeworkAssignment(task.id.split('::')[0] ?? task.id);
+      await deleteHomeworkAssignment(task.id.split('::')[0] ?? task.id, splitKind ?? undefined);
       return;
     }
 
@@ -419,13 +458,17 @@ export function ParentHomeworkPanel({
       ...weeklyPlan,
       [dayKey]: {
         ...weeklyPlan[dayKey],
-        writing: null,
-        vocab: null,
+        writing: splitKind === 'vocab' ? weeklyPlan[dayKey].writing : null,
+        vocab: splitKind === 'writing' ? weeklyPlan[dayKey].vocab : null,
       },
     };
     setWeeklyPlan(nextPlan);
     await saveTimetable(false, nextPlan);
-    setSuccess(`${dayLabelMap[dayKey]} recurring homework removed.`);
+    if (splitKind) {
+      setSuccess(`${capitalizeFirst(splitKind)} recurring task removed from ${dayLabelMap[dayKey]}.`);
+    } else {
+      setSuccess(`${dayLabelMap[dayKey]} recurring homework removed.`);
+    }
   };
 
   const setDayPlan = (day: HomeworkDayKey, updater: (current: WeeklyHomeworkPlan[HomeworkDayKey]) => WeeklyHomeworkPlan[HomeworkDayKey]) => {
@@ -491,6 +534,8 @@ export function ParentHomeworkPanel({
   const recentAssignmentsPreview = (data?.recentAssignments ?? []).slice(0, 6);
   const currentTasks = data?.todayTasks ?? [];
   const futureTasks = data?.upcoming ?? [];
+  const currentTaskGroups = useMemo(() => groupTasksByDueDate(currentTasks), [currentTasks]);
+  const futureTaskGroups = useMemo(() => groupTasksByDueDate(futureTasks), [futureTasks]);
   const performanceDays = data?.performance.days ?? [];
   const timelineOptions: Array<7 | 14 | 30> = performanceDays.length > 14 ? [7, 14, 30] : [7, 14];
   const visiblePerformanceDays = performanceDays.slice(0, Math.min(timelineWindowDays, performanceDays.length));
@@ -1046,7 +1091,7 @@ export function ParentHomeworkPanel({
                       </span>
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--workspace-text2)', marginTop: 4 }}>
-                      One step per day. Step 8 is review.
+                      One step per day. Tuesday onward can repeat the previous day. Step 8 is review.
                     </div>
                   </div>
                   <button
@@ -1058,7 +1103,7 @@ export function ParentHomeworkPanel({
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))', gap: 8 }}>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
                     <button
                       key={step}
@@ -1084,6 +1129,12 @@ export function ParentHomeworkPanel({
                 {timetableStep < 8 ? (() => {
                   const day = HOMEWORK_DAY_KEYS[timetableStep - 1];
                   const plan = weeklyPlan[day];
+                  const previousDay = timetableStep > 1 ? HOMEWORK_DAY_KEYS[timetableStep - 2] : null;
+                  const previousPlan = previousDay ? weeklyPlan[previousDay] : null;
+                  const previousHasData = Boolean(
+                    previousPlan &&
+                    (previousPlan.writing || previousPlan.vocab || previousPlan.notes.trim().length > 0),
+                  );
                   const modeKey = plan.writing && plan.vocab
                     ? 'both'
                     : plan.writing
@@ -1103,16 +1154,59 @@ export function ParentHomeworkPanel({
 
                   return (
                     <div style={{ borderRadius: 22, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 18, display: 'grid', gap: 14 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: 16, fontWeight: 900, lineHeight: 1.1 }}>{dayLabelMap[day]}</div>
-                        <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1, color: modeKey === 'none' ? 'var(--workspace-text3)' : '#4dd4a8' }}>
-                          {modeKey === 'none' ? 'Nothing' : modeKey === 'both' ? 'Both' : capitalizeFirst(modeKey)}
+                      <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: 16, fontWeight: 900, lineHeight: 1.1 }}>{dayLabelMap[day]}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1, color: modeKey === 'none' ? 'var(--workspace-text3)' : '#4dd4a8' }}>
+                            {modeKey === 'none' ? 'Nothing' : modeKey === 'both' ? 'Both' : capitalizeFirst(modeKey)}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {previousDay ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!previousDay || !previousPlan) return;
+                                setDayPlan(day, () => cloneDayPlan(previousPlan));
+                                setSuccess(`Copied ${dayLabelMap[previousDay]} settings to ${dayLabelMap[day]}.`);
+                              }}
+                              disabled={!previousHasData}
+                              style={{
+                                borderRadius: 999,
+                                border: previousHasData ? '1px solid rgba(56,189,248,0.45)' : '1px solid var(--workspace-border)',
+                                background: previousHasData ? 'linear-gradient(135deg, rgba(56,189,248,0.22), rgba(99,102,241,0.16))' : 'var(--workspace-surface)',
+                                color: previousHasData ? 'var(--workspace-text)' : 'var(--workspace-text3)',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                padding: '8px 12px',
+                                cursor: previousHasData ? 'pointer' : 'not-allowed',
+                              }}
+                            >
+                              Repeat {dayLabelMap[previousDay]}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setDayPlan(day, () => ({ writing: null, vocab: null, notes: '' }))}
+                            style={{
+                              borderRadius: 999,
+                              border: '1px solid var(--workspace-border)',
+                              background: 'var(--workspace-surface)',
+                              color: 'var(--workspace-text2)',
+                              fontSize: 12,
+                              fontWeight: 800,
+                              padding: '8px 12px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Clear day
+                          </button>
                         </div>
                       </div>
                       <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>
                         Choose what your child does on {dayLabelMap[day]}.
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
                         {modeOptions.map((option) => (
                           <button
                             key={option.key}
@@ -1525,73 +1619,92 @@ export function ParentHomeworkPanel({
 
           {activeAction === 'currentFuture' && !loading ? (
             <div style={{ display: 'grid', gap: 14 }}>
-              <div style={{ borderRadius: 20, border: '1px solid rgba(99,102,241,0.3)', background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 85%, rgba(99,102,241,0.16)) 0%, color-mix(in srgb, var(--workspace-surface2) 92%, rgba(56,189,248,0.1)) 100%)', padding: 16, display: 'grid', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 900 }}>
-                  <Clock3 style={{ width: 16, height: 16, color: '#a5b4fc' }} />
-                  Current & future homeworks
+              <div style={{ borderRadius: 16, border: '1px solid rgba(99,102,241,0.28)', background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 88%, rgba(99,102,241,0.14)) 0%, color-mix(in srgb, var(--workspace-surface2) 94%, rgba(56,189,248,0.08)) 100%)', padding: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 900 }}>
+                  <Clock3 style={{ width: 15, height: 15, color: '#a5b4fc' }} />
+                  Current & Future Homework (7-day view)
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.65 }}>
-                  Track what is due now and what is coming next in one focused place.
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, border: '1px solid rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.1)' }}>
+                    Current {currentTasks.length}
+                  </div>
+                  <div style={{ borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, border: '1px solid rgba(59,130,246,0.35)', background: 'rgba(59,130,246,0.1)' }}>
+                    Future {futureTasks.length}
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10 }}>
+                <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 12, display: 'grid', gap: 8, maxHeight: 520, overflow: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900 }}>Current homework</div>
-                    <div style={{ borderRadius: 999, padding: '4px 9px', fontSize: 12, fontWeight: 800, border: '1px solid rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.12)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 900 }}>Current homework</div>
+                    <div style={{ borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, border: '1px solid rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.12)' }}>
                       {currentTasks.length}
                     </div>
                   </div>
-                  {currentTasks.length === 0 ? (
+                  {currentTaskGroups.length === 0 ? (
                     <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No current homework due today.</div>
                   ) : (
                     <div style={{ display: 'grid', gap: 8 }}>
-                      {currentTasks.map((task) => (
-                        <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{task.title}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                            <div style={{ fontSize: 12, color: 'var(--workspace-text3)' }}>{formatHomeworkDate(task.dueDate)}</div>
-                            <button
-                              type="button"
-                              onClick={() => void deleteHomeworkTask(task)}
-                              title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
-                              style={{ width: 28, height: 28, borderRadius: 9, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
-                            >
-                              <X style={{ width: 13, height: 13 }} />
-                            </button>
+                      {currentTaskGroups.map((group) => (
+                        <div key={`current-${group.dueDate || 'none'}`} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 9, display: 'grid', gap: 7 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--workspace-text2)' }}>
+                              {group.dueDate ? formatHomeworkDate(group.dueDate) : 'No due date'}
+                            </div>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--workspace-text3)' }}>{group.items.length} task{group.items.length === 1 ? '' : 's'}</div>
                           </div>
+                          {group.items.map((task) => (
+                            <div key={task.id} style={{ borderRadius: 10, border: '1px solid color-mix(in srgb, var(--workspace-border) 90%, transparent)', background: 'var(--workspace-surface2)', padding: '8px 10px', display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35 }}>{task.title}</div>
+                              <button
+                                type="button"
+                                onClick={() => void deleteHomeworkTask(task)}
+                                title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
+                                style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+                              >
+                                <X style={{ width: 12, height: 12 }} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 10 }}>
+                <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 12, display: 'grid', gap: 8, maxHeight: 520, overflow: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900 }}>Future homework</div>
-                    <div style={{ borderRadius: 999, padding: '4px 9px', fontSize: 12, fontWeight: 800, border: '1px solid rgba(59,130,246,0.35)', background: 'rgba(59,130,246,0.1)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 900 }}>Future homework</div>
+                    <div style={{ borderRadius: 999, padding: '3px 8px', fontSize: 11, fontWeight: 800, border: '1px solid rgba(59,130,246,0.35)', background: 'rgba(59,130,246,0.1)' }}>
                       {futureTasks.length}
                     </div>
                   </div>
-                  {futureTasks.length === 0 ? (
+                  {futureTaskGroups.length === 0 ? (
                     <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No upcoming homework yet.</div>
                   ) : (
                     <div style={{ display: 'grid', gap: 8 }}>
-                      {futureTasks.map((task) => (
-                        <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{task.title}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                            <div style={{ fontSize: 12, color: 'var(--workspace-text3)' }}>{formatHomeworkDate(task.dueDate)}</div>
-                            <button
-                              type="button"
-                              onClick={() => void deleteHomeworkTask(task)}
-                              title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
-                              style={{ width: 28, height: 28, borderRadius: 9, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
-                            >
-                              <X style={{ width: 13, height: 13 }} />
-                            </button>
+                      {futureTaskGroups.map((group) => (
+                        <div key={`future-${group.dueDate || 'none'}`} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 9, display: 'grid', gap: 7 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--workspace-text2)' }}>
+                              {group.dueDate ? formatHomeworkDate(group.dueDate) : 'No due date'}
+                            </div>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--workspace-text3)' }}>{group.items.length} task{group.items.length === 1 ? '' : 's'}</div>
                           </div>
+                          {group.items.map((task) => (
+                            <div key={task.id} style={{ borderRadius: 10, border: '1px solid color-mix(in srgb, var(--workspace-border) 90%, transparent)', background: 'var(--workspace-surface2)', padding: '8px 10px', display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35 }}>{task.title}</div>
+                              <button
+                                type="button"
+                                onClick={() => void deleteHomeworkTask(task)}
+                                title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
+                                style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}
+                              >
+                                <X style={{ width: 12, height: 12 }} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
@@ -1599,34 +1712,34 @@ export function ParentHomeworkPanel({
                 </div>
               </div>
 
-              <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', padding: 16, background: 'var(--workspace-surface2)', display: 'grid', gap: 12 }}>
+              <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface2)', display: 'grid', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 16, fontWeight: 900 }}>Recently assigned</div>
-                  <div style={{ borderRadius: 999, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: '5px 10px', fontSize: 12, fontWeight: 800, color: 'var(--workspace-text2)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 900 }}>Recently assigned</div>
+                  <div style={{ borderRadius: 999, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: '3px 8px', fontSize: 11, fontWeight: 800, color: 'var(--workspace-text2)' }}>
                     {recentAssignmentsPreview.length} assignments
                   </div>
                 </div>
                 {recentAssignmentsPreview.length === 0 ? (
                   <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No homework has been assigned yet.</div>
                 ) : (
-                  <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'grid', gap: 7 }}>
                     {recentAssignmentsPreview.map((item, idx) => (
-                      <div key={item.id} style={{ borderRadius: 14, border: '1px solid var(--workspace-border)', padding: 12, background: 'linear-gradient(145deg, var(--workspace-surface), color-mix(in srgb, var(--workspace-surface) 90%, #34d399 10%))', display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                      <div key={item.id} style={{ borderRadius: 10, border: '1px solid var(--workspace-border)', padding: '8px 10px', background: 'var(--workspace-surface)', display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{item.title}</div>
-                          <div style={{ marginTop: 5, display: 'inline-flex', alignItems: 'center', borderRadius: 999, border: '1px solid rgba(59,130,246,0.35)', padding: '3px 8px', fontSize: 11, fontWeight: 800, color: '#60a5fa', background: 'rgba(59,130,246,0.08)' }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.35 }}>{item.title}</div>
+                          <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', borderRadius: 999, border: '1px solid rgba(59,130,246,0.35)', padding: '2px 7px', fontSize: 10.5, fontWeight: 800, color: '#60a5fa', background: 'rgba(59,130,246,0.08)' }}>
                             Assignment {idx + 1}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                          <div style={{ fontSize: 12, color: 'var(--workspace-text3)', borderRadius: 999, border: '1px solid var(--workspace-border)', padding: '6px 9px', background: 'var(--workspace-surface2)' }}>{item.dueLabel}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          <div style={{ fontSize: 11.5, color: 'var(--workspace-text3)', borderRadius: 999, border: '1px solid var(--workspace-border)', padding: '4px 7px', background: 'var(--workspace-surface2)' }}>{item.dueLabel}</div>
                           <button
                             type="button"
                             onClick={() => void deleteHomeworkAssignment(item.id)}
                             title="Delete homework"
-                            style={{ width: 30, height: 30, borderRadius: 10, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                            style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
                           >
-                            <X style={{ width: 13, height: 13 }} />
+                            <X style={{ width: 12, height: 12 }} />
                           </button>
                         </div>
                       </div>

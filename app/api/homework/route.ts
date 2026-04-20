@@ -80,6 +80,12 @@ function getFutureDates(days: number, startOffset = 1, anchorDate?: string) {
   });
 }
 
+function addDaysToDateKey(dateKey: string, offset: number) {
+  const base = new Date(`${dateKey}T00:00:00`);
+  base.setDate(base.getDate() + offset);
+  return getLocalDateKey(base);
+}
+
 function weekdayLabel(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
 }
@@ -292,6 +298,7 @@ function buildTimetableTasks(date: string, dayPlan: DayHomeworkPlan): HomeworkTa
 async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: string) {
   const today = todayOverride ?? getTodayKey();
   const start14 = getDateRange(14, today)[0];
+  const windowEnd = addDaysToDateKey(today, 6);
 
   const [statsRes, writingsRes, assignmentsRes, timetableRes] = await Promise.all([
     adminSupabase.from('daily_stats').select('date, words_written, vocab_words_learned, custom_goal_completed').eq('user_id', studentId).gte('date', start14),
@@ -338,17 +345,17 @@ async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: s
   const todayKey = getHomeworkDayKey(todayDate);
   const todayPlanTasks = buildTimetableTasks(today, weeklyPlan[todayKey]);
 
-  const activeAssignments = assignments.filter((a) => a.assigned_date <= today && a.due_date >= today);
+  const currentAssignments = assignments.filter((a) => a.due_date === today);
   const upcomingAssignments = assignments
-    .filter((a) => a.assigned_date > today || a.due_date > today)
-    .slice(0, 5);
+    .filter((a) => a.due_date > today && a.due_date <= windowEnd)
+    .slice(0, 8);
 
   const todayStats = statsByDate.get(today) ?? null;
   const todayWritings = writingsByDate.get(today) ?? [];
 
   const todayTasks: HomeworkTaskItem[] = [];
 
-  for (const row of activeAssignments) {
+  for (const row of currentAssignments) {
     for (const { kind, payload } of splitHomeworkPayload(row.homework_payload)) {
       const breakdown = evaluateTaskProgress({ writing: payload.writing, vocab: payload.vocab }, todayStats, todayWritings);
       todayTasks.push({
@@ -393,7 +400,7 @@ async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: s
     })),
   );
 
-  const upcomingFromTimetable = getFutureDates(7, 1, today)
+  const upcomingFromTimetable = getFutureDates(6, 1, today)
     .flatMap((date) => {
       const dayKey = getHomeworkDayKey(new Date(`${date}T00:00:00`));
       const timetableTasks = buildTimetableTasks(date, weeklyPlan[dayKey]);
@@ -414,7 +421,7 @@ async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: s
 
   const upcoming = [...upcomingFromAssignments, ...upcomingFromTimetable]
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 8);
+    .slice(0, 20);
 
   return {
     today,
@@ -769,6 +776,8 @@ export async function DELETE(request: NextRequest) {
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
   const studentId = (typeof body.studentId === 'string' ? body.studentId : query.get('studentId') || '').trim();
   const assignmentId = (typeof body.assignmentId === 'string' ? body.assignmentId : query.get('assignmentId') || '').trim();
+  const splitKindRaw = typeof body.splitKind === 'string' ? body.splitKind : query.get('splitKind') || '';
+  const splitKind = splitKindRaw === 'writing' || splitKindRaw === 'vocab' ? splitKindRaw : null;
 
   if (!studentId || !assignmentId) {
     return NextResponse.json({ error: 'Missing studentId or assignmentId.' }, { status: 400 });
@@ -777,6 +786,64 @@ export async function DELETE(request: NextRequest) {
   const allowed = await canParentAccessStudent(auth.auth.userId, studentId);
   if (!allowed) {
     return NextResponse.json({ error: 'You cannot delete homework for that student.' }, { status: 403 });
+  }
+
+  if (splitKind) {
+    const { data: existingRow, error: existingError } = await (adminSupabase as any)
+      .from('parent_homework_assignments')
+      .select('id, homework_payload')
+      .eq('id', assignmentId)
+      .eq('student_id', studentId)
+      .eq('parent_id', auth.auth.userId)
+      .maybeSingle();
+
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message || 'Could not find homework assignment.' }, { status: 500 });
+    }
+
+    if (!existingRow) {
+      return NextResponse.json({ error: 'Homework assignment not found.' }, { status: 404 });
+    }
+
+    const payload = normalizeHomeworkPayload(existingRow.homework_payload);
+    if (splitKind === 'writing') {
+      payload.writing = null;
+    } else {
+      payload.vocab = null;
+    }
+
+    if (!payload.writing && !payload.vocab) {
+      const { error, data } = await (adminSupabase as any)
+        .from('parent_homework_assignments')
+        .delete()
+        .eq('id', assignmentId)
+        .eq('student_id', studentId)
+        .eq('parent_id', auth.auth.userId)
+        .select('id');
+
+      if (error) {
+        return NextResponse.json({ error: error.message || 'Could not delete homework assignment.' }, { status: 500 });
+      }
+
+      if (!data || data.length === 0) {
+        return NextResponse.json({ error: 'Homework assignment not found.' }, { status: 404 });
+      }
+
+      return NextResponse.json({ ok: true, mode: 'deleted_assignment' });
+    }
+
+    const { error: updateError } = await (adminSupabase as any)
+      .from('parent_homework_assignments')
+      .update({ homework_payload: payload })
+      .eq('id', assignmentId)
+      .eq('student_id', studentId)
+      .eq('parent_id', auth.auth.userId);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message || 'Could not update homework assignment.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, mode: 'updated_assignment', splitKind });
   }
 
   const { error, data } = await (adminSupabase as any)

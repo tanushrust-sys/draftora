@@ -143,15 +143,17 @@ function PillButton({
       style={{
         cursor: 'pointer',
         borderRadius: 999,
-        padding: '10px 14px',
+        padding: '10px 15px',
         background: active
-          ? `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`
-          : 'rgba(255,255,255,0.04)',
+          ? `linear-gradient(135deg, color-mix(in srgb, ${accent} 86%, white) 0%, ${accent} 55%, color-mix(in srgb, ${accent} 62%, #22d3ee) 100%)`
+          : 'linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))',
         color: active ? '#fff' : 'var(--workspace-text)',
         fontSize: 13,
-        fontWeight: 800,
-        boxShadow: active ? `0 12px 26px color-mix(in srgb, ${accent} 18%, transparent)` : 'none',
-        border: active ? `1px solid color-mix(in srgb, ${accent} 22%, transparent)` : '1px solid var(--workspace-border)',
+        fontWeight: 850,
+        letterSpacing: '0.01em',
+        boxShadow: active ? `0 14px 30px color-mix(in srgb, ${accent} 24%, transparent)` : '0 8px 18px rgba(2,6,23,0.08)',
+        border: active ? `1px solid color-mix(in srgb, ${accent} 26%, transparent)` : '1px solid var(--workspace-border)',
+        transform: active ? 'translateY(-1px)' : 'none',
       }}
     >
       {children}
@@ -169,11 +171,11 @@ function SurfaceCard({
   return (
     <section
       style={{
-        borderRadius: 28,
+        borderRadius: 30,
         background: 'var(--workspace-surface)',
         border: '1px solid var(--workspace-border)',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.16)',
-        backdropFilter: 'blur(14px)',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
+        backdropFilter: 'blur(16px)',
         ...style,
       }}
     >
@@ -478,7 +480,7 @@ export default function ParentPage() {
   };
 
   const modeToggle = (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderRadius: 999, padding: 4, border: `1px solid ${palette.border}`, background: palette.surface2 }}>
       <PillButton active={mode === 'dark'} accent={palette.mode === 'dark' ? '#67e8f9' : '#0f172a'} onClick={() => setMode('dark')}>
         <MoonStar style={{ width: 14, height: 14, marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
         Dark
@@ -493,18 +495,19 @@ export default function ParentPage() {
   const renderWorkspaceTop = () => (
     <SurfaceCard
       style={{
-        padding: '30px 34px',
+        padding: '32px 34px',
         background:
           palette.mode === 'light'
-            ? 'linear-gradient(130deg, #f0fdf9 0%, #d1fae5 35%, #a7f3d0 70%, #6ee7b7 100%)'
-            : 'linear-gradient(130deg, rgba(6, 10, 22, 0.98) 0%, rgba(9, 18, 34, 0.96) 44%, rgba(7, 31, 42, 0.98) 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        minHeight: 132,
+            ? 'linear-gradient(132deg, #f0fdf9 0%, #d1fae5 32%, #a7f3d0 56%, #67e8f9 100%)'
+            : 'linear-gradient(132deg, rgba(4, 10, 20, 0.98) 0%, rgba(8, 20, 36, 0.97) 46%, rgba(5, 34, 43, 0.98) 100%)',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: 16,
+        alignItems: 'end',
+        minHeight: 160,
         overflow: 'hidden',
         position: 'relative',
-        boxShadow: palette.mode === 'dark' ? '0 30px 96px rgba(0,0,0,0.38)' : '0 24px 80px rgba(15,23,42,0.12)',
+        boxShadow: palette.mode === 'dark' ? '0 34px 100px rgba(0,0,0,0.42)' : '0 24px 80px rgba(15,23,42,0.15)',
         border: `1px solid ${palette.border}`,
         backdropFilter: 'blur(18px)',
       }}
@@ -522,7 +525,7 @@ export default function ParentPage() {
         </div>
         <div
           style={{
-            fontSize: 'clamp(2.8rem, 6vw, 5rem)',
+            fontSize: 'clamp(2.3rem, 5.4vw, 4.6rem)',
             lineHeight: 0.95,
             fontWeight: 950,
             letterSpacing: '-0.06em',
@@ -532,6 +535,19 @@ export default function ParentPage() {
         >
           Welcome back, {parentLabel}
         </div>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ borderRadius: 999, padding: '6px 10px', border: '1px solid rgba(255,255,255,0.16)', background: palette.mode === 'light' ? 'rgba(255,255,255,0.65)' : 'rgba(15,23,42,0.34)', fontSize: 12, fontWeight: 800 }}>
+            {linkedCount} linked student{linkedCount === 1 ? '' : 's'}
+          </div>
+          <div style={{ borderRadius: 999, padding: '6px 10px', border: '1px solid rgba(255,255,255,0.16)', background: palette.mode === 'light' ? 'rgba(255,255,255,0.65)' : 'rgba(15,23,42,0.34)', fontSize: 12, fontWeight: 800 }}>
+            Selected: {selectedName}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(120px, 1fr))', gap: 10, width: 'min(340px, 100%)' }}>
+        <TinyStat label="This Week Words" value={String(weeklyWords)} accent="#4dd4a8" icon={<BookOpen style={{ width: 18, height: 18 }} />} />
+        <TinyStat label="Mastered Vocab" value={String(masteredWords)} accent="#60a5fa" icon={<Check style={{ width: 18, height: 18 }} />} />
       </div>
     </SurfaceCard>
   );
@@ -572,14 +588,15 @@ export default function ParentPage() {
 
   const renderStudentsTab = () => (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
         <section
           style={{
-            borderRadius: 26,
-            padding: 20,
+            borderRadius: 28,
+            padding: 22,
             background: palette.surface,
             border: `1px solid ${palette.border}`,
             boxShadow: palette.softShadow,
+            backdropFilter: 'blur(14px)',
           }}
         >
           <SectionTitle
@@ -649,11 +666,12 @@ export default function ParentPage() {
 
         <section
           style={{
-            borderRadius: 26,
-            padding: 20,
+            borderRadius: 28,
+            padding: 22,
             background: palette.surface,
             border: `1px solid ${palette.border}`,
             boxShadow: palette.softShadow,
+            backdropFilter: 'blur(14px)',
           }}
         >
           <SectionTitle
@@ -770,11 +788,12 @@ export default function ParentPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
         <section
           style={{
-            borderRadius: 26,
-            padding: 20,
+            borderRadius: 28,
+            padding: 22,
             background: palette.surface,
             border: `1px solid ${palette.border}`,
             boxShadow: palette.softShadow,
+            backdropFilter: 'blur(14px)',
           }}
         >
           <SectionTitle
@@ -874,14 +893,15 @@ export default function ParentPage() {
 
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <section
           style={{
-            borderRadius: 26,
-            padding: 20,
+            borderRadius: 28,
+            padding: 22,
             background: palette.surface,
             border: `1px solid ${palette.border}`,
             boxShadow: palette.softShadow,
+            backdropFilter: 'blur(14px)',
           }}
         >
           <SectionTitle
@@ -918,11 +938,12 @@ export default function ParentPage() {
 
         <section
           style={{
-            borderRadius: 26,
-            padding: 20,
+            borderRadius: 28,
+            padding: 22,
             background: palette.surface,
             border: `1px solid ${palette.dangerBorder}`,
             boxShadow: palette.softShadow,
+            backdropFilter: 'blur(14px)',
           }}
         >
           <SectionTitle

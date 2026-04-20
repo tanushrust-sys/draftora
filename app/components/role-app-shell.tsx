@@ -52,15 +52,19 @@ export function RoleAppShell({
   const isLight = mode === 'light';
 
   const shellBg = isLight
-    ? 'linear-gradient(180deg, #f8fbff 0%, #edf7f5 100%)'
+    ? `
+          radial-gradient(circle at 8% -6%, rgba(16,185,129,0.16) 0%, transparent 28%),
+          radial-gradient(circle at 92% 0%, rgba(56,189,248,0.18) 0%, transparent 30%),
+          linear-gradient(180deg, #f5fbff 0%, #ecf7f5 100%)
+        `
     : `
-          radial-gradient(circle at 12% 0%, color-mix(in srgb, ${accent} 22%, transparent) 0%, transparent 30%),
-          radial-gradient(circle at 88% 0%, rgba(91,216,255,0.14) 0%, transparent 24%),
-          radial-gradient(circle at 50% 108%, rgba(168,85,247,0.10) 0%, transparent 30%),
-          linear-gradient(180deg, #040714 0%, #091326 52%, #050711 100%)
+          radial-gradient(circle at 8% 0%, color-mix(in srgb, ${accent} 30%, transparent) 0%, transparent 28%),
+          radial-gradient(circle at 90% 0%, rgba(56,189,248,0.18) 0%, transparent 24%),
+          radial-gradient(circle at 50% 104%, rgba(20,184,166,0.14) 0%, transparent 28%),
+          linear-gradient(180deg, #030815 0%, #081226 48%, #040812 100%)
         `;
-  const shellCard = isLight ? 'rgba(255,255,255,0.9)' : `color-mix(in srgb, rgba(12, 18, 32, 0.92) 90%, ${accent} 10%)`;
-  const shellSurface2 = isLight ? 'rgba(247,250,255,0.92)' : 'rgba(16, 23, 42, 0.84)';
+  const shellCard = isLight ? 'rgba(255,255,255,0.92)' : `color-mix(in srgb, rgba(12, 20, 36, 0.93) 88%, ${accent} 12%)`;
+  const shellSurface2 = isLight ? 'rgba(247,251,255,0.94)' : 'rgba(16, 24, 44, 0.86)';
   const shellChipBg = isLight ? 'rgba(15, 23, 42, 0.04)' : 'rgba(255,255,255,0.07)';
   const shellBorder = isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(125, 211, 252, 0.14)';
   const shellText = isLight ? '#0f172a' : '#f8fbff';
@@ -125,25 +129,25 @@ export function RoleAppShell({
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 16,
-            padding: '12px 18px',
-            borderRadius: 22,
-            background: isLight ? shellCard : 'linear-gradient(180deg, rgba(13, 19, 36, 0.94) 0%, rgba(8, 12, 24, 0.88) 100%)',
+            padding: '13px 18px',
+            borderRadius: 24,
+            background: isLight ? shellCard : 'linear-gradient(180deg, rgba(10, 18, 34, 0.95) 0%, rgba(6, 12, 26, 0.9) 100%)',
             border: `1px solid ${shellBorder}`,
-            boxShadow: isLight ? '0 18px 50px rgba(0,0,0,0.16)' : '0 28px 82px rgba(0,0,0,0.38)',
+            boxShadow: isLight ? '0 18px 54px rgba(2,6,23,0.18)' : '0 30px 84px rgba(0,0,0,0.4)',
             backdropFilter: 'blur(16px)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div
               style={{
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 borderRadius: 16,
                 background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 52%, white))`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: `0 14px 30px color-mix(in srgb, ${accent} 28%, transparent)`,
+                boxShadow: `0 16px 32px color-mix(in srgb, ${accent} 32%, transparent)`,
               }}
             >
               <Sparkles style={{ width: 18, height: 18, color: '#fff' }} />
@@ -168,6 +172,7 @@ export function RoleAppShell({
                 color: shellText2,
                 fontSize: 13,
                 fontWeight: 700,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
               }}
             >
               {profile.username}
@@ -187,7 +192,7 @@ export function RoleAppShell({
                 fontSize: 13,
                 fontWeight: 700,
                 padding: '10px 14px',
-                boxShadow: '0 6px 14px color-mix(in srgb, var(--t-danger) 18%, transparent)',
+                boxShadow: '0 8px 16px color-mix(in srgb, var(--t-danger) 20%, transparent)',
                 cursor: 'pointer',
               }}
             >
@@ -257,11 +262,11 @@ export function RoleAppShell({
             transform: 'translateX(-50%)',
             width: 'min(1180px, calc(100vw - 1.5rem))',
             zIndex: 30,
-            borderRadius: 24,
-            background: isLight ? 'rgba(255,255,255,0.92)' : 'linear-gradient(180deg, rgba(10, 16, 30, 0.88) 0%, rgba(8, 12, 24, 0.84) 100%)',
+            borderRadius: 26,
+            background: isLight ? 'rgba(255,255,255,0.94)' : 'linear-gradient(180deg, rgba(8, 15, 28, 0.9) 0%, rgba(6, 10, 22, 0.86) 100%)',
             border: `1px solid ${shellBorder}`,
-            boxShadow: isLight ? '0 18px 60px rgba(0,0,0,0.22)' : '0 28px 82px rgba(0,0,0,0.40)',
-            backdropFilter: 'blur(18px)',
+            boxShadow: isLight ? '0 20px 60px rgba(0,0,0,0.24)' : '0 30px 86px rgba(0,0,0,0.42)',
+            backdropFilter: 'blur(20px)',
             padding: 10,
             display: 'grid',
             gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))`,
@@ -281,11 +286,11 @@ export function RoleAppShell({
                 style={{
                   border: 'none',
                   borderRadius: 18,
-                  padding: '11px 12px',
+                  padding: '12px 12px',
                   cursor: 'pointer',
                   textAlign: 'left',
                   background: active
-                    ? `linear-gradient(135deg, color-mix(in srgb, ${accent} 20%, transparent) 0%, color-mix(in srgb, ${accent} 10%, transparent) 100%)`
+                    ? `linear-gradient(135deg, color-mix(in srgb, ${accent} 26%, transparent) 0%, color-mix(in srgb, ${accent} 14%, transparent) 100%)`
                     : 'transparent',
                   color: shellText,
                   outline: 'none',
@@ -295,19 +300,19 @@ export function RoleAppShell({
                   minHeight: hasDescription ? 66 : 58,
                   borderLeft: active ? `1px solid color-mix(in srgb, ${accent} 26%, transparent)` : '1px solid transparent',
                   borderTop: active ? `1px solid color-mix(in srgb, ${accent} 22%, transparent)` : '1px solid transparent',
-                  boxShadow: active ? `0 12px 26px color-mix(in srgb, ${accent} 14%, transparent)` : 'none',
+                  boxShadow: active ? `0 14px 28px color-mix(in srgb, ${accent} 20%, transparent)` : 'none',
                 }}
               >
                 <span
                   style={{
-                    width: 34,
-                    height: 34,
+                    width: 36,
+                    height: 36,
                     borderRadius: 12,
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     background: active
-                      ? `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 65%, white))`
+                      ? `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 72%, white))`
                       : isLight ? 'color-mix(in srgb, var(--t-tx3) 12%, transparent)' : 'rgba(255,255,255,0.06)',
                     color: active ? '#fff' : shellText2,
                     flexShrink: 0,
