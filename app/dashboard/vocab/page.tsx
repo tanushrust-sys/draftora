@@ -2176,7 +2176,7 @@ export default function VocabPage() {
             <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--t-tx)' }}>Today&apos;s Words</h2>
             <span style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 600 }}>{dailyWords.length} words today</span>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--t-tx3)', marginTop: -6, marginBottom: 14 }}>
+          <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--t-tx3)', marginTop: -6, marginBottom: 14 }}>
             Submit a sentence for all 3 words to unlock extra words.
           </p>
 

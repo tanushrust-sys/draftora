@@ -253,12 +253,12 @@ function getTargetSectionCount(wordCount: number) {
   return 5;
 }
 
-// Send up to 10000 chars in full; beyond that, trim head + tail to preserve context
+// Keep prompt context compact to reduce token cost while preserving opening + ending coherence.
 function buildCompactExcerpt(content: string) {
   const normalized = content.replace(/\s+/g, ' ').trim();
-  if (normalized.length <= 10000) return normalized;
-  const head = normalized.slice(0, 7000);
-  const tail = normalized.slice(-1500);
+  if (normalized.length <= 5200) return normalized;
+  const head = normalized.slice(0, 3600);
+  const tail = normalized.slice(-1200);
   return `${head}\n\n[Middle section trimmed — story continues]\n\n${tail}`;
 }
 
@@ -386,6 +386,22 @@ function ensureRewrittenVersion(feedback: WritingFeedback, content: string, prom
     ...feedback,
     rewritten_version: sanitizeRewriteOnly(buildRewrittenFallback(content, prompt, category)),
   };
+}
+
+function isFeedbackQualityAcceptable(feedback: WritingFeedback, sourceWordCount: number) {
+  const paragraphLen = feedback.paragraph_feedback.trim().length;
+  const overallLen = feedback.overall.trim().length;
+  const rewriteWords = wordCount(feedback.rewritten_version);
+  const targetRewriteMin = Math.max(45, Math.min(190, Math.floor(sourceWordCount * 0.45)));
+
+  const minimumParagraphLen = sourceWordCount < 120 ? 280 : sourceWordCount < 280 ? 460 : 620;
+  const minimumOverallLen = 220;
+
+  return (
+    paragraphLen >= minimumParagraphLen &&
+    overallLen >= minimumOverallLen &&
+    rewriteWords >= targetRewriteMin
+  );
 }
 
 function buildStructuredFallbackFeedback(content: string, prompt?: string, category?: string): WritingFeedback {
@@ -678,13 +694,14 @@ export async function POST(req: Request) {
         }
 
         const client = new OpenAI({ apiKey });
-        const model = process.env.AI_ASSIST_MODEL || process.env.AI_SMART_MODEL || 'gpt-4.1-mini';
+        const model = process.env.AI_ASSIST_MODEL || process.env.AI_FAST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5.4-nano';
         const fallbackCandidates = [
           process.env.AI_FALLBACK_MODEL,
+          process.env.AI_SMART_MODEL,
           'gpt-5-mini',
           'gpt-4.1-mini',
         ].filter((m): m is string => Boolean(m && m.trim()));
-        const modelsToTry = [model, ...fallbackCandidates.filter((m) => m !== model)];
+        const modelsToTry = Array.from(new Set([model, ...fallbackCandidates.filter((m) => m !== model)]));
 
         let completion: Awaited<ReturnType<typeof client.chat.completions.create>> | null = null;
         let lastError: unknown = null;
@@ -694,8 +711,8 @@ export async function POST(req: Request) {
           try {
             completion = await client.chat.completions.create({
               model: candidate,
-              temperature: 0.7,
-              max_tokens: 700,
+              temperature: 0.4,
+              max_tokens: 420,
               messages: [
                 { role: 'system', content: AI_ASSIST_SYSTEM_PROMPT },
                 { role: 'user', content: userPrompt },
@@ -807,24 +824,24 @@ In rewritten_version, enforce:
 - Keep length target; do not add meta commentary or labels.
 - Upgrade diction, clarity, flow, and specificity without changing the core meaning.`;
 
-    const feedbackMaxTokens = safeWordCount < 120
-      ? 950
+    const fastMaxTokens = safeWordCount < 120
+      ? 700
       : safeWordCount < 260
-        ? 1200
+        ? 880
         : safeWordCount < 520
-          ? 1500
-          : 1750;
+          ? 1080
+          : 1260;
+    const smartMaxTokens = safeWordCount < 120
+      ? 900
+      : safeWordCount < 260
+        ? 1100
+        : safeWordCount < 520
+          ? 1320
+          : 1520;
 
-    const raw = await chat({
-      tier: 'smart',
-      system,
-      maxTokens: feedbackMaxTokens,
-      jsonMode: true,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
-
-    const parsed = parseFeedback(raw);
-    if (!parsed) {
+    const tryParseFeedback = (raw: string) => {
+      const parsed = parseFeedback(raw);
+      if (parsed) return parsed;
       try {
         const obj = JSON.parse(repairJSON(extractJSON(raw))) as Record<string, unknown>;
         const types = Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, Array.isArray(v) ? 'array' : typeof v]));
@@ -832,10 +849,34 @@ In rewritten_version, enforce:
       } catch (e) {
         console.error('ai-feedback: JSON invalid after repair —', (e as Error).message, '\nRaw[0..500]:', raw.slice(0, 500));
       }
+      return null;
+    };
+
+    const fastRaw = await chat({
+      tier: 'fast',
+      system,
+      maxTokens: fastMaxTokens,
+      jsonMode: true,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+    const fastParsed = tryParseFeedback(fastRaw);
+    if (fastParsed && isFeedbackQualityAcceptable(fastParsed, safeWordCount)) {
+      return NextResponse.json({ feedback: ensureRewrittenVersion(fastParsed, content, prompt, category) });
+    }
+
+    const smartRaw = await chat({
+      tier: 'smart',
+      system,
+      maxTokens: smartMaxTokens,
+      jsonMode: true,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+    const smartParsed = tryParseFeedback(smartRaw);
+    if (!smartParsed) {
       return NextResponse.json({ feedback: buildStructuredFallbackFeedback(content, prompt, category) });
     }
 
-    return NextResponse.json({ feedback: ensureRewrittenVersion(parsed, content, prompt, category) });
+    return NextResponse.json({ feedback: ensureRewrittenVersion(smartParsed, content, prompt, category) });
   } catch (err) {
     console.error('ai-feedback error:', err);
     if (payload.content && payload.content.trim().length > 0) {

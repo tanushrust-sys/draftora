@@ -3,7 +3,7 @@
 // WRITING STUDIO — Write, Journal, and Progress in one place
 // Three tabs: Write (editor + AI feedback) | Journal (all writings) | My Progress (improvement chart)
 
-import { useState, useEffect, useCallback, useMemo, useRef, Suspense, startTransition } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense, startTransition, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { fetchWithTimeout, FetchTimeoutError } from '@/app/lib/fetch-with-timeout';
@@ -418,6 +418,12 @@ function trimToWordLimit(text: string, wordLimit: number) {
   }
 
   return text;
+}
+
+function countWords(text: string) {
+  const normalized = text.trim();
+  if (!normalized) return 0;
+  return normalized.split(/\s+/).length;
 }
 
 function resolvePromptForCategory(category: string, ageGroup?: string) {
@@ -1122,7 +1128,7 @@ function WritingsContent() {
 
   // ── Live word count ──
   useEffect(() => {
-    setWordCount(content.trim() ? content.trim().split(/\s+/).length : 0);
+    setWordCount(countWords(content));
   }, [content]);
 
   useEffect(() => {
@@ -2064,6 +2070,60 @@ function WritingsContent() {
     setContent(trimToWordLimit(nextValue, WRITING_WORD_LIMIT));
   }, []);
 
+  const handleContentKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (wordCount < WRITING_WORD_LIMIT) return;
+    if (event.nativeEvent.isComposing) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    const allowedKeys = new Set([
+      'Backspace',
+      'Delete',
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+      'Home',
+      'End',
+      'PageUp',
+      'PageDown',
+      'Tab',
+      'Escape',
+    ]);
+
+    if (allowedKeys.has(event.key)) return;
+
+    const target = event.currentTarget;
+    if (target.selectionStart !== target.selectionEnd) return;
+    event.preventDefault();
+  }, [wordCount]);
+
+  const handleContentPaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = event.clipboardData.getData('text');
+    if (!pasted) return;
+
+    const target = event.currentTarget;
+    const selectionStart = target.selectionStart ?? 0;
+    const selectionEnd = target.selectionEnd ?? selectionStart;
+    const selectedText = content.slice(selectionStart, selectionEnd);
+    const remainingWords = WRITING_WORD_LIMIT - (countWords(content) - countWords(selectedText));
+
+    event.preventDefault();
+    if (remainingWords <= 0) return;
+
+    const limitedPaste = trimToWordLimit(pasted, remainingWords);
+    if (!limitedPaste) return;
+
+    const merged = `${content.slice(0, selectionStart)}${limitedPaste}${content.slice(selectionEnd)}`;
+    const limitedMerged = trimToWordLimit(merged, WRITING_WORD_LIMIT);
+    setContent(limitedMerged);
+
+    const nextCaret = Math.min(selectionStart + limitedPaste.length, limitedMerged.length);
+    requestAnimationFrame(() => {
+      target.selectionStart = nextCaret;
+      target.selectionEnd = nextCaret;
+    });
+  }, [content]);
+
   const handleCategoryChange = useCallback((nextCategory: string) => {
     if (isStyleLockedByHomework) return;
     const nextPrompt = resolvePromptForCategory(nextCategory, profile?.age_group ?? undefined);
@@ -2461,6 +2521,8 @@ function WritingsContent() {
                 <textarea
                   value={content}
                   onChange={e => handleContentChange(e.target.value)}
+                  onKeyDown={handleContentKeyDown}
+                  onPaste={handleContentPaste}
                   placeholder={prompt ? 'Write your response to the prompt above…' : 'Start writing here…'}
                   disabled={status !== 'idle'}
                   style={{
