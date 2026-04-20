@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
+  Clock3,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -98,7 +99,7 @@ type ParentHomeworkPanelProps = {
   mode: 'dark' | 'light';
 };
 
-type HomeworkAction = 'assign' | 'timetable' | 'performance';
+type HomeworkAction = 'assign' | 'timetable' | 'currentFuture' | 'performance';
 type AssignStep = 1 | 2 | 3 | 4;
 type TimetableStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -142,6 +143,14 @@ function capitalizeFirst(value: string) {
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
+}
+
+function formatPerformanceDay(date: string) {
+  return fromYmd(date).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 function CounterField({
@@ -227,17 +236,20 @@ function ActionButton({
       onClick={onClick}
       style={{
         borderRadius: 18,
-        border: active ? '1px solid rgba(77,212,168,0.38)' : '1px solid var(--workspace-border)',
-        background: active ? 'linear-gradient(135deg, rgba(77,212,168,0.26), rgba(103,232,249,0.2))' : 'var(--workspace-surface)',
+        border: active ? '1px solid rgba(77,212,168,0.5)' : '1px solid var(--workspace-border)',
+        background: active
+          ? 'linear-gradient(138deg, rgba(77,212,168,0.38) 0%, rgba(103,232,249,0.25) 100%)'
+          : 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 82%, transparent), var(--workspace-surface))',
         color: 'var(--workspace-text)',
-        padding: '14px 16px',
+        padding: '14px 18px',
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        fontSize: 13,
+        fontSize: 13.5,
         fontWeight: 850,
         cursor: 'pointer',
-        boxShadow: active ? '0 14px 30px rgba(77,212,168,0.16)' : 'none',
+        boxShadow: active ? '0 16px 34px rgba(77,212,168,0.2)' : '0 10px 24px rgba(2,6,23,0.08)',
+        transform: active ? 'translateY(-1px)' : 'none',
       }}
     >
       {icon}
@@ -270,11 +282,11 @@ export function ParentHomeworkPanel({
   const [timetableModalOpen, setTimetableModalOpen] = useState(false);
   const [timetableStep, setTimetableStep] = useState<TimetableStep>(1);
   const [assignStep, setAssignStep] = useState<AssignStep>(1);
+  const [timelineWindowDays, setTimelineWindowDays] = useState<7 | 14 | 30>(14);
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => startOfMonth(new Date()));
 
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyHomeworkPlan>(() => createDefaultWeeklyPlan());
 
-  const assignedDate = selectedDates[0] ?? toYmd(new Date());
   const selectedDatesSorted = useMemo(() => [...selectedDates].sort(), [selectedDates]);
   const selectedDatesText = useMemo(() => selectedDatesSorted.map((date) => formatHomeworkDate(date)).join(', '), [selectedDatesSorted]);
   const todayKey = toYmd(new Date());
@@ -476,13 +488,46 @@ export function ParentHomeworkPanel({
       return day;
     });
   }, [calendarMonth]);
+  const recentAssignmentsPreview = (data?.recentAssignments ?? []).slice(0, 6);
+  const currentTasks = data?.todayTasks ?? [];
+  const futureTasks = data?.upcoming ?? [];
+  const performanceDays = data?.performance.days ?? [];
+  const timelineOptions: Array<7 | 14 | 30> = performanceDays.length > 14 ? [7, 14, 30] : [7, 14];
+  const visiblePerformanceDays = performanceDays.slice(0, Math.min(timelineWindowDays, performanceDays.length));
 
   return (
-    <section style={{ borderRadius: 28, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', boxShadow: mode === 'dark' ? '0 20px 64px rgba(0,0,0,0.26)' : '0 16px 42px rgba(15,23,42,0.12)', padding: 20, display: 'grid', gap: 18 }}>
-      <div style={{ display: 'grid', gap: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#4dd4a8' }}>Homework</div>
-        <div style={{ fontSize: 28, fontWeight: 950, letterSpacing: '-0.04em' }}>Plan, assign, and track with clarity</div>
-        <div style={{ fontSize: 14, color: 'var(--workspace-text2)', lineHeight: 1.7 }}>Start by selecting a child, then assign one-time homework, build a recurring weekly timetable, and review meaningful progress from the last two weeks.</div>
+    <section style={{ borderRadius: 30, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', boxShadow: mode === 'dark' ? '0 24px 72px rgba(0,0,0,0.3)' : '0 18px 46px rgba(15,23,42,0.13)', padding: 22, display: 'grid', gap: 18 }}>
+      <div
+        style={{
+          display: 'grid',
+          gap: 10,
+          borderRadius: 22,
+          border: '1px solid color-mix(in srgb, var(--workspace-border) 88%, transparent)',
+          background: mode === 'dark'
+            ? 'linear-gradient(135deg, rgba(14,22,36,0.98) 0%, rgba(9,31,39,0.96) 56%, rgba(20,78,69,0.42) 100%)'
+            : 'linear-gradient(135deg, rgba(236,253,245,0.92) 0%, rgba(204,251,241,0.78) 60%, rgba(165,243,252,0.56) 100%)',
+          padding: 18,
+        }}
+      >
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#34d399' }}>Homework</div>
+        <div style={{ fontSize: 33, fontWeight: 950, letterSpacing: '-0.05em', lineHeight: 1.05 }}>Plan, assign, and track with clarity</div>
+        <div style={{ fontSize: 14, color: 'var(--workspace-text2)', lineHeight: 1.7 }}>
+          Start by selecting a child, then assign one-time homework, build a recurring weekly timetable, and review meaningful progress from the last two weeks.
+        </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ borderRadius: 999, padding: '7px 12px', fontSize: 12, fontWeight: 800, background: 'rgba(16,185,129,0.16)', border: '1px solid rgba(16,185,129,0.35)' }}>
+            {links.length} linked student{links.length === 1 ? '' : 's'}
+          </div>
+          <div style={{ borderRadius: 999, padding: '7px 12px', fontSize: 12, fontWeight: 800, background: 'rgba(56,189,248,0.16)', border: '1px solid rgba(56,189,248,0.34)' }}>
+            {activeAction === 'assign'
+              ? 'Assign mode'
+              : activeAction === 'timetable'
+                ? 'Timetable mode'
+                : activeAction === 'currentFuture'
+                  ? 'Current/future mode'
+                  : 'Performance mode'}
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
@@ -524,6 +569,7 @@ export function ParentHomeworkPanel({
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <ActionButton icon={<ClipboardCheck style={{ width: 16, height: 16 }} />} title="Assign Homework" active={activeAction === 'assign'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('assign'); }} />
             <ActionButton icon={<CalendarDays style={{ width: 16, height: 16 }} />} title="Timetable" active={activeAction === 'timetable'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('timetable'); }} />
+            <ActionButton icon={<Clock3 style={{ width: 16, height: 16 }} />} title="Current/Future" active={activeAction === 'currentFuture'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('currentFuture'); }} />
             <ActionButton icon={<BarChart3 style={{ width: 16, height: 16 }} />} title="View Performance" active={activeAction === 'performance'} onClick={() => { setAssignModalOpen(false); setTimetableModalOpen(false); setActiveAction('performance'); }} />
           </div>
 
@@ -536,59 +582,57 @@ export function ParentHomeworkPanel({
 
           {activeAction === 'assign' && !loading ? (
             <div style={{ display: 'grid', gap: 14 }}>
-              <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 16, display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 15, fontWeight: 900 }}>Guided assignment popup</div>
-                <div style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.7 }}>
-                  Homework setup now opens in a step-by-step popup. You only see one step at a time and unlock the next step by clicking Continue.
+              <div style={{ borderRadius: 24, border: '1px solid rgba(16,185,129,0.4)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--workspace-surface2) 78%, rgba(16,185,129,0.24)) 0%, color-mix(in srgb, var(--workspace-surface2) 90%, rgba(56,189,248,0.2)) 55%, color-mix(in srgb, var(--workspace-surface2) 96%, rgba(14,165,233,0.12)) 100%)', padding: 20, display: 'grid', gap: 16, boxShadow: '0 20px 40px rgba(16,185,129,0.16)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 20, fontWeight: 950, letterSpacing: '-0.02em' }}>
+                      <ClipboardCheck style={{ width: 18, height: 18, color: '#22c55e' }} />
+                      Guided assignment flow
+                    </div>
+                    <div style={{ fontSize: 14, color: 'var(--workspace-text2)', lineHeight: 1.75, maxWidth: 760 }}>
+                      Build one assignment in minutes with a focused step-by-step wizard. Pick dates, set writing + vocab goals, review, and publish confidently.
+                    </div>
+                  </div>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(16,185,129,0.42)', background: 'rgba(16,185,129,0.14)', padding: '7px 12px', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 900, color: 'var(--workspace-text)', whiteSpace: 'nowrap' }}>
+                    4-step wizard
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={openAssignModal}
-                  style={{
-                    border: 'none',
-                    borderRadius: 14,
-                    padding: '12px 15px',
-                    background: 'linear-gradient(135deg, #4dd4a8 0%, #67e8f9 100%)',
-                    color: '#00201a',
-                    fontSize: 14,
-                    fontWeight: 900,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    cursor: 'pointer',
-                    boxShadow: '0 14px 26px rgba(77,212,168,0.24)',
-                    width: 'fit-content',
-                  }}
-                >
-                  <ClipboardCheck style={{ width: 14, height: 14 }} />
-                  Open Assign Homework
-                </button>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(34,197,94,0.35)', background: 'rgba(34,197,94,0.1)', padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>Date selection</div>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(56,189,248,0.35)', background: 'rgba(56,189,248,0.1)', padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>Writing + vocab setup</div>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.1)', padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>Final review</div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={openAssignModal}
+                    style={{
+                      border: 'none',
+                      borderRadius: 16,
+                      padding: '14px 20px',
+                      background: 'linear-gradient(135deg, #34d399 0%, #67e8f9 55%, #22d3ee 100%)',
+                      color: '#00201a',
+                      fontSize: 15,
+                      fontWeight: 950,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      cursor: 'pointer',
+                      boxShadow: '0 18px 30px rgba(52,211,153,0.3)',
+                      width: 'fit-content',
+                    }}
+                  >
+                    <ClipboardCheck style={{ width: 15, height: 15 }} />
+                    Open Assign Homework
+                  </button>
+                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700 }}>
+                    Recommended when setting new weekly goals
+                  </div>
+                </div>
               </div>
 
-              <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 14, background: 'var(--workspace-surface2)', display: 'grid', gap: 8 }}>
-                {(data?.recentAssignments ?? []).length === 0 ? (
-                  <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No homework has been assigned yet.</div>
-                ) : (
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {(data?.recentAssignments ?? []).slice(0, 4).map((item) => (
-                      <div key={item.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', padding: 10, background: 'var(--workspace-surface)', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>{item.title}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ fontSize: 12, color: 'var(--workspace-text3)' }}>{item.dueLabel}</div>
-                          <button
-                            type="button"
-                            onClick={() => void deleteHomeworkAssignment(item.id)}
-                            title="Delete homework"
-                            style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', color: 'var(--workspace-text3)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
-                          >
-                            <X style={{ width: 13, height: 13 }} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           ) : null}
 
@@ -1301,139 +1345,294 @@ export function ParentHomeworkPanel({
 
           {activeAction === 'timetable' && !loading ? (
             <div style={{ display: 'grid', gap: 14 }}>
-              <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 16, display: 'grid', gap: 12 }}>
-                <div style={{ fontSize: 15, fontWeight: 900 }}>Weekly timetable popup</div>
-                <div style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.7 }}>
-                  This opens an 8-step flow: 1 step for each day, then a final review step.
+              <div style={{ borderRadius: 24, border: '1px solid rgba(56,189,248,0.4)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--workspace-surface2) 80%, rgba(56,189,248,0.24)) 0%, color-mix(in srgb, var(--workspace-surface2) 92%, rgba(59,130,246,0.16)) 60%, color-mix(in srgb, var(--workspace-surface2) 96%, rgba(14,116,144,0.16)) 100%)', padding: 20, display: 'grid', gap: 16, boxShadow: '0 20px 38px rgba(56,189,248,0.16)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 20, fontWeight: 950, letterSpacing: '-0.02em' }}>
+                      <CalendarDays style={{ width: 18, height: 18, color: '#38bdf8' }} />
+                      Weekly timetable builder
+                    </div>
+                    <div style={{ fontSize: 14, color: 'var(--workspace-text2)', lineHeight: 1.75, maxWidth: 760 }}>
+                      Plan your child’s entire week in one guided flow. Configure Monday to Sunday, then do a final review before saving.
+                    </div>
+                  </div>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(56,189,248,0.42)', background: 'rgba(56,189,248,0.14)', padding: '7px 12px', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 900, color: 'var(--workspace-text)', whiteSpace: 'nowrap' }}>
+                    8-step planner
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={openTimetableModal}
-                  style={{
-                    border: 'none',
-                    borderRadius: 14,
-                    padding: '12px 15px',
-                    background: 'linear-gradient(135deg, #4dd4a8 0%, #67e8f9 100%)',
-                    color: '#00201a',
-                    fontSize: 14,
-                    fontWeight: 900,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    cursor: 'pointer',
-                    boxShadow: '0 14px 26px rgba(77,212,168,0.24)',
-                    width: 'fit-content',
-                  }}
-                >
-                  <CalendarDays style={{ width: 14, height: 14 }} />
-                  Open Weekly Timetable
-                </button>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(56,189,248,0.35)', background: 'rgba(56,189,248,0.1)', padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>Mon-Sun coverage</div>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(99,102,241,0.35)', background: 'rgba(99,102,241,0.1)', padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>Recurring homework</div>
+                  <div style={{ borderRadius: 999, border: '1px solid rgba(14,165,233,0.35)', background: 'rgba(14,165,233,0.1)', padding: '5px 10px', fontSize: 12, fontWeight: 800 }}>Final review</div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={openTimetableModal}
+                    style={{
+                      border: 'none',
+                      borderRadius: 16,
+                      padding: '14px 20px',
+                      background: 'linear-gradient(135deg, #22d3ee 0%, #60a5fa 55%, #38bdf8 100%)',
+                      color: '#041826',
+                      fontSize: 15,
+                      fontWeight: 950,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      cursor: 'pointer',
+                      boxShadow: '0 18px 30px rgba(56,189,248,0.28)',
+                      width: 'fit-content',
+                    }}
+                  >
+                    <CalendarDays style={{ width: 15, height: 15 }} />
+                    Open Weekly Timetable
+                  </button>
+                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700 }}>
+                    Best for building a repeatable weekly rhythm
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
 
           {activeAction === 'performance' && !loading ? (
             <div style={{ display: 'grid', gap: 14 }}>
+              <div style={{ borderRadius: 22, border: '1px solid rgba(56,189,248,0.36)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--workspace-surface2) 80%, rgba(56,189,248,0.2)) 0%, color-mix(in srgb, var(--workspace-surface2) 90%, rgba(14,165,233,0.16)) 58%, var(--workspace-surface2) 100%)', padding: 16, display: 'grid', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#7dd3fc' }}>Performance Intelligence</div>
+                <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: '-0.03em' }}>Progress dashboard for the last 14 days</div>
+                <div style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.65 }}>
+                  See completion trends, identify bottlenecks quickly, and turn insights into next-step actions.
+                </div>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-                <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface2)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700 }}>2-week completion</div>
-                  <div style={{ fontSize: 28, fontWeight: 950, color: '#4dd4a8' }}>{data?.performance.summary.twoWeekCompletionRate ?? 0}%</div>
+                <div style={{ borderRadius: 18, border: '1px solid rgba(16,185,129,0.32)', padding: 14, background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 84%, rgba(16,185,129,0.16)) 0%, var(--workspace-surface2) 100%)', boxShadow: '0 14px 24px rgba(16,185,129,0.11)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>2-week completion</div>
+                  <div style={{ fontSize: 30, fontWeight: 950, color: '#34d399', marginTop: 4 }}>{data?.performance.summary.twoWeekCompletionRate ?? 0}%</div>
                 </div>
-                <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface2)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700 }}>Writing completion</div>
-                  <div style={{ fontSize: 28, fontWeight: 950 }}>{data?.performance.summary.writingCompletionRate ?? 0}%</div>
+                <div style={{ borderRadius: 18, border: '1px solid rgba(59,130,246,0.3)', padding: 14, background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 84%, rgba(59,130,246,0.16)) 0%, var(--workspace-surface2) 100%)', boxShadow: '0 14px 24px rgba(59,130,246,0.11)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Writing completion</div>
+                  <div style={{ fontSize: 30, fontWeight: 950, marginTop: 4 }}>{data?.performance.summary.writingCompletionRate ?? 0}%</div>
                 </div>
-                <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface2)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700 }}>Vocab completion</div>
-                  <div style={{ fontSize: 28, fontWeight: 950 }}>{data?.performance.summary.vocabCompletionRate ?? 0}%</div>
+                <div style={{ borderRadius: 18, border: '1px solid rgba(239,68,68,0.3)', padding: 14, background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 84%, rgba(239,68,68,0.14)) 0%, var(--workspace-surface2) 100%)', boxShadow: '0 14px 24px rgba(239,68,68,0.1)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Vocab completion</div>
+                  <div style={{ fontSize: 30, fontWeight: 950, marginTop: 4 }}>{data?.performance.summary.vocabCompletionRate ?? 0}%</div>
                 </div>
-                <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface2)' }}>
-                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700 }}>Consistency streak</div>
-                  <div style={{ fontSize: 28, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Flame style={{ width: 20, height: 20, color: '#f97316' }} />
+                <div style={{ borderRadius: 18, border: '1px solid rgba(249,115,22,0.32)', padding: 14, background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 84%, rgba(249,115,22,0.14)) 0%, var(--workspace-surface2) 100%)', boxShadow: '0 14px 24px rgba(249,115,22,0.1)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Consistency streak</div>
+                  <div style={{ fontSize: 30, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <Flame style={{ width: 20, height: 20, color: '#fb923c' }} />
                     {data?.performance.summary.consistencyStreak ?? 0}
                   </div>
                 </div>
               </div>
 
-              <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 900 }}>Past writings</div>
-                <div style={{ display: 'grid', gap: 8, maxHeight: 330, overflow: 'auto', paddingRight: 3 }}>
-                  {(data?.performance.days ?? []).map((day) => (
-                    <div key={day.date} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', padding: 10, background: 'var(--workspace-surface)', display: 'grid', gap: 7 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 800 }}>{day.weekday}, {formatHomeworkDate(day.date)}</div>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: day.completionRate >= 80 ? '#4dd4a8' : day.completionRate > 0 ? '#fbbf24' : 'var(--workspace-text3)' }}>{day.completionRate}%</div>
-                      </div>
-                      <div style={{ height: 6, borderRadius: 999, background: 'var(--workspace-border)', overflow: 'hidden', display: 'flex' }}>
-                        <div
+              <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 16, fontWeight: 900 }}>Past {visiblePerformanceDays.length || Math.min(timelineWindowDays, 14)} days</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {timelineOptions.map((option) => {
+                      const active = timelineWindowDays === option;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setTimelineWindowDays(option)}
                           style={{
-                            height: '100%',
-                            width: `${day.writingRequired > 0 && day.vocabRequired > 0
-                              ? Math.round((day.writingCompleted / day.writingRequired) * 50)
-                              : Math.round((day.writingRequired > 0 ? day.writingCompleted / day.writingRequired : 0) * 100)}%`,
-                            background: '#3b82f6',
+                            borderRadius: 999,
+                            border: active ? '1px solid rgba(56,189,248,0.5)' : '1px solid var(--workspace-border)',
+                            background: active ? 'linear-gradient(135deg, rgba(56,189,248,0.24), rgba(99,102,241,0.16))' : 'var(--workspace-surface)',
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: active ? 'var(--workspace-text)' : 'var(--workspace-text2)',
+                            letterSpacing: '0.06em',
+                            cursor: 'pointer',
                           }}
-                        />
-                        <div
-                          style={{
-                            height: '100%',
-                            width: `${day.writingRequired > 0 && day.vocabRequired > 0
-                              ? Math.round((day.vocabCompleted / day.vocabRequired) * 50)
-                              : Math.round((day.vocabRequired > 0 ? day.vocabCompleted / day.vocabRequired : 0) * 100)}%`,
-                            background: '#ef4444',
-                          }}
-                        />
+                        >
+                          {option}D
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gap: 10, maxHeight: 360, overflow: 'auto', paddingRight: 3 }}>
+                  {visiblePerformanceDays.map((day) => {
+                    const writingRatio = day.writingRequired > 0 ? Math.round((day.writingCompleted / day.writingRequired) * 100) : 0;
+                    const vocabRatio = day.vocabRequired > 0 ? Math.round((day.vocabCompleted / day.vocabRequired) * 100) : 0;
+                    return (
+                      <div key={day.date} style={{ borderRadius: 14, border: '1px solid var(--workspace-border)', padding: 12, background: 'var(--workspace-surface)', display: 'grid', gap: 9 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: 13, fontWeight: 900 }}>{formatPerformanceDay(day.date)}</div>
+                          <div style={{ fontSize: 12, fontWeight: 900, color: day.completionRate >= 80 ? '#34d399' : day.completionRate > 0 ? '#fbbf24' : 'var(--workspace-text3)', borderRadius: 999, border: '1px solid var(--workspace-border)', padding: '4px 8px', background: 'var(--workspace-surface2)' }}>
+                            {day.completionRate}% complete
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                            <span style={{ color: '#60a5fa', fontWeight: 800 }}>Writing {day.writingCompleted}/{day.writingRequired}</span>
+                            <span style={{ color: 'var(--workspace-text3)', fontWeight: 700 }}>{writingRatio}%</span>
+                          </div>
+                          <div style={{ height: 8, borderRadius: 999, background: 'var(--workspace-border)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${writingRatio}%`, background: 'linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%)' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                            <span style={{ color: '#f87171', fontWeight: 800 }}>Vocab {day.vocabCompleted}/{day.vocabRequired}</span>
+                            <span style={{ color: 'var(--workspace-text3)', fontWeight: 700 }}>{vocabRatio}%</span>
+                          </div>
+                          <div style={{ height: 8, borderRadius: 999, background: 'var(--workspace-border)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${vocabRatio}%`, background: 'linear-gradient(90deg, #ef4444 0%, #f87171 100%)' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: 12, color: 'var(--workspace-text2)', fontWeight: 700 }}>
+                          {day.assigned.length} task{day.assigned.length === 1 ? '' : 's'} scheduled
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--workspace-text2)' }}>
-                        <span style={{ color: '#3b82f6' }}>Writing {day.writingCompleted}/{day.writingRequired}</span>
-                        <span style={{ color: '#ef4444' }}>Vocab {day.vocabCompleted}/{day.vocabRequired}</span>
-                        <span>{day.assigned.length} task{day.assigned.length === 1 ? '' : 's'}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-                <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 900 }}><Sparkles style={{ width: 16, height: 16, color: '#4dd4a8' }} /> What is going well</div>
+                <div style={{ borderRadius: 18, border: '1px solid rgba(16,185,129,0.3)', background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 88%, rgba(16,185,129,0.12)) 0%, var(--workspace-surface2) 100%)', padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 900 }}><Sparkles style={{ width: 16, height: 16, color: '#34d399' }} /> What is going well</div>
                   {(data?.performance.summary.insights ?? []).map((item, idx) => (
-                    <div key={idx} style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.6 }}>{item}</div>
+                    <div key={idx} style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.65, borderRadius: 10, border: '1px solid color-mix(in srgb, var(--workspace-border) 90%, transparent)', background: 'var(--workspace-surface)', padding: '10px 11px' }}>
+                      {item}
+                    </div>
                   ))}
                 </div>
 
-                <div style={{ borderRadius: 18, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 900 }}><CheckCircle2 style={{ width: 16, height: 16, color: '#7dd3fc' }} /> Suggested next steps</div>
+                <div style={{ borderRadius: 18, border: '1px solid rgba(56,189,248,0.3)', background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 88%, rgba(56,189,248,0.12)) 0%, var(--workspace-surface2) 100%)', padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 900 }}><CheckCircle2 style={{ width: 16, height: 16, color: '#7dd3fc' }} /> Suggested next steps</div>
                   {(data?.performance.summary.nextSteps ?? []).map((item, idx) => (
-                    <div key={idx} style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.6 }}>{item}</div>
+                    <div key={idx} style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.65, borderRadius: 10, border: '1px solid color-mix(in srgb, var(--workspace-border) 90%, transparent)', background: 'var(--workspace-surface)', padding: '10px 11px' }}>
+                      {item}
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
           ) : null}
 
-          {data && activeAction !== 'performance' ? (
-            <div style={{ borderRadius: 16, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 12, display: 'grid', gap: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 850 }}>Students current homework</div>
-              <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>student facing visibility</div>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {(data.todayTasks.length === 0 ? data.upcoming.slice(0, 2) : data.todayTasks.slice(0, 2)).map((task) => (
-                  <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 10, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{task.title}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ fontSize: 12, color: 'var(--workspace-text3)' }}>{formatHomeworkDate(task.dueDate)}</div>
-                      <button
-                        type="button"
-                        onClick={() => void deleteHomeworkTask(task)}
-                        title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
-                        style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', color: 'var(--workspace-text3)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
-                      >
-                        <X style={{ width: 13, height: 13 }} />
-                      </button>
+          {activeAction === 'currentFuture' && !loading ? (
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div style={{ borderRadius: 20, border: '1px solid rgba(99,102,241,0.3)', background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 85%, rgba(99,102,241,0.16)) 0%, color-mix(in srgb, var(--workspace-surface2) 92%, rgba(56,189,248,0.1)) 100%)', padding: 16, display: 'grid', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 900 }}>
+                  <Clock3 style={{ width: 16, height: 16, color: '#a5b4fc' }} />
+                  Current & future homeworks
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--workspace-text2)', lineHeight: 1.65 }}>
+                  Track what is due now and what is coming next in one focused place.
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 15, fontWeight: 900 }}>Current homework</div>
+                    <div style={{ borderRadius: 999, padding: '4px 9px', fontSize: 12, fontWeight: 800, border: '1px solid rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.12)' }}>
+                      {currentTasks.length}
                     </div>
                   </div>
-                ))}
+                  {currentTasks.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No current homework due today.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {currentTasks.map((task) => (
+                        <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{task.title}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            <div style={{ fontSize: 12, color: 'var(--workspace-text3)' }}>{formatHomeworkDate(task.dueDate)}</div>
+                            <button
+                              type="button"
+                              onClick={() => void deleteHomeworkTask(task)}
+                              title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
+                              style={{ width: 28, height: 28, borderRadius: 9, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                            >
+                              <X style={{ width: 13, height: 13 }} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface2)', padding: 14, display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontSize: 15, fontWeight: 900 }}>Future homework</div>
+                    <div style={{ borderRadius: 999, padding: '4px 9px', fontSize: 12, fontWeight: 800, border: '1px solid rgba(59,130,246,0.35)', background: 'rgba(59,130,246,0.1)' }}>
+                      {futureTasks.length}
+                    </div>
+                  </div>
+                  {futureTasks.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No upcoming homework yet.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {futureTasks.map((task) => (
+                        <div key={task.id} style={{ borderRadius: 12, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{task.title}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            <div style={{ fontSize: 12, color: 'var(--workspace-text3)' }}>{formatHomeworkDate(task.dueDate)}</div>
+                            <button
+                              type="button"
+                              onClick={() => void deleteHomeworkTask(task)}
+                              title={task.source === 'one_time' ? 'Delete homework' : 'Remove recurring homework for this weekday'}
+                              style={{ width: 28, height: 28, borderRadius: 9, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                            >
+                              <X style={{ width: 13, height: 13 }} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ borderRadius: 20, border: '1px solid var(--workspace-border)', padding: 16, background: 'var(--workspace-surface2)', display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 16, fontWeight: 900 }}>Recently assigned</div>
+                  <div style={{ borderRadius: 999, border: '1px solid var(--workspace-border)', background: 'var(--workspace-surface)', padding: '5px 10px', fontSize: 12, fontWeight: 800, color: 'var(--workspace-text2)' }}>
+                    {recentAssignmentsPreview.length} assignments
+                  </div>
+                </div>
+                {recentAssignmentsPreview.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--workspace-text2)' }}>No homework has been assigned yet.</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {recentAssignmentsPreview.map((item, idx) => (
+                      <div key={item.id} style={{ borderRadius: 14, border: '1px solid var(--workspace-border)', padding: 12, background: 'linear-gradient(145deg, var(--workspace-surface), color-mix(in srgb, var(--workspace-surface) 90%, #34d399 10%))', display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.45 }}>{item.title}</div>
+                          <div style={{ marginTop: 5, display: 'inline-flex', alignItems: 'center', borderRadius: 999, border: '1px solid rgba(59,130,246,0.35)', padding: '3px 8px', fontSize: 11, fontWeight: 800, color: '#60a5fa', background: 'rgba(59,130,246,0.08)' }}>
+                            Assignment {idx + 1}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                          <div style={{ fontSize: 12, color: 'var(--workspace-text3)', borderRadius: 999, border: '1px solid var(--workspace-border)', padding: '6px 9px', background: 'var(--workspace-surface2)' }}>{item.dueLabel}</div>
+                          <button
+                            type="button"
+                            onClick={() => void deleteHomeworkAssignment(item.id)}
+                            title="Delete homework"
+                            style={{ width: 30, height: 30, borderRadius: 10, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                          >
+                            <X style={{ width: 13, height: 13 }} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
