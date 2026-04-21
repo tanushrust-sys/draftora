@@ -20,31 +20,31 @@ const PLATFORM_EXPERIENCES = [
   {
     icon: FileText,
     app: 'Student App',
-    title: 'Focused writing and feedback loop',
+    title: 'Focused writing that lifts marks and confidence',
     points: [
       'Write in a calm, prompt-aware editor.',
-      'Get instant AI coaching and rewrites.',
-      'Build confidence with every draft.',
+      'Get instant AI coaching and clearer rewrites.',
+      'Improve results with each new draft.',
     ],
   },
   {
     icon: CalendarCheck2,
     app: 'Parent App',
-    title: 'Simple progress visibility at home',
+    title: 'Clear visibility so parents can support fast',
     points: [
       'See writing momentum without complexity.',
       'Understand feedback in plain language.',
-      'Support practice with clear next steps.',
+      'Guide practice with clear next steps.',
     ],
   },
   {
     icon: MessageSquareText,
     app: 'Teacher App',
-    title: 'Practical support for classroom writing',
+    title: 'Consistent classroom support with less marking time',
     points: [
       'Review stronger drafts in less time.',
-      'Use structured AI insights for guidance.',
-      'Keep support consistent across students.',
+      'Use structured AI insights for feedback consistency.',
+      'Keep support practical across every class.',
     ],
   },
 ] as const;
@@ -52,25 +52,25 @@ const PLATFORM_EXPERIENCES = [
 const OUTCOMES = [
   {
     title: 'Improve Writing Faster',
-    description: 'Turn every draft into a learning loop with precise next steps.',
+    description: 'Turn each draft into better structure, clarity, and marks.',
     audience: 'Student',
-    scenario: 'Students get instant coaching after each paragraph instead of waiting for end-of-week feedback.',
+    scenario: 'Students get instant coaching after each paragraph instead of waiting until the end of the week.',
   },
   {
-    title: 'Make Writing Enjoyable',
-    description: 'A clear workflow keeps students engaged, focused, and motivated.',
+    title: 'Make Progress Easy To See',
+    description: 'Parents can quickly spot growth and support the right next step.',
     audience: 'Parent',
-    scenario: 'Parents can review progress snapshots and coach at home without guessing what to focus on.',
+    scenario: 'Parents review progress snapshots at home without guessing what to focus on.',
   },
   {
-    title: 'Personalised Suggestions',
-    description: 'Feedback adapts to writing level, style, and goals.',
+    title: 'Save Teacher Time',
+    description: 'Feedback adapts by level while keeping guidance consistent.',
     audience: 'Teacher',
-    scenario: 'Teachers see targeted suggestions by student level so support stays differentiated and practical.',
+    scenario: 'Teachers move faster with targeted suggestions while maintaining classroom consistency.',
   },
   {
     title: 'Build Confidence',
-    description: 'Students see progress they can feel across every week.',
+    description: 'Students can feel weekly growth, not just final scores.',
     audience: 'All roles',
     scenario: 'Students improve, parents see momentum, and teachers track growth with one shared language.',
   },
@@ -428,21 +428,22 @@ export default function MarketingHome() {
               <span className={`${styles.typeLine} ${styles.typeLineDark}`}>improve writing</span>
               <span className={`${styles.typeLine} ${styles.typeLineDeep}`}>skills daily.</span>
             </h1>
+            <p className={styles.heroPunch}>Write better in minutes, not months.</p>
             <p className={styles.subhead}>
               Draftora helps students improve writing skills with guided feedback, gives parents clear progress visibility, and helps teachers deliver faster writing support at scale.
             </p>
             <div className={styles.heroActions}>
               <Link href="/signup" className={styles.primaryCta}>
                 <span className={styles.ctaCopy}>
-                  <span className={styles.ctaMain}>Start Writing Free</span>
-                  <span className={styles.ctaSub}>Open your first draft now</span>
+                  <span className={styles.ctaMain}>Start Writing Free — takes seconds</span>
+                  <span className={styles.ctaSub}>Open your first draft instantly</span>
                 </span>
                 <span className={styles.ctaArrowWrap}>
                   <ArrowRight size={16} />
                 </span>
               </Link>
               <a href="#showcase" className={styles.secondaryHeroCta}>
-                View Product Walkthrough
+                See Product Walkthrough
               </a>
             </div>
             <p className={styles.heroTrustLine}>Built for students. Trusted by parents. Practical for teachers.</p>
@@ -450,22 +451,22 @@ export default function MarketingHome() {
               <article className={styles.heroProofCard}>
                 <MessageSquareText size={15} />
                 <div>
-                  <strong>Actionable Feedback</strong>
-                  <span>Clear next steps after every draft</span>
+                  <strong>Instant feedback</strong>
+                  <span>Know what to fix right away</span>
                 </div>
               </article>
               <article className={styles.heroProofCard}>
                 <Wand2 size={15} />
                 <div>
-                  <strong>Smart Rewrites</strong>
-                  <span>Better clarity without losing voice</span>
+                  <strong>Clearer writing</strong>
+                  <span>Improve flow without losing voice</span>
                 </div>
               </article>
               <article className={styles.heroProofCard}>
                 <CalendarCheck2 size={15} />
                 <div>
-                  <strong>Daily Writing Rhythm</strong>
-                  <span>Consistent support that builds confidence</span>
+                  <strong>Builds confidence</strong>
+                  <span>Small wins that compound weekly</span>
                 </div>
               </article>
             </div>
@@ -503,11 +504,40 @@ export default function MarketingHome() {
           </div>
         </section>
 
+        <section className={`${styles.proofSection} ${styles.reveal}`} data-reveal>
+          <div className={styles.sectionHead}>
+            <h2>See how Draftora improves writing</h2>
+            <p className={styles.sectionSubhead}>
+              A quick before-and-after snapshot from one revision cycle.
+            </p>
+          </div>
+          <div className={styles.proofCard}>
+            <article className={styles.proofBlock}>
+              <p className={styles.proofLabel}>Before</p>
+              <p className={styles.proofText}>
+                My school day was good. We did science and it was fun. I learned things and then I went home.
+              </p>
+            </article>
+            <ArrowRight className={styles.proofArrow} size={18} />
+            <article className={styles.proofBlock}>
+              <p className={styles.proofLabel}>After</p>
+              <p className={styles.proofText}>
+                Today&apos;s science lesson was my favorite because we built a simple circuit. I learned how electricity flows, then explained it to my parents at home.
+              </p>
+            </article>
+          </div>
+          <div className={styles.proofCtaWrap}>
+            <Link href="/signup" className={styles.proofCta}>
+              Start Writing Free — takes seconds
+            </Link>
+          </div>
+        </section>
+
         <section className={`${styles.section} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
             <h2>Why Draftora works for writing growth</h2>
             <p className={styles.sectionSubhead}>
-              One AI writing workflow that supports students directly and keeps parents and teachers aligned.
+              One AI writing workflow that improves student outcomes and keeps parents and teachers aligned.
             </p>
           </div>
           <div className={styles.outcomeGrid}>
@@ -526,7 +556,7 @@ export default function MarketingHome() {
           <div className={styles.sectionHead}>
             <h2>See how students improve writing skills</h2>
             <p className={styles.sectionSubhead}>
-              Explore the core surfaces students use every day to draft, revise, and improve with AI support.
+              Explore the core surfaces students use to draft, revise, and improve with AI support.
             </p>
           </div>
           <div className={styles.previewGrid}>
@@ -546,7 +576,7 @@ export default function MarketingHome() {
           <div className={styles.sectionHead}>
             <h2>Built to help students improve writing skills every draft</h2>
             <p className={styles.sectionSubhead}>
-              Three focused experiences that work independently and stay seamlessly connected.
+              Three focused experiences that stay seamlessly connected.
             </p>
           </div>
           <div className={styles.seamlessBand}>
@@ -613,7 +643,7 @@ export default function MarketingHome() {
           <div className={styles.sectionHead}>
             <h2>Loved by students, trusted by parents</h2>
             <p className={styles.sectionSubhead}>
-              Draftora helps make writing clearer, calmer, and more consistent week after week.
+              Draftora makes writing clearer, calmer, and more consistent week after week.
             </p>
           </div>
           <div className={styles.testimonialGrid}>
@@ -680,8 +710,8 @@ export default function MarketingHome() {
           <h2>Start improving your writing today</h2>
           <Link href="/signup" className={styles.primaryCta}>
             <span className={styles.ctaCopy}>
-              <span className={styles.ctaMain}>Start Writing Free</span>
-              <span className={styles.ctaSub}>Create your account and begin your first piece</span>
+              <span className={styles.ctaMain}>Start Writing Free — begin in seconds</span>
+              <span className={styles.ctaSub}>Create your account and open your first piece now</span>
             </span>
             <span className={styles.ctaArrowWrap}>
               <ArrowRight size={16} />
