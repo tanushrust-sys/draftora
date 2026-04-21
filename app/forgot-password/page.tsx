@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { AtSign } from 'lucide-react';
 import { supabase } from '@/app/lib/supabase';
 import { AuthShell } from '@/app/components/auth-shell';
 
@@ -137,7 +136,6 @@ export default function ForgotPasswordPage() {
               Username
             </label>
             <div style={fieldWrapStyle}>
-              <AtSign size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(21, 109, 188, 0.82)' }} />
               <input
                 id="username"
                 type="text"
@@ -147,7 +145,7 @@ export default function ForgotPasswordPage() {
                 autoComplete="username"
                 style={{
                   ...inputStyle,
-                  padding: '0.95rem 1rem 0.95rem 2.95rem',
+                  padding: '0.95rem 1rem',
                 }}
               />
             </div>

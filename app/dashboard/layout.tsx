@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -26,6 +26,8 @@ import LevelUpPopup from '@/app/components/LevelUpPopup';
 import { clearAccountTypeOverride } from '@/app/lib/account-type';
 import { getAccountHomePath } from '@/app/lib/account-type';
 import BrandLogo from '@/app/components/BrandLogo';
+import { getLocalDateKey, updateStreak } from '@/app/lib/xp';
+import { STREAK_UP_GIF } from '@/app/lib/reaction-gifs';
 
 function createNavLinks() {
   return [
@@ -55,11 +57,13 @@ const SIDEBAR_W  = 264;
 const COLLAPSED_W = 72;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, refreshProfile } = useAuth();
   const router   = useRouter();
   const pathname = usePathname();
   const hasAuthContext = Boolean(user || profile);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [streakGifPopup, setStreakGifPopup] = useState<{ streak: number } | null>(null);
+  const streakGifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('draftora-sidebar-collapsed') === '1';
@@ -89,6 +93,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
   }, [loading, pathname, profile?.account_type, router]);
+
+  useEffect(() => {
+    if (loading || !profile?.id || profile.account_type !== 'student') return;
+    if (typeof window === 'undefined') return;
+
+    const today = getLocalDateKey();
+    const checkInKey = `draftora:streak-checkin:${profile.id}`;
+    const lastCheckIn = window.localStorage.getItem(checkInKey);
+    if (lastCheckIn === today) return;
+
+    window.localStorage.setItem(checkInKey, today);
+    const previousStreak = profile.streak ?? 0;
+
+    void (async () => {
+      const nextStreak = await updateStreak(profile.id);
+      if (typeof nextStreak === 'number' && nextStreak > previousStreak) {
+        setStreakGifPopup({ streak: nextStreak });
+        if (streakGifTimerRef.current) clearTimeout(streakGifTimerRef.current);
+        streakGifTimerRef.current = setTimeout(() => {
+          setStreakGifPopup(null);
+          streakGifTimerRef.current = null;
+        }, 6500);
+      }
+      await refreshProfile();
+    })();
+  }, [loading, profile?.account_type, profile?.id, profile?.streak, refreshProfile]);
+
+  useEffect(() => {
+    return () => {
+      if (streakGifTimerRef.current) clearTimeout(streakGifTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
@@ -490,6 +526,62 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </div>
+      {streakGifPopup && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setStreakGifPopup(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 85,
+            background: 'rgba(2, 12, 30, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            backdropFilter: 'blur(3px)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setStreakGifPopup(null)}
+            style={{
+              position: 'absolute',
+              top: 14,
+              right: 14,
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              border: '1px solid color-mix(in srgb, white 30%, transparent)',
+              background: 'rgba(255,255,255,0.08)',
+              color: 'white',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            aria-label="Close streak GIF"
+          >
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+          <img
+            src={STREAK_UP_GIF}
+            alt="Streak up GIF"
+            loading="lazy"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: 'min(560px, 90vw)',
+              height: 'min(560px, 74vh)',
+              objectFit: 'cover',
+              borderRadius: 18,
+              border: '1px solid rgba(255,255,255,0.18)',
+              boxShadow: '0 30px 80px rgba(0,0,0,0.55)',
+              display: 'block',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -16,10 +16,11 @@ import {
   removeStoredWritingHistory,
   upsertStoredWritingHistory,
 } from '@/app/lib/writing-history-storage';
-import { awardXP, getLocalDateKey, msUntilNextLocalMidnight, updateDailyStats, updateStreak, XP_REWARDS } from '@/app/lib/xp';
+import { awardXP, getLocalDateKey, msUntilNextLocalMidnight, updateDailyStats, XP_REWARDS } from '@/app/lib/xp';
 import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
+import { ENCOURAGE_GIFS, SUCCESS_GIFS } from '@/app/lib/reaction-gifs';
 import type { HomeworkTaskItem } from '@/app/lib/homework';
 import type { Writing } from '@/app/types/database';
 import { getDailyPrompt, getPromptPool } from '@/app/data/prompts';
@@ -773,6 +774,7 @@ function WritingsContent() {
   const [timerSetupOpen, setTimerSetupOpen] = useState(false);
   const [timerSetupMinutes, setTimerSetupMinutes] = useState(15);
   const [timerSetupSeconds, setTimerSetupSeconds] = useState(0);
+  const [reactionGifCard, setReactionGifCard] = useState<{ kind: 'encourage' | 'success'; src: string } | null>(null);
   // (daily limit removed — users can write unlimited pieces per day up to their total cap)
 
   // ── Journal tab state ──
@@ -824,6 +826,29 @@ function WritingsContent() {
   const skipNextPreferencePersistRef = useRef(false);
   const timerEndTimestampRef = useRef<number | null>(null);
   const timerAutoSubmitTriggeredRef = useRef(false);
+  const reactionGifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCompletionReactionRef = useRef<string | null>(null);
+  const todayWordsAtSubmitStartRef = useRef(0);
+  const encourageGifCursorRef = useRef(0);
+  const successGifCursorRef = useRef(0);
+
+  const shuffledEncourageGifs = useMemo(() => {
+    const deck = [...ENCOURAGE_GIFS];
+    for (let i = deck.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+  }, []);
+
+  const shuffledSuccessGifs = useMemo(() => {
+    const deck = [...SUCCESS_GIFS];
+    for (let i = deck.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+  }, []);
 
   const switchTab = useCallback((nextTab: ActiveTab) => {
     startTransition(() => {
@@ -1024,7 +1049,6 @@ function WritingsContent() {
         writings_completed: 1,
         xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK,
       });
-      await updateStreak(profile.id);
       writingRewardsGrantedRef.current = true;
       void persistWritingExperienceScore(
         profile.id,
@@ -1823,6 +1847,7 @@ function WritingsContent() {
     if (wordCount >= 30 && uniqueWordRatio(content) < 0.12) {
       setError('Your writing looks repetitive, but I am still sending it for feedback so you can improve it.');
     }
+    todayWordsAtSubmitStartRef.current = todayWords;
 
     writingMutationLock.current = true;
     writingRewardsGrantedRef.current = false;
@@ -2073,8 +2098,42 @@ function WritingsContent() {
   useEffect(() => {
     return () => {
       if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
+      if (reactionGifTimerRef.current) clearTimeout(reactionGifTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (status !== 'done' || xpEarned <= 0 || wordCount <= 0) return;
+
+    const completionKey = `${writingId ?? 'new'}:${wordCount}:${xpEarned}:${feedback ? 'f' : 'n'}`;
+    if (lastCompletionReactionRef.current === completionKey) return;
+    lastCompletionReactionRef.current = completionKey;
+
+    const wordGoal = profile?.daily_word_goal ?? 300;
+    const projectedTotal = todayWordsAtSubmitStartRef.current + wordCount;
+    const crossedDailyGoal = projectedTotal >= wordGoal;
+    const kind = crossedDailyGoal ? 'success' : 'encourage';
+    const src = (() => {
+      if (crossedDailyGoal) {
+        if (shuffledSuccessGifs.length === 0) return '';
+        const next = shuffledSuccessGifs[successGifCursorRef.current % shuffledSuccessGifs.length];
+        successGifCursorRef.current = (successGifCursorRef.current + 1) % shuffledSuccessGifs.length;
+        return next;
+      }
+      if (shuffledEncourageGifs.length === 0) return '';
+      const next = shuffledEncourageGifs[encourageGifCursorRef.current % shuffledEncourageGifs.length];
+      encourageGifCursorRef.current = (encourageGifCursorRef.current + 1) % shuffledEncourageGifs.length;
+      return next;
+    })();
+    if (!src) return;
+
+    setReactionGifCard({ kind, src });
+    if (reactionGifTimerRef.current) clearTimeout(reactionGifTimerRef.current);
+    reactionGifTimerRef.current = setTimeout(() => {
+      setReactionGifCard(null);
+      reactionGifTimerRef.current = null;
+    }, 6500);
+  }, [feedback, profile?.daily_word_goal, shuffledEncourageGifs, shuffledSuccessGifs, status, wordCount, writingId, xpEarned]);
 
   const activeWritingHomework = useMemo(() => {
     if (!todayHomework?.todayTasks?.length) return null;
@@ -2219,6 +2278,12 @@ function WritingsContent() {
     setAiAssistTips([]);
     setAiAssistExamples([]);
     setAiAssistCopied(false);
+    setReactionGifCard(null);
+    lastCompletionReactionRef.current = null;
+    if (reactionGifTimerRef.current) {
+      clearTimeout(reactionGifTimerRef.current);
+      reactionGifTimerRef.current = null;
+    }
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
     setTimerRunning(false);
     setTimerSetupOpen(false);
@@ -3292,6 +3357,62 @@ function WritingsContent() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+            {reactionGifCard && (
+              <div
+                role="dialog"
+                aria-modal="true"
+                onClick={() => setReactionGifCard(null)}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 90,
+                  background: 'rgba(2, 12, 30, 0.9)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 16,
+                  backdropFilter: 'blur(3px)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setReactionGifCard(null)}
+                  style={{
+                    position: 'absolute',
+                    top: 14,
+                    right: 14,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 12,
+                    border: '1px solid color-mix(in srgb, white 30%, transparent)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: 'white',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                  aria-label="Close reaction GIF"
+                >
+                  <X style={{ width: 16, height: 16 }} />
+                </button>
+                <img
+                  src={reactionGifCard.src}
+                  alt={reactionGifCard.kind === 'success' ? 'Celebration GIF' : 'Encouragement GIF'}
+                  loading="lazy"
+                  onClick={(event) => event.stopPropagation()}
+                  style={{
+                    width: 'min(560px, 90vw)',
+                    height: 'min(560px, 74vh)',
+                    objectFit: 'cover',
+                    borderRadius: 18,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    boxShadow: '0 30px 80px rgba(0,0,0,0.55)',
+                    display: 'block',
+                  }}
+                />
               </div>
             )}
           </>

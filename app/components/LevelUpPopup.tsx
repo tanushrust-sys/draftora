@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { Trophy } from 'lucide-react';
+import { pickLevelUpGif } from '@/app/lib/reaction-gifs';
 
 // Lightweight canvas confetti — no external dependency
 function runConfetti(canvas: HTMLCanvasElement) {
@@ -81,6 +82,7 @@ export default function LevelUpPopup() {
   }, [clearLevelUpEvent]);
 
   if (!levelUpEvent) return null;
+  const levelUpGif = pickLevelUpGif(levelUpEvent.level);
 
   return (
     <div
@@ -137,6 +139,16 @@ export default function LevelUpPopup() {
         <p style={{ fontSize: 14, color: 'var(--t-tx3)', lineHeight: 1.55, marginBottom: 24 }}>
           You&apos;ve earned this through consistent writing and practice. Keep it up!
         </p>
+        {levelUpGif && (
+          <div style={{ marginBottom: 18, borderRadius: 14, overflow: 'hidden', border: '1px solid var(--t-brd)' }}>
+            <img
+              src={levelUpGif}
+              alt="Level up GIF"
+              loading="lazy"
+              style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
+            />
+          </div>
+        )}
 
         <button
           onClick={handleDismiss}

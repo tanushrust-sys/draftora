@@ -28,6 +28,7 @@ type WritingRow = {
   category: string;
   word_count: number;
   created_at: string;
+  status: string;
 };
 
 type AssignmentRow = {
@@ -51,6 +52,7 @@ type TimetablePayload = {
 };
 
 type SplitKind = 'writing' | 'vocab';
+type HomeworkTaskDraft = Omit<HomeworkTaskItem, 'breakdown' | 'completionPct'>;
 
 function jsonNoStore(body: unknown, init?: ResponseInit) {
   return NextResponse.json(body, {
@@ -139,7 +141,7 @@ function getRequiredPiecesByType(cfg: WritingHomeworkConfig | null) {
 }
 
 function getCompletedWritingPieces(writings: WritingRow[], cfg: WritingHomeworkConfig | null) {
-  if (!cfg) return { total: 0, byType: {} as Record<string, number> };
+  if (!cfg) return { total: 0, byType: {} as Record<string, number>, usedWritingIds: [] as string[] };
 
   const requiredByType = getRequiredPiecesByType(cfg);
   const requiredTotal = getWritingRequiredPieces(cfg);
@@ -149,6 +151,7 @@ function getCompletedWritingPieces(writings: WritingRow[], cfg: WritingHomeworkC
   let total = 0;
   let extraUsed = 0;
   const byType: Record<string, number> = {};
+  const usedWritingIds: string[] = [];
 
   for (const writing of writings) {
     const normalizedCategory = normalizeWritingCategory(writing.category);
@@ -172,9 +175,10 @@ function getCompletedWritingPieces(writings: WritingRow[], cfg: WritingHomeworkC
 
     total += 1;
     byType[normalizedCategory] = (byType[normalizedCategory] ?? 0) + 1;
+    usedWritingIds.push(writing.id);
   }
 
-  return { total, byType };
+  return { total, byType, usedWritingIds };
 }
 
 function evaluateTaskProgress(task: { writing: WritingHomeworkConfig | null; vocab: HomeworkPayload['vocab'] | null }, stats: DailyStatsRow | null, writings: WritingRow[]): HomeworkProgressBreakdown {
@@ -196,6 +200,42 @@ function evaluateTaskProgress(task: { writing: WritingHomeworkConfig | null; voc
     drillRequired,
     drillCompleted,
   };
+}
+
+function evaluateTaskProgressQueue(
+  tasks: Array<{ taskId: string; writing: WritingHomeworkConfig | null; vocab: HomeworkPayload['vocab'] | null }>,
+  stats: DailyStatsRow | null,
+  writings: WritingRow[],
+) {
+  const usedWritingIds = new Set<string>();
+  const results = new Map<string, HomeworkProgressBreakdown>();
+
+  for (const task of tasks) {
+    const writingRequired = getWritingRequiredPieces(task.writing);
+    const availableWritings = writings.filter((writing) => !usedWritingIds.has(writing.id));
+    const writingDoneParts = getCompletedWritingPieces(availableWritings, task.writing);
+    for (const writingId of writingDoneParts.usedWritingIds) {
+      usedWritingIds.add(writingId);
+    }
+    const writingCompleted = Math.min(writingRequired, writingDoneParts.total);
+
+    const vocabRequired = task.vocab?.wordsToLearn ?? 0;
+    const vocabCompleted = Math.min(vocabRequired, stats?.vocab_words_learned ?? 0);
+
+    const drillRequired = Boolean(task.vocab?.requireDrill);
+    const drillCompleted = drillRequired ? Boolean(stats?.custom_goal_completed) : false;
+
+    results.set(task.taskId, {
+      writingCompleted,
+      writingRequired,
+      vocabCompleted,
+      vocabRequired,
+      drillRequired,
+      drillCompleted,
+    });
+  }
+
+  return results;
 }
 
 function completionPctForBreakdown(breakdown: HomeworkProgressBreakdown) {
@@ -314,7 +354,13 @@ async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: s
 
   const [statsRes, writingsRes, assignmentsRes, timetableRes] = await Promise.all([
     adminSupabase.from('daily_stats').select('date, words_written, vocab_words_learned, custom_goal_completed').eq('user_id', studentId).gte('date', start14),
-    adminSupabase.from('writings').select('id, category, word_count, created_at').eq('user_id', studentId).gte('created_at', `${start14}T00:00:00`).order('created_at', { ascending: false }),
+    adminSupabase
+      .from('writings')
+      .select('id, category, word_count, created_at, status')
+      .eq('user_id', studentId)
+      .in('status', ['submitted', 'reviewed'])
+      .gte('created_at', `${start14}T00:00:00`)
+      .order('created_at', { ascending: false }),
     (adminSupabase as any)
       .from('parent_homework_assignments')
       .select('id, parent_id, student_id, assigned_date, due_date, homework_payload, created_at')
@@ -365,12 +411,11 @@ async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: s
   const todayStats = statsByDate.get(today) ?? null;
   const todayWritings = writingsByDate.get(today) ?? [];
 
-  const todayTasks: HomeworkTaskItem[] = [];
+  const todayTaskDrafts: HomeworkTaskDraft[] = [];
 
   for (const row of currentAssignments) {
     for (const { kind, payload } of splitHomeworkPayload(row.homework_payload)) {
-      const breakdown = evaluateTaskProgress({ writing: payload.writing, vocab: payload.vocab }, todayStats, todayWritings);
-      todayTasks.push({
+      todayTaskDrafts.push({
         id: `${row.id}::${kind}`,
         title: buildTaskTitle(payload),
         source: 'one_time',
@@ -379,16 +424,28 @@ async function buildStudentHomeworkSnapshot(studentId: string, todayOverride?: s
         writing: payload.writing,
         vocab: payload.vocab,
         notes: payload.parentNotes,
-        breakdown,
-        completionPct: completionPctForBreakdown(breakdown),
       });
     }
   }
 
   for (const todayPlanTask of todayPlanTasks) {
-    const breakdown = evaluateTaskProgress({ writing: todayPlanTask.writing, vocab: todayPlanTask.vocab }, todayStats, todayWritings);
-    todayTasks.push({ ...todayPlanTask, breakdown, completionPct: completionPctForBreakdown(breakdown) });
+    todayTaskDrafts.push(todayPlanTask);
   }
+
+  const todayBreakdowns = evaluateTaskProgressQueue(
+    todayTaskDrafts.map((task) => ({ taskId: task.id, writing: task.writing, vocab: task.vocab })),
+    todayStats,
+    todayWritings,
+  );
+
+  const todayTasks: HomeworkTaskItem[] = todayTaskDrafts.map((task) => {
+    const breakdown = todayBreakdowns.get(task.id) ?? evaluateTaskProgress(
+      { writing: task.writing, vocab: task.vocab },
+      todayStats,
+      todayWritings,
+    );
+    return { ...task, breakdown, completionPct: completionPctForBreakdown(breakdown) };
+  });
 
   const upcomingFromAssignments = upcomingAssignments.flatMap((row) =>
     splitHomeworkPayload(row.homework_payload).map(({ kind, payload }) => ({
@@ -463,22 +520,18 @@ function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assign
   for (const date of days) {
     const dow = getHomeworkDayKey(new Date(`${date}T00:00:00`));
     const dayPlan = weeklyPlan[dow];
-    const dayTasks: HomeworkTaskItem[] = [];
+    const dayTaskDrafts: HomeworkTaskDraft[] = [];
 
     if (!timetableStartDate || date >= timetableStartDate) {
       const timetableTasks = buildTimetableTasks(date, dayPlan);
-      for (const timetableTask of timetableTasks) {
-        const breakdown = evaluateTaskProgress({ writing: timetableTask.writing, vocab: timetableTask.vocab }, statsByDate.get(date) ?? null, writingsByDate.get(date) ?? []);
-        dayTasks.push({ ...timetableTask, breakdown, completionPct: completionPctForBreakdown(breakdown) });
-      }
+      for (const timetableTask of timetableTasks) dayTaskDrafts.push(timetableTask);
     }
 
     const oneTimeTasks = assignments.filter((a) => a.due_date === date);
     for (const row of oneTimeTasks) {
       const payload = normalizeHomeworkPayload(row.homework_payload);
       for (const { kind, payload: splitPayload } of splitHomeworkPayload(payload)) {
-        const breakdown = evaluateTaskProgress({ writing: splitPayload.writing, vocab: splitPayload.vocab }, statsByDate.get(date) ?? null, writingsByDate.get(date) ?? []);
-        dayTasks.push({
+        dayTaskDrafts.push({
           id: `${row.id}::${kind}`,
           title: buildTaskTitle(splitPayload),
           source: 'one_time',
@@ -487,11 +540,25 @@ function buildPerformance(days: string[], weeklyPlan: WeeklyHomeworkPlan, assign
           writing: splitPayload.writing,
           vocab: splitPayload.vocab,
           notes: splitPayload.parentNotes,
-          breakdown,
-          completionPct: completionPctForBreakdown(breakdown),
         });
       }
     }
+
+    const dayStats = statsByDate.get(date) ?? null;
+    const dayWritings = writingsByDate.get(date) ?? [];
+    const dayBreakdowns = evaluateTaskProgressQueue(
+      dayTaskDrafts.map((task) => ({ taskId: task.id, writing: task.writing, vocab: task.vocab })),
+      dayStats,
+      dayWritings,
+    );
+    const dayTasks: HomeworkTaskItem[] = dayTaskDrafts.map((task) => {
+      const breakdown = dayBreakdowns.get(task.id) ?? evaluateTaskProgress(
+        { writing: task.writing, vocab: task.vocab },
+        dayStats,
+        dayWritings,
+      );
+      return { ...task, breakdown, completionPct: completionPctForBreakdown(breakdown) };
+    });
 
     const assignedTotals = dayTasks.reduce(
       (acc, task) => {
