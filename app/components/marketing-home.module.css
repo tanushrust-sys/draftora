@@ -1331,6 +1331,10 @@
   gap: 0.78rem;
 }
 
+.aboutMeGrid {
+  grid-template-columns: 1fr;
+}
+
 .blogCard {
   border: 1px solid rgba(45, 116, 177, 0.2);
   border-radius: 16px;
@@ -1877,6 +1881,7 @@
   .blogModalSection p {
     font-size: 0.91rem;
   }
+
 }
 
 @media (max-width: 980px) {

@@ -33,7 +33,6 @@ export function pickRandomGif(gifs: readonly string[]) {
 }
 
 export function pickLevelUpGif(level: number) {
-  if (LEVEL_UP_GIFS.length === 0) return '';
   const safeLevel = Math.max(1, Math.floor(level || 1));
   return LEVEL_UP_GIFS[(safeLevel - 1) % LEVEL_UP_GIFS.length];
 }

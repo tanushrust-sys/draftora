@@ -145,6 +145,91 @@ type BlogPost = {
   sections: { heading: string; paragraphs: string[] }[];
 };
 
+const ABOUT_ME_STORY = {
+  title: 'About Me',
+  subtitle: 'How I Started Coding at 10 and Built My First App at 11',
+  intro:
+    'People sometimes look at a finished app, a polished project, or a strong piece of writing and assume the person behind it must have some rare talent. My story is the opposite. I started small, made lots of mistakes, asked basic questions, and kept going. I began coding at age 10. By age 11, in Grade 6, I built an app. That experience taught me a lesson I now carry into everything: progress belongs to people who stay curious long enough to practice.',
+  sections: [
+    {
+      heading: 'How it started with curiosity, not confidence',
+      paragraphs: [
+        'When I first got interested in coding at 10, I was not confident. I was curious. There is a big difference. Confidence usually comes later, after repetition. Curiosity comes first and gives you a reason to begin. I started by asking simple questions: How do websites know what to show when I click a button? How does a game remember my score? How do apps go from an idea to something real on a screen? Those questions made coding feel less like schoolwork and more like discovery.',
+        'At the beginning, everything looked confusing. I saw lines of code and did not understand why punctuation could break everything. I copied examples and got errors. I fixed one bug and created three more. But slowly, patterns appeared. I realized coding is not about instantly knowing the right answer. It is about testing ideas, seeing what breaks, and learning why. That mindset changed how I approached every challenge, including writing.',
+      ],
+    },
+    {
+      heading: 'Learning the basics one tiny win at a time',
+      paragraphs: [
+        'I did not learn coding in one big jump. I learned it through tiny wins. One day I made text appear on a page. Another day I changed colors and fonts. Then I learned how buttons work, how to organize code, and how to connect one feature to another. Small wins do not look impressive from the outside, but they are powerful because they build momentum. Each one quietly says, Keep going, you are getting better.',
+        'What helped most was consistency. Some days I only practiced for a short time, but I showed up. That routine mattered more than perfect sessions. When I got stuck, I stopped trying to be the smartest person in the room and started trying to be the most patient learner in the room. I learned to read errors carefully, search for answers, ask for help, and try again. That process became my strongest skill.',
+      ],
+    },
+    {
+      heading: 'Building my first app at 11 in Grade 6',
+      paragraphs: [
+        'At 11, in Grade 6, I decided I wanted to build my own app. The idea felt bigger than me, and honestly, it was. I had never built something complete before. I only knew pieces. But I broke the project into steps: define the purpose, sketch the screens, build the core features, test, improve, and repeat. That structure turned a scary goal into daily tasks I could actually do.',
+        'The first version was far from perfect. Some parts were clunky. Some things looked basic. A few features failed the first time I demoed them. Still, it worked well enough to prove the idea. That moment was huge for me. It was not about building a perfect app. It was about realizing I could take an idea in my head and turn it into something people could use. That changed how I saw myself.',
+      ],
+    },
+    {
+      heading: 'The biggest lessons were not technical',
+      paragraphs: [
+        'People think coding teaches only technical skills, but my biggest lessons were mindset lessons. I learned that frustration is normal, not a sign to quit. I learned that feedback is not criticism; it is a shortcut to improvement. I learned that strong work comes from revision, not first drafts. Most importantly, I learned that progress is usually invisible day to day, but obvious over months when you stay consistent.',
+        'Those lessons carried into writing too. Good writing and good coding follow similar rules: start with a draft, get feedback, revise with intention, and improve clarity. In both, early attempts can feel messy. That is okay. Messy drafts are not failure. They are raw material. If you can keep refining, your work gets stronger and your confidence grows naturally.',
+      ],
+    },
+    {
+      heading: 'Why writing confidence matters as much as coding skill',
+      paragraphs: [
+        'As I kept building projects, I noticed something important: technical ideas are only useful if you can communicate them clearly. Writing is how you explain your thinking, share your story, and persuade others to care about your ideas. Whether you are pitching an app, writing an assignment, or sending a simple message, strong writing multiplies your impact.',
+        'That is why I care so much about helping students become better writers. Writing is not just a school subject. It is a life skill. When students learn to organize thoughts, support ideas, and revise for clarity, they become stronger learners in every area. They ask better questions, explain better answers, and build more confidence in their own voice.',
+      ],
+    },
+    {
+      heading: 'What I want students to know when they feel behind',
+      paragraphs: [
+        'If you feel behind right now, you are not broken, and you are not alone. Most people you admire started as beginners too. They were confused. They made mistakes. They felt slow. The difference is that they kept practicing when progress felt small. You do not need to be the best in your class today. You only need to be better than you were last month.',
+        'Compare less, build more. Instead of asking, Am I as good as them? ask, Did I improve one thing today? Maybe your paragraph has clearer structure. Maybe your opening sentence is stronger. Maybe your app loads faster. Small gains count. They stack. Over time, small improvements create big transformations that surprise even you.',
+      ],
+    },
+    {
+      heading: 'My routine for improving any skill',
+      paragraphs: [
+        'The system that helped me most is simple and works for coding, writing, and almost anything else. Step one: start small and specific. Step two: practice consistently, even in short sessions. Step three: ask for feedback early. Step four: revise one priority at a time. Step five: reflect on what improved. This routine removes the pressure to be perfect and replaces it with a clear path to growth.',
+        'I still use this approach now. I do not wait for motivation to magically appear. I create momentum by beginning. Once you start, effort gets easier. Once effort becomes a habit, confidence becomes a side effect. Confidence is not the starting point. It is the result of repeated action.',
+      ],
+    },
+    {
+      heading: 'Anyone can become good at writing and creating',
+      paragraphs: [
+        'I truly believe anyone can become good at writing and creating with the right support and consistent effort. Talent can help, but habits matter more. Students improve fastest when they get clear feedback, practical next steps, and a safe space to try again. Growth is not reserved for a few people. It is available to everyone willing to practice with patience.',
+        'When I started coding at 10, I did not know where the journey would go. At 11, in Grade 6, building an app showed me what was possible. Now I want more students to feel that same belief: I can do this. I can improve. I can create work I am proud of. That belief changes outcomes because it changes how people show up every day.',
+      ],
+    },
+    {
+      heading: 'A message to every student reading this',
+      paragraphs: [
+        'Your starting point does not define your future. Your habits do. If you are just beginning, begin proudly. If you are struggling, keep moving. If your first draft is messy, that means you are in the real process of learning. Keep writing. Keep building. Keep revising. Ask questions without embarrassment. No serious learner succeeds alone.',
+        'One day, you will look back and realize the moment that changed everything was not when you felt ready. It was when you started anyway. I started coding at 10. I built an app at 11 in Grade 6. You have your own timeline and your own path, and it can be just as powerful. Keep going. Your next version is already being built through the work you do today.',
+      ],
+    },
+  ],
+} as const;
+
+const ABOUT_ME_BLOG: BlogPost = {
+  title: 'About Me: How I Started Coding at 10 and Built My First App at 11',
+  summary:
+    'My personal journey from a curious 10-year-old beginner to building an app in Grade 6, and why I believe anyone can become confident at writing and creating.',
+  audience: 'About me',
+  readTime: '7 min read',
+  intro: ABOUT_ME_STORY.intro,
+  sections: ABOUT_ME_STORY.sections.map((section) => ({
+    heading: section.heading,
+    paragraphs: [...section.paragraphs],
+  })),
+};
+
 const BLOG_POSTS: BlogPost[] = [
   {
     title: 'How an AI writing app for students can build daily writing confidence',
@@ -703,6 +788,37 @@ export default function MarketingHome() {
                 </p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className={`${styles.section} ${styles.reveal}`} data-reveal>
+          <div className={styles.sectionHead}>
+            <h2>{ABOUT_ME_STORY.title}</h2>
+            <p className={styles.sectionSubhead}>{ABOUT_ME_STORY.subtitle}</p>
+          </div>
+          <div className={`${styles.blogGrid} ${styles.aboutMeGrid}`}>
+            <article
+              className={styles.blogCard}
+              onClick={() => setActiveBlog(ABOUT_ME_BLOG)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setActiveBlog(ABOUT_ME_BLOG);
+                }
+              }}
+            >
+              <p className={styles.blogAudience}>
+                <BookOpen size={14} />
+                <span>{ABOUT_ME_BLOG.audience}</span>
+              </p>
+              <h3>{ABOUT_ME_BLOG.title}</h3>
+              <p>{ABOUT_ME_BLOG.summary}</p>
+              <p className={styles.blogReadMore}>
+                ... click to read more
+              </p>
+            </article>
           </div>
         </section>
 
