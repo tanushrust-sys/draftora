@@ -88,11 +88,12 @@ function getConversationPreview(conversation: Conversation) {
    GOAL DASHBOARD
    ────────────────────────────────────────────────────────────────────────── */
 function GoalDashboard({
-  profile, goalData, onAsk,
+  profile, goalData, onAsk, compact = false,
 }: {
   profile: { custom_daily_goal?: string; streak: number; xp: number; level: number };
   goalData: GoalData | null;
   onAsk: (q: string) => void;
+  compact?: boolean;
 }) {
   const goal = profile.custom_daily_goal || 'No goal set yet';
   const STARTERS = [
@@ -105,7 +106,7 @@ function GoalDashboard({
   ];
 
   return (
-    <div style={{ padding: '28px 28px 40px', maxWidth: 820, margin: '0 auto' }}>
+    <div style={{ padding: compact ? '18px 16px 24px' : '28px 28px 40px', maxWidth: 820, margin: '0 auto' }}>
       {/* ── Goal hero ── */}
       <div style={{
         borderRadius: 28,
@@ -129,7 +130,7 @@ function GoalDashboard({
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: compact ? 'repeat(auto-fit, minmax(140px, 1fr))' : 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { emoji: '✍️', label: 'Drafts',         value: goalData?.writings.length ?? '—', color: 'var(--t-mod-write)' },
           { emoji: '📚', label: 'Word Wins',      value: goalData?.vocabMastered ?? '—',  color: 'var(--t-mod-vocab)' },
@@ -175,7 +176,7 @@ function GoalDashboard({
 
       {/* ── Ask starters ── */}
       <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-tx3)', textTransform: 'uppercase', letterSpacing: '0.18em', marginBottom: 12 }}>Ask your goal coach</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1fr 1fr', gap: 10 }}>
         {STARTERS.map(q => (
           <button
             key={q}
@@ -217,6 +218,7 @@ export default function CoachPage() {
   const [activeId, setActiveId]           = useState<string | null>(null);
   const [goalData, setGoalData]           = useState<GoalData | null>(null);
   const [showTrainerLabels, setShowTrainerLabels] = useState(false);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
@@ -275,7 +277,11 @@ export default function CoachPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const update = () => setShowTrainerLabels(window.innerWidth > 1100);
+    const update = () => {
+      const width = window.innerWidth;
+      setShowTrainerLabels(width > 1220);
+      setIsCompactLayout(width < 1080);
+    };
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
@@ -566,16 +572,26 @@ export default function CoachPage() {
   /* ────────────────────────────────────── RENDER ────────────────────────── */
   return (
     <>
-    <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'var(--t-bg)', overflow: 'hidden', borderRadius: 20 }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: isCompactLayout ? 'column' : 'row',
+      height: isCompactLayout ? 'auto' : 'calc(100vh - 120px)',
+      minHeight: isCompactLayout ? '72vh' : 'calc(100vh - 120px)',
+      background: 'var(--t-bg)',
+      overflow: 'hidden',
+      borderRadius: 20,
+    }}>
 
       {/* ══════════════════════════════════════════
           LEFT SIDEBAR — conversations
           ══════════════════════════════════════════ */}
       <div style={{
-        width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        width: isCompactLayout ? '100%' : 260, flexShrink: 0, display: 'flex', flexDirection: 'column',
+        maxHeight: isCompactLayout ? 300 : undefined,
         background: 'var(--t-card)',
-        borderRight: '1px solid var(--t-brd)',
-        borderRadius: '20px 0 0 20px',
+        borderRight: isCompactLayout ? 'none' : '1px solid var(--t-brd)',
+        borderBottom: isCompactLayout ? '1px solid var(--t-brd)' : 'none',
+        borderRadius: isCompactLayout ? '20px 20px 0 0' : '20px 0 0 20px',
       }}>
         {/* Sidebar header */}
         <div style={{ padding: '18px 16px 14px', borderBottom: '1px solid var(--t-brd)' }}>
@@ -691,18 +707,22 @@ export default function CoachPage() {
       {/* ══════════════════════════════════════════
           RIGHT PANEL — chat area
           ══════════════════════════════════════════ */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderRadius: '0 20px 20px 0', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderRadius: isCompactLayout ? '0 0 20px 20px' : '0 20px 20px 0', overflow: 'hidden' }}>
 
         {/* ── Top header bar ── */}
         <div style={{
           flexShrink: 0,
           background: 'var(--t-card)',
           borderBottom: '1px solid var(--t-brd)',
-          padding: '12px 20px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: isCompactLayout ? '12px 12px' : '12px 20px',
+          display: 'flex',
+          flexDirection: isCompactLayout ? 'column' : 'row',
+          alignItems: isCompactLayout ? 'stretch' : 'center',
+          justifyContent: 'space-between',
+          gap: 12,
         }}>
           {/* Left: trainer identity */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
             <div style={{
               width: 40, height: 40, borderRadius: 14, flexShrink: 0,
               background: trainer.bg, border: `1px solid ${trainer.color}30`,
@@ -720,7 +740,7 @@ export default function CoachPage() {
           </div>
 
           {/* Right: controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: isCompactLayout ? '100%' : 'auto' }}>
             {/* Mode toggle */}
             <div style={{ display: 'flex', background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 14, padding: 3, gap: 2 }}>
               <button
@@ -750,7 +770,7 @@ export default function CoachPage() {
             </div>
 
             {/* Trainer pill selector */}
-            <div style={{ display: 'flex', gap: 4, overflowX: 'auto', maxWidth: 420 }}>
+            <div style={{ display: 'flex', gap: 4, overflowX: 'auto', maxWidth: isCompactLayout ? '100%' : 420 }}>
               {TRAINERS.map(t => {
                 const isActive = t.value === trainerType;
                 const TI = t.icon as LucideIcon;
@@ -795,10 +815,11 @@ export default function CoachPage() {
                 profile={profile as Parameters<typeof GoalDashboard>[0]['profile']}
                 goalData={goalData}
                 onAsk={send}
+                compact={isCompactLayout}
               />
             ) : (
               /* Welcome screen */
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100%', padding: '40px 32px', textAlign: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100%', padding: isCompactLayout ? '24px 16px' : '40px 32px', textAlign: 'center' }}>
                 {/* Animated trainer orb */}
                 <div style={{ position: 'relative', marginBottom: 28 }}>
                   <div style={{
@@ -833,7 +854,7 @@ export default function CoachPage() {
                 </p>
 
                 {/* Starter cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, width: '100%', maxWidth: 640 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isCompactLayout ? '1fr' : 'repeat(2, 1fr)', gap: 10, width: '100%', maxWidth: 640 }}>
                   {starters.map((q, qi) => (
                     <button
                       key={q}
@@ -871,7 +892,7 @@ export default function CoachPage() {
             )
           ) : (
             /* Chat messages */
-            <div style={{ padding: '24px 28px', maxWidth: 820, margin: '0 auto' }}>
+            <div style={{ padding: isCompactLayout ? '16px 12px' : '24px 28px', maxWidth: 820, margin: '0 auto' }}>
               {/* Goal reminder strip */}
               {trainerType === 'goal' && profile?.custom_daily_goal && (
                 <div style={{ background: 'var(--t-acc-a)', border: '1px solid var(--t-brd-a)', borderRadius: 14, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -898,7 +919,7 @@ export default function CoachPage() {
                     {/* Bubble */}
                     <div
                       style={{
-                        maxWidth: '76%', fontSize: 15, lineHeight: 1.75, whiteSpace: 'pre-wrap',
+                        maxWidth: isCompactLayout ? '90%' : '76%', fontSize: 15, lineHeight: 1.75, whiteSpace: 'pre-wrap',
                         padding: '14px 18px',
                         ...(msg.role === 'user' ? {
                           background: 'var(--t-btn)',
@@ -944,9 +965,9 @@ export default function CoachPage() {
           flexShrink: 0,
           background: 'var(--t-card)',
           borderTop: '1px solid var(--t-brd)',
-          padding: '14px 20px 16px',
+          padding: isCompactLayout ? '12px 12px 14px' : '14px 20px 16px',
         }}>
-          <div style={{ maxWidth: 780, margin: '0 auto' }}>
+          <div style={{ maxWidth: 780, margin: '0 auto', width: '100%' }}>
             {(loading || queuedMessages.length > 0 || coachError) && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                 {loading && (
@@ -1017,7 +1038,7 @@ export default function CoachPage() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap', textAlign: 'center' }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: trainer.color }} />
               <p style={{ fontSize: 11, color: 'var(--t-tx3)' }}>
                 {trainer.label} · {mode === 'thinking' ? 'Thinking' : 'Creative'} Mode · Enter to send, Shift+Enter for new line

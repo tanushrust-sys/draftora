@@ -62,6 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const hasAuthContext = Boolean(user || profile);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLargeViewport, setIsLargeViewport] = useState(false);
   const [streakGifPopup, setStreakGifPopup] = useState<{ streak: number } | null>(null);
   const streakGifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [collapsed, setCollapsed] = useState(() => {
@@ -128,6 +129,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(min-width: 1024px)');
+    const apply = () => setIsLargeViewport(media.matches);
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, []);
+
+  useEffect(() => {
+    if (!isLargeViewport) setSidebarOpen(false);
+  }, [isLargeViewport]);
+
   const handleLogout = async () => {
     try { localStorage.removeItem('draftora-profile-v1'); } catch {}
     if (profile?.id) {
@@ -148,6 +162,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     () => navLinks.find((item) => isNavActive(pathname, item.href, homeHref)) ?? navLinks[0],
     [homeHref, navLinks, pathname],
   );
+  const effectiveCollapsed = isLargeViewport ? collapsed : false;
   const themeAccent = 'var(--t-acc)';
   const isSunsetTheme = profile?.active_theme === 'sunset-glow';
   const inactiveNavLabelColor = isSunsetTheme
@@ -192,7 +207,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <button type="button" className="fixed inset-0 z-40 md:hidden"
+        <button type="button" className="fixed inset-0 z-40 lg:hidden"
           style={{ background: 'var(--t-overlay)' }}
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation" />
@@ -202,8 +217,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* ─── SIDEBAR ─── */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 transform transition-all duration-300 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-          style={{ width: collapsed ? COLLAPSED_W : SIDEBAR_W }}
+          className={`fixed inset-y-0 left-0 z-50 transform transition-all duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          style={{ width: effectiveCollapsed ? COLLAPSED_W : SIDEBAR_W }}
         >
           <div style={{
             margin: 8,
@@ -219,11 +234,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* ── BRAND ── */}
             <div style={{
-              padding: collapsed ? '14px 0 12px' : '15px 16px',
+              padding: effectiveCollapsed ? '14px 0 12px' : '15px 16px',
               borderBottom: '1px solid color-mix(in srgb, var(--t-brd) 40%, transparent)',
               flexShrink: 0,
             }}>
-              {collapsed ? (
+              {effectiveCollapsed ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <Link href="/dashboard" style={{ textDecoration: 'none' }}>
                     <div style={{
@@ -260,7 +275,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                   </Link>
                   <button type="button"
-                    onClick={() => window.innerWidth >= 768 ? toggleCollapsed() : setSidebarOpen(false)}
+                    onClick={() => window.innerWidth >= 1024 ? toggleCollapsed() : setSidebarOpen(false)}
                     style={{
                       width: 32, height: 32, borderRadius: 10, flexShrink: 0,
                       background: 'color-mix(in srgb, var(--t-tx3) 8%, transparent)',
@@ -276,7 +291,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* ── USER CARD (expanded only) ── */}
-            {profile && !collapsed && (
+            {profile && !effectiveCollapsed && (
               <div style={{
                 margin: '10px 12px 0',
                 borderRadius: 18,
@@ -352,13 +367,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <nav style={{
               flex: '1 1 auto',
               overflow: 'hidden',
-              padding: collapsed ? '10px 0 0' : '10px 10px 0',
+              padding: effectiveCollapsed ? '10px 0 0' : '10px 10px 0',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'center',
-              alignItems: collapsed ? 'center' : 'stretch',
+              alignItems: effectiveCollapsed ? 'center' : 'stretch',
             }}>
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <p style={{ fontSize: 9.5, fontWeight: 800, color: 'color-mix(in srgb, var(--t-sb-mu) 92%, white 8%)', letterSpacing: '0.26em', textTransform: 'uppercase', padding: '4px 8px 10px' }}>Navigate</p>
               )}
               <div style={{
@@ -366,12 +381,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 flexDirection: 'column',
                 gap: 6,
                 width: '100%',
-                alignItems: collapsed ? 'center' : 'stretch',
+                alignItems: effectiveCollapsed ? 'center' : 'stretch',
               }}>
                 {navLinks.map(({ href, icon: Icon, label, color, description }) => {
                   const active = isNavActive(pathname, href, homeHref);
 
-                  if (collapsed) {
+                  if (effectiveCollapsed) {
                     return (
                       <Link key={href} href={href} title={label}
                         style={{
@@ -470,7 +485,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* ── SIGN OUT ── */}
             <div style={{
-              padding: collapsed ? '8px 10px 10px' : '8px 10px 10px',
+              padding: effectiveCollapsed ? '8px 10px 10px' : '8px 10px 10px',
               borderTop: '1px solid color-mix(in srgb, var(--t-brd) 40%, transparent)',
               marginTop: 'auto',
               marginBottom: 0,
@@ -479,9 +494,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button type="button" onClick={handleLogout}
                 style={{
                   width: '100%',
-                  display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
+                  display: 'flex', alignItems: 'center', justifyContent: effectiveCollapsed ? 'center' : 'flex-start',
                   gap: 10,
-                  padding: collapsed ? '12px' : '12px 14px',
+                  padding: effectiveCollapsed ? '12px' : '12px 14px',
                   borderRadius: 14,
                   background: 'color-mix(in srgb, var(--t-danger) 18%, rgba(0,0,0,0.10))',
                   border: '1px solid color-mix(in srgb, var(--t-danger) 34%, rgba(255,255,255,0.20))',
@@ -492,7 +507,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }}
                 title="Sign out">
                 <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
-                {!collapsed && <span>Sign out</span>}
+                {!effectiveCollapsed && <span>Sign out</span>}
               </button>
             </div>
 
@@ -500,12 +515,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </aside>
 
         {/* ─── MAIN CONTENT ─── */}
-        <div className={`min-w-0 flex-1 ${collapsed ? 'sidebar-offset-collapsed' : 'sidebar-offset'}`}>
+        <div className={`min-w-0 flex-1 ${effectiveCollapsed ? 'sidebar-offset-collapsed' : 'sidebar-offset'}`}>
           <div className="dashboard-main">
             <div className="dashboard-content app-surface">
               <div className="dashboard-topbar">
                 <div className="dashboard-topbar__meta">
-                  <button type="button" className="dashboard-topbar__menu md:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
+                  <button type="button" className="dashboard-topbar__menu lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
                     <Menu className="h-4 w-4" />
                   </button>
                   <div>

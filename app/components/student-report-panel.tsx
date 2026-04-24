@@ -479,7 +479,7 @@ export function StudentReportPanel({ report, accent, mode, emptyTitle, emptyCopy
       </div>
 
       {/* ── BOTTOM ROW: writings + vocab + activity ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
 
         {/* Writings */}
         <div style={{ borderRadius: 26, padding: 20, background: card, border: `1px solid ${border}`, boxShadow: isLight ? '0 16px 42px rgba(15,23,42,0.05)' : '0 24px 70px rgba(0,0,0,0.24)', backdropFilter: 'blur(14px)', display: 'grid', gap: 14 }}>

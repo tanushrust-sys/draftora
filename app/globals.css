@@ -1566,7 +1566,7 @@ body {
   padding: 1.5rem 1rem 1rem;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .sidebar-offset {
     margin-left: 284px;
     transition: margin-left 0.3s;
@@ -2557,4 +2557,48 @@ select:focus-visible {
 
 .auth-card-panel__description {
   color: rgba(210, 195, 255, 0.8) !important;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-main {
+    padding: 1rem 0.85rem 0.85rem;
+  }
+
+  .dashboard-content {
+    min-height: calc(100vh - 1.85rem);
+  }
+}
+
+@media (max-width: 1023px) {
+  .dashboard-content {
+    border-radius: 20px;
+    min-height: calc(100vh - 1.45rem);
+  }
+
+  .dashboard-topbar {
+    padding: 0.85rem 0.95rem;
+  }
+
+  .dashboard-topbar__badge {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-main {
+    padding: 0.7rem 0.45rem 0.6rem;
+  }
+
+  .dashboard-content {
+    border-radius: 16px;
+    min-height: calc(100vh - 1rem);
+  }
+
+  .dashboard-topbar__meta h1 {
+    font-size: 0.95rem;
+  }
+
+  .dashboard-topbar__meta p {
+    font-size: 0.74rem;
+  }
 }

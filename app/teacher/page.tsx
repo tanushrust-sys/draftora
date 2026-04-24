@@ -774,7 +774,7 @@ export default function TeacherPage() {
                   <Trash2 style={{ width: 15, height: 15 }} />
                 </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
                 <input
                   value={row.firstName}
                   onChange={(event) => setBulkRows((current) => current.map((item, rowIndex) => rowIndex === index ? { ...item, firstName: event.target.value } : item))}
@@ -916,7 +916,7 @@ export default function TeacherPage() {
         </section>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
         <section style={paletteStyle}>
           <SectionTitle eyebrow="Session" title="Sign out" copy="Leave the teacher workspace on this device." accent="#67e8f9" />
           <button

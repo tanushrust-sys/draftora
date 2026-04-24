@@ -2517,7 +2517,7 @@ function WritingsContent() {
   );
 
   return (
-    <div style={{ padding: '2rem 2rem 4rem', background: 'var(--t-bg)', minHeight: '100vh' }}>
+    <div style={{ padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 4rem', background: 'var(--t-bg)', minHeight: '100vh' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── PAGE HEADER ── */}
@@ -2593,7 +2593,7 @@ function WritingsContent() {
 
             {/* Progress cards — shown while writing */}
             {status !== 'done' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
                 <div style={{
                   background: 'var(--t-card)',
                   border: '1px solid var(--t-brd)',
@@ -2993,7 +2993,7 @@ function WritingsContent() {
 
                     <div style={{ maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
                       {aiAssistLoading ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
                           {Array.from({ length: 2 }).map((_, col) => (
                             <div key={col}>
                               <div style={{ height: 12, width: 90, borderRadius: 6, background: 'currentColor', opacity: 0.32, marginBottom: 8 }} />
@@ -3010,7 +3010,7 @@ function WritingsContent() {
                         </div>
                       ) : (
                         (aiAssistTips.length > 0 || aiAssistExamples.length > 0) ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
                             <div>
                               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Tips</div>
                               <div style={{ display: 'grid', gap: 8 }}>
@@ -3110,7 +3110,7 @@ function WritingsContent() {
                       </div>
                       <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--t-tx)' }}>AI Feedback</h2>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, alignItems: 'start' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'start' }}>
                       {/* Overall Feedback — structured */}
                       {(() => {
                         const sections = parseOverallFeedbackSections(feedback.overall);
@@ -3265,7 +3265,7 @@ function WritingsContent() {
                       <X style={{ width: 14, height: 14 }} />
                     </button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                     <label style={{ display: 'grid', gap: 5 }}>
                       <span style={{ fontSize: 11, color: 'var(--t-tx3)', fontWeight: 700 }}>Minutes</span>
                       <input
@@ -3424,7 +3424,7 @@ function WritingsContent() {
         {activeTab === 'journal' && (
           <>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
               {[
                 { label: 'Reviewed Pieces', value: journalReviewedCount, color: 'var(--t-success)' },
                 { label: 'Average Length', value: avgJournalWords ? `${avgJournalWords} words` : 'No data yet', color: 'var(--t-mod-vocab)' },
@@ -3577,7 +3577,7 @@ function WritingsContent() {
                             <p style={{ color: 'var(--t-acc)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5 }}>
                               <Sparkles style={{ width: 11, height: 11 }} /> AI Feedback
                             </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, alignItems: 'start' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, alignItems: 'start' }}>
                               {(() => {
                                 const sections = parseOverallFeedbackSections(w.feedback);
 
@@ -3716,7 +3716,7 @@ function WritingsContent() {
             ) : (
               <>
                 {/* ── Stat cards (4 columns) ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem' }}>
                   {[
                     { label: 'Pieces Written', value: `${reviewedWritings.length}`, suffix: '', color: 'var(--t-mod-write)', icon: FileText },
                     { label: 'Total Words', value: reviewedWordTotal >= 1000 ? `${(reviewedWordTotal / 1000).toFixed(1)}k` : `${reviewedWordTotal}`, suffix: '', color: 'var(--t-mod-vocab)', icon: BookOpen },
@@ -3763,7 +3763,7 @@ function WritingsContent() {
                     </p>
 
                     {/* Strengths + Areas to Improve grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12, marginBottom: 16 }}>
                       <div style={{ background: tone('var(--t-success)', 5), border: `1px solid ${tone('var(--t-success)', 15)}`, borderRadius: 18, padding: '16px 14px' }}>
                         <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-success)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Your Strengths</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

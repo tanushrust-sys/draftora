@@ -504,11 +504,11 @@ export default function SettingsPage() {
   );
 
   return (
-    <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: '2rem 2rem 5rem' }}>
+    <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 5rem' }}>
       <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── PAGE HEADER ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div style={{
             width: 52, height: 52, borderRadius: 18, flexShrink: 0,
             background: 'var(--t-acc-b)', border: '1px solid var(--t-brd-a)',
@@ -556,7 +556,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
             {[
               { icon: Star,      label: 'XP Stash',    value: profile.xp.toLocaleString(), color: 'var(--t-acc)' },
               { icon: Flame,     label: 'Hot Streak',  value: profile.streak,               color: 'var(--t-warning)' },
@@ -646,7 +646,7 @@ export default function SettingsPage() {
               </div>
             )}
             {editingAge ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                 {AGE_GROUPS.map(ag => {
                   const selected = selectedAge === ag.value;
                   return (
@@ -977,7 +977,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
                 {[
                   { icon: PenLine,  label: 'Word Goal',   value: `${profile.daily_word_goal}`,    color: 'var(--t-mod-write)' },
                   { icon: BookOpen, label: 'Vocab Goal',  value: `${profile.daily_vocab_goal}`,   color: 'var(--t-mod-vocab)' },
@@ -1094,7 +1094,7 @@ export default function SettingsPage() {
         )}
 
         {/* ══ SIGN OUT + DANGER ══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
           {/* Sign Out */}
           <div style={{
             background: 'var(--t-card)', border: '1px solid var(--t-brd)',

@@ -96,11 +96,11 @@ export default function RewardsPage() {
   const nextTitle   = LEVEL_MILESTONES.find(m => p.level < m.level);
 
   return (
-    <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: '2rem 2rem 5rem' }}>
+    <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 5rem' }}>
       <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
         {/* ── PAGE HEADER ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div style={{
             width: 52, height: 52, borderRadius: 18, flexShrink: 0,
             background: 'var(--t-acc-b)', border: '1px solid var(--t-brd-a)',
@@ -127,7 +127,7 @@ export default function RewardsPage() {
           {/* Glow */}
           <div style={{ position: 'absolute', top: -60, right: -60, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, var(--t-acc-b) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
-          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }}>
+          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '2rem', alignItems: 'center' }}>
             {/* Level badge */}
             <div style={{ textAlign: 'center' }}>
               <div style={{
@@ -171,7 +171,7 @@ export default function RewardsPage() {
 
           {/* Stats row */}
           <div style={{
-            position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+            position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
             gap: '1rem', marginTop: '1.5rem', paddingTop: '1.5rem',
             borderTop: '1px solid var(--t-brd)',
           }}>
@@ -282,7 +282,7 @@ export default function RewardsPage() {
             Every action in Draftora earns XP toward your next level.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '0.75rem' }}>
             {XP_SOURCES.map(src => {
               const Icon = src.icon;
               return (
@@ -322,7 +322,7 @@ export default function RewardsPage() {
 
           {/* Word count bonuses */}
           <div style={{
-            marginTop: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem',
+            marginTop: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '0.75rem',
           }}>
             {[
               { label: '250+ Words', sub: '+5 bonus XP per submission', color: '#60a5fa', n: '250' },

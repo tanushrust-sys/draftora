@@ -1615,7 +1615,7 @@ export default function VocabPage() {
 
                 {/* Word tags row */}
                 {(drillReview.strong_words.length > 0 || drillReview.weak_words.length > 0) && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                     {drillReview.strong_words.length > 0 && (
                       <div style={{ background: tone('var(--t-success)', 7), border: `1px solid ${tone('var(--t-success)', 20)}`, borderRadius: 16, padding: '14px 16px' }}>
                         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--t-success)', marginBottom: 8 }}>Solid</p>
@@ -2047,12 +2047,12 @@ export default function VocabPage() {
   // ─── MAIN VOCAB PAGE ───
   return (
     <div className="min-h-screen animate-fade-in" style={{ background: 'var(--t-bg)', color: 'var(--t-tx)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 2rem 4rem', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 4rem', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
 
         {/* ══════════════════════════════════════
             PAGE HEADER
         ══════════════════════════════════════ */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, var(--t-acc-a), var(--t-acc-b))', border: '1px solid var(--t-acc-b)', boxShadow: '0 4px 20px var(--t-acc-a)', flexShrink: 0 }}>
             <GraduationCap style={{ width: 28, height: 28, color: 'var(--t-acc)' }} />
           </div>
@@ -2090,7 +2090,7 @@ export default function VocabPage() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
             {words.length >= 1 && (
               <button
                 onClick={startDrill}
@@ -2124,7 +2124,7 @@ export default function VocabPage() {
         {/* ══════════════════════════════════════
             STAT CARDS ROW
         ══════════════════════════════════════ */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           {/* Words in Bank */}
           <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 20, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, borderRadius: '50%', background: `radial-gradient(circle, ${tone('var(--t-mod-write)', 10)}, transparent 70%)`, pointerEvents: 'none' }} />
@@ -2180,7 +2180,7 @@ export default function VocabPage() {
             Submit a sentence for all 3 words to unlock extra words.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' }}>
             {dailyWords.map((dw, i) => {
               const t = CARD_THEMES[i % CARD_THEMES.length];
               const typedSentence = (sentences[i] || '').trim();

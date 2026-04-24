@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronRight, LogOut, Sparkles } from 'lucide-react';
@@ -49,6 +49,7 @@ export function RoleAppShell({
 }: RoleAppShellProps) {
   const { profile, loading } = useAuth();
   const router = useRouter();
+  const [compactTabs, setCompactTabs] = useState(false);
   const isLight = mode === 'light';
 
   const shellBg = isLight
@@ -82,6 +83,14 @@ export function RoleAppShell({
     }
   }, [expectedRole, loading, profile, router]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => setCompactTabs(window.innerWidth < 980);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   if (loading || !profile) {
     return (
       <div
@@ -112,7 +121,7 @@ export function RoleAppShell({
         minHeight: '100vh',
         background: shellBg,
         color: shellText,
-        paddingBottom: tabs.length ? 116 : 0,
+        paddingBottom: tabs.length ? (compactTabs ? 108 : 116) : 0,
         ['--workspace-text' as string]: shellText,
         ['--workspace-text2' as string]: shellText2,
         ['--workspace-text3' as string]: shellText3,
@@ -122,12 +131,13 @@ export function RoleAppShell({
         ['--workspace-chip-bg' as string]: shellChipBg,
       } as CSSProperties}
     >
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '1.25rem 1.25rem 2rem' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: 'clamp(0.75rem, 2vw, 1.25rem) clamp(0.75rem, 2.4vw, 1.25rem) 2rem' }}>
         <header
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
             gap: 16,
             padding: '13px 18px',
             borderRadius: 24,
@@ -137,7 +147,7 @@ export function RoleAppShell({
             backdropFilter: 'blur(16px)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: '1 1 240px' }}>
             <div
               style={{
                 width: 46,
@@ -162,7 +172,7 @@ export function RoleAppShell({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10, marginLeft: 'auto', minWidth: 0 }}>
             <div
               style={{
                 padding: '8px 12px',
@@ -173,6 +183,10 @@ export function RoleAppShell({
                 fontSize: 13,
                 fontWeight: 700,
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
+                maxWidth: 'min(100%, 220px)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
               {profile.username}
@@ -191,7 +205,7 @@ export function RoleAppShell({
                 color: 'var(--t-sb-tx)',
                 fontSize: 13,
                 fontWeight: 700,
-                padding: '10px 14px',
+                padding: compactTabs ? '9px 12px' : '10px 14px',
                 boxShadow: '0 8px 16px color-mix(in srgb, var(--t-danger) 20%, transparent)',
                 cursor: 'pointer',
               }}
@@ -207,7 +221,7 @@ export function RoleAppShell({
             <section
               style={{
                 borderRadius: 30,
-                padding: '2rem',
+                padding: 'clamp(1rem, 2.8vw, 2rem)',
                 background: isLight
                   ? 'rgba(255,255,255,0.85)'
                   : 'linear-gradient(180deg, rgba(12, 18, 34, 0.94) 0%, rgba(10, 14, 26, 0.90) 100%)',
@@ -222,8 +236,8 @@ export function RoleAppShell({
                 style={{
                   position: 'absolute',
                   inset: 'auto -100px -120px auto',
-                  width: 320,
-                  height: 320,
+                  width: 'clamp(180px, 28vw, 320px)',
+                  height: 'clamp(180px, 28vw, 320px)',
                   borderRadius: '50%',
                   background: `radial-gradient(circle, color-mix(in srgb, ${accent} 18%, transparent) 0%, transparent 70%)`,
                   pointerEvents: 'none',
@@ -237,7 +251,7 @@ export function RoleAppShell({
                   {title}
                 </h2>
                 {description ? (
-                  <p style={{ margin: 0, maxWidth: 720, fontSize: 15.5, lineHeight: 1.7, color: shellText2 }}>
+                  <p style={{ margin: 0, maxWidth: 720, fontSize: 'clamp(13.5px, 2.1vw, 15.5px)', lineHeight: 1.7, color: shellText2 }}>
                     {description}
                   </p>
                 ) : null}
@@ -268,9 +282,10 @@ export function RoleAppShell({
             boxShadow: isLight ? '0 20px 60px rgba(0,0,0,0.24)' : '0 30px 86px rgba(0,0,0,0.42)',
             backdropFilter: 'blur(20px)',
             padding: 10,
-            display: 'grid',
-            gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))`,
+            display: compactTabs ? 'flex' : 'grid',
+            gridTemplateColumns: compactTabs ? undefined : `repeat(${tabs.length}, minmax(0, 1fr))`,
             gap: 8,
+            overflowX: compactTabs ? 'auto' : 'visible',
           }}
         >
           {tabs.map((tab) => {
@@ -298,6 +313,8 @@ export function RoleAppShell({
                   alignItems: 'center',
                   gap: 12,
                   minHeight: hasDescription ? 66 : 58,
+                  minWidth: compactTabs ? (hasDescription ? 210 : 170) : undefined,
+                  flexShrink: compactTabs ? 0 : 1,
                   borderLeft: active ? `1px solid color-mix(in srgb, ${accent} 26%, transparent)` : '1px solid transparent',
                   borderTop: active ? `1px solid color-mix(in srgb, ${accent} 22%, transparent)` : '1px solid transparent',
                   boxShadow: active ? `0 14px 28px color-mix(in srgb, ${accent} 20%, transparent)` : 'none',

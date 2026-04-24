@@ -726,7 +726,7 @@ export function ParentHomeworkPanel({
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
                   {[1, 2, 3, 4].map((n) => (
                     <div
                       key={n}
@@ -1336,7 +1336,7 @@ export function ParentHomeworkPanel({
                             <BookOpen style={{ width: 14, height: 14, color: '#7dd3fc' }} />
                             Vocab options
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
                             <CounterField
                               label="Words to learn"
                               value={plan.vocab.wordsToLearn}

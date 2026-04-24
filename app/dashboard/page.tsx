@@ -162,7 +162,7 @@ export default function DashboardPage() {
   } as const;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '1.3125rem 2.4rem 5rem', background: 'var(--t-bg)' }}>
+    <div style={{ minHeight: '100vh', padding: 'clamp(0.75rem, 2vw, 1.3125rem) clamp(0.75rem, 2.8vw, 2.4rem) 5rem', background: 'var(--t-bg)' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
         {/* ── HERO ── */}
@@ -215,7 +215,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── 4 STAT CARDS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.55rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.55rem' }}>
           {([
             { tone: streakTone, Icon: Flame,    label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
             { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${profile.level}` },
@@ -318,7 +318,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── BOTTOM ROW: activity + goals ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
 
           {/* 7-day activity */}
           <div style={{ ...cardSurface, borderRadius: 26, padding: '1.8rem 1.85rem' }}>
