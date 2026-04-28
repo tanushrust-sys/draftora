@@ -1566,7 +1566,7 @@ body {
   padding: 1.5rem 1rem 1rem;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .sidebar-offset {
     margin-left: 284px;
     transition: margin-left 0.3s;
@@ -2569,7 +2569,7 @@ select:focus-visible {
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1279px) {
   .dashboard-content {
     border-radius: 20px;
     min-height: calc(100vh - 1.45rem);
@@ -2577,6 +2577,17 @@ select:focus-visible {
 
   .dashboard-topbar {
     padding: 0.85rem 0.95rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .dashboard-topbar__meta {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .dashboard-topbar__meta > div {
+    min-width: 0;
   }
 
   .dashboard-topbar__badge {

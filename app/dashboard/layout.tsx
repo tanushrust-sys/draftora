@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(min-width: 1024px)');
+    const media = window.matchMedia('(min-width: 1280px)');
     const apply = () => setIsLargeViewport(media.matches);
     apply();
     media.addEventListener('change', apply);
@@ -207,7 +207,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <button type="button" className="fixed inset-0 z-40 lg:hidden"
+        <button type="button" className="fixed inset-0 z-40 xl:hidden"
           style={{ background: 'var(--t-overlay)' }}
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation" />
@@ -217,7 +217,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* ─── SIDEBAR ─── */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 transform transition-all duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`fixed inset-y-0 left-0 z-50 transform transition-all duration-300 xl:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
           style={{ width: effectiveCollapsed ? COLLAPSED_W : SIDEBAR_W }}
         >
           <div style={{
@@ -275,7 +275,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                   </Link>
                   <button type="button"
-                    onClick={() => window.innerWidth >= 1024 ? toggleCollapsed() : setSidebarOpen(false)}
+                    onClick={() => window.innerWidth >= 1280 ? toggleCollapsed() : setSidebarOpen(false)}
                     style={{
                       width: 32, height: 32, borderRadius: 10, flexShrink: 0,
                       background: 'color-mix(in srgb, var(--t-tx3) 8%, transparent)',
@@ -520,7 +520,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="dashboard-content app-surface">
               <div className="dashboard-topbar">
                 <div className="dashboard-topbar__meta">
-                  <button type="button" className="dashboard-topbar__menu lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
+                  <button type="button" className="dashboard-topbar__menu xl:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
                     <Menu className="h-4 w-4" />
                   </button>
                   <div>

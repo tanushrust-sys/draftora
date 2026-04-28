@@ -48,8 +48,8 @@ function isModelResolutionError(err: unknown): boolean {
   );
 }
 
-const AI_ASSIST_SYSTEM_PROMPT = `You are an expert creative writing coach. Your job is to deliver direct, specific, and age-appropriate writing coaching with zero filler.
-Read the writing prompt and the user's current story excerpt.
+const AI_ASSIST_SYSTEM_PROMPT = `You are an expert writing revision coach. Your job is to deliver direct, specific, age-appropriate coaching with zero filler.
+Read the writing prompt, writing category, and the user's current draft excerpt.
 Return ONLY a valid JSON object with exactly 2 keys:
 {
   "tips": [
@@ -65,13 +65,41 @@ Rules:
 - Do not include any keys other than "tips" and "examples".
 - Do not include any text outside the JSON object.
 - Do not apologize, hedge, or offer generic encouragement.
-- Do not invent ideas that are not present in the prompt or excerpt.
-- Tips must be precise, actionable, and directly tied to the draft or to a strong way to start if the draft is empty.
-- Examples must be concrete sample lines or micro-directions that the student can use immediately.
+- Do not invent plot facts that are not present in the prompt or excerpt.
+- Tips must be precise, actionable, and directly tied to visible draft issues (or a strong start strategy when the draft is empty).
+- Each tip must describe one concrete upgrade move, not a broad slogan.
+- Examples must be concrete sample lines or micro-directions that the student can adapt immediately.
+- Examples must sound like writing, not teacher commentary.
 - If the textarea is empty, all tips must teach how to begin with a strong image, action, or emotion, and all examples must show an actual opening move.
-- If the draft is weak or underdeveloped, explain what is missing and give one exact revision move for stronger wording or structure.
+- If the draft is weak or underdeveloped, explain what is missing and give an exact revision move for stronger wording, structure, or clarity.
 - Always favor specificity over general statements.
 - Never repeat the same idea across multiple tips or examples.`;
+
+const ASSIST_STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'so', 'to', 'of', 'in', 'on', 'at', 'for',
+  'with', 'from', 'by', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'it', 'its', 'i', 'you', 'he', 'she', 'they', 'we', 'my', 'your', 'his', 'her',
+  'their', 'our', 'me', 'him', 'them', 'this', 'that', 'these', 'those', 'there',
+  'here', 'then', 'than', 'if', 'when', 'while', 'because', 'about', 'into', 'out',
+  'up', 'down', 'over', 'under', 'again', 'very', 'just', 'really',
+]);
+
+const ASSIST_SENSORY_WORDS = new Set([
+  'bright', 'dark', 'cold', 'warm', 'hot', 'loud', 'quiet', 'silent', 'rough', 'smooth',
+  'soft', 'sharp', 'bitter', 'sweet', 'salty', 'sour', 'fragrant', 'stale', 'glow', 'shadow',
+  'whisper', 'shout', 'thunder', 'echo', 'scent', 'smell', 'taste', 'touch', 'texture',
+]);
+
+const ASSIST_EMOTION_WORDS = new Set([
+  'afraid', 'angry', 'anxious', 'calm', 'confused', 'curious', 'excited', 'frustrated',
+  'grateful', 'guilty', 'happy', 'hopeful', 'lonely', 'nervous', 'proud', 'relieved',
+  'sad', 'scared', 'stressed', 'surprised', 'upset', 'worried',
+]);
+
+const ASSIST_TRANSITIONS = new Set([
+  'after', 'before', 'during', 'meanwhile', 'however', 'therefore', 'later', 'next',
+  'then', 'suddenly', 'finally', 'instead', 'because', 'although', 'eventually',
+]);
 
 function splitWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean);
@@ -96,40 +124,200 @@ function normalizeAssistSuggestion(raw: unknown, forcedType: 'tip' | 'example'):
   };
 }
 
-function assistFallback(prompt: string, hasContent: boolean, mappedAgeGroup: string): AssistResult {
-  const promptHint = prompt.trim() || 'the writing prompt';
+function extractAssistTokens(text: string) {
+  return text.toLowerCase().match(/[a-z']+/g) ?? [];
+}
+
+function countLexiconHits(tokens: string[], lexicon: Set<string>) {
+  let total = 0;
+  for (const token of tokens) {
+    if (lexicon.has(token)) total += 1;
+  }
+  return total;
+}
+
+function findRepeatedAssistWord(tokens: string[]) {
+  const counts = new Map<string, number>();
+  for (const token of tokens) {
+    if (token.length < 4) continue;
+    if (ASSIST_STOPWORDS.has(token)) continue;
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+
+  let result: { word: string; count: number } | null = null;
+  for (const [word, count] of counts.entries()) {
+    if (count < 4) continue;
+    if (!result || count > result.count) {
+      result = { word, count };
+    }
+  }
+  return result;
+}
+
+function startsWithWeakSetup(sentence: string) {
+  const lower = sentence.trim().toLowerCase();
+  return (
+    lower.startsWith('there is') ||
+    lower.startsWith('there are') ||
+    lower.startsWith('it is') ||
+    lower.startsWith('it was') ||
+    lower.startsWith('i am') ||
+    lower.startsWith('i was')
+  );
+}
+
+function assistFallback(prompt: string, content: string, category: string, mappedAgeGroup: string): AssistResult {
+  const promptHint = (prompt.trim() || category.trim() || 'this piece').replace(/\s+/g, ' ').trim();
+  const clean = content.trim();
+  const hasContent = clean.length > 0;
   const kidMode = mappedAgeGroup === 'children';
-  const teenMode = mappedAgeGroup === 'teens';
+  const categoryLower = category.toLowerCase();
+  const narrativeStyle = /(creative|story|blog|feature|diary|personal|poetry)/.test(categoryLower);
+  const persuasiveStyle = /(persuasive|essay)/.test(categoryLower);
+
   if (!hasContent) {
     return {
       tips: [
-        { type: 'tip', label: 'Start In Motion', detail: kidMode ? `Begin with one clear action so we instantly know what is happening in ${promptHint}.` : `Open with a concrete action that places the reader directly inside ${promptHint}.` },
-        { type: 'tip', label: 'Set Scene Quickly', detail: kidMode ? 'Use one strong describing word so the place feels real right away.' : 'Use one sensory image in the first two sentences so the location feels real.' },
-        { type: 'tip', label: 'Reveal Character Goal', detail: kidMode ? 'Tell us what your character wants in the first two lines.' : 'Show what your main character wants in line one or two.' },
-        { type: 'tip', label: 'Signal Early Tension', detail: kidMode ? 'Add a small problem early so readers want to know what happens next.' : 'Introduce a small problem immediately so readers feel momentum from the start.' },
+        { type: 'tip', label: 'Open With Action', detail: `Begin ${promptHint} with a clear action in the first sentence so readers enter the moment immediately.` },
+        { type: 'tip', label: 'Anchor The Setting', detail: kidMode ? 'Add one place detail and one sound detail in your first two lines.' : 'Add one concrete place detail and one sensory detail in your first two lines.' },
+        { type: 'tip', label: 'State A Goal Early', detail: 'Show what the main person wants right away so the scene has purpose.' },
+        { type: 'tip', label: 'Introduce Early Tension', detail: 'Add a small problem by line three so readers want to continue.' },
       ],
       examples: [
-        { type: 'example', label: 'Action Opening', detail: kidMode ? 'The bell rang, and I ran to find my best friend before I lost courage.' : 'By the time the school bell rang, I was still clutching the note I never sent.' },
-        { type: 'example', label: 'Scene First Line', detail: kidMode ? 'Rain hit the bus window while I practiced the words in my head.' : 'Rain tapped the bus window while I rehearsed what I would finally say to her.' },
-        { type: 'example', label: 'Character Hook', detail: teenMode ? 'People said I was being dramatic, but I was terrified she would walk away.' : 'Everyone thought I was angry, but I was mostly scared she would not listen.' },
-        { type: 'example', label: 'Conflict Seed', detail: kidMode ? 'When she sat next to me, my mouth went dry and I forgot every sentence.' : 'When she sat beside me at lunch, the words I had waited months to say disappeared.' },
+        { type: 'example', label: 'Action First Line', detail: 'I slammed the locker shut and ran before anyone could read the note in my hand.' },
+        { type: 'example', label: 'Setting Snapshot', detail: 'Cold rain ticked against the bus window while the station lights flickered above me.' },
+        { type: 'example', label: 'Goal In View', detail: 'I only had ten minutes to convince her before the final bell rang.' },
+        { type: 'example', label: 'Tension Trigger', detail: 'Then my phone buzzed with a message that changed what I had planned to say.' },
       ],
     };
   }
 
+  const tokens = extractAssistTokens(clean);
+  const sentences = splitIntoSentences(clean);
+  const paragraphs = clean.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean);
+  const words = tokens.length;
+  const averageSentenceWords = sentences.length > 0 ? Math.round(words / sentences.length) : words;
+  const sensoryHits = countLexiconHits(tokens, ASSIST_SENSORY_WORDS);
+  const emotionHits = countLexiconHits(tokens, ASSIST_EMOTION_WORDS);
+  const transitionHits = countLexiconHits(tokens, ASSIST_TRANSITIONS);
+  const repeatedWord = findRepeatedAssistWord(tokens);
+  const firstSentence = sentences[0] ?? '';
+
+  type AssistCandidate = {
+    id: string;
+    tipLabel: string;
+    tipDetail: string;
+    exampleLabel: string;
+    exampleDetail: string;
+  };
+  const candidates: AssistCandidate[] = [];
+  const addCandidate = (candidate: AssistCandidate) => {
+    if (candidates.some((item) => item.id === candidate.id)) return;
+    candidates.push(candidate);
+  };
+
+  if (words < 100) {
+    addCandidate({
+      id: 'develop-core-idea',
+      tipLabel: 'Develop Core Idea',
+      tipDetail: `Expand one key moment from ${promptHint} with 2-3 extra sentences that explain what happens, why it matters, and what changes next.`,
+      exampleLabel: 'Expansion Move',
+      exampleDetail: 'I thought it would be simple, but when the door opened, every plan I had started to fall apart.',
+    });
+  }
+
+  if (averageSentenceWords > 24) {
+    addCandidate({
+      id: 'shorten-sentences',
+      tipLabel: 'Shorten Long Sentences',
+      tipDetail: `Your average sentence is about ${averageSentenceWords} words, so split one long line into two shorter beats for cleaner rhythm.`,
+      exampleLabel: 'Sentence Split',
+      exampleDetail: 'I ran for the gate, and my lungs burned, but I refused to slow down.',
+    });
+  }
+
+  if (paragraphs.length <= 1 && words >= 120) {
+    addCandidate({
+      id: 'paragraph-structure',
+      tipLabel: 'Break Into Paragraphs',
+      tipDetail: 'Start a new paragraph when the focus shifts from action to reaction, or from one idea to the next.',
+      exampleLabel: 'Paragraph Cue',
+      exampleDetail: 'New paragraph after a turning point so readers can feel the shift in focus.',
+    });
+  }
+
+  if (sensoryHits === 0) {
+    addCandidate({
+      id: 'sensory-detail',
+      tipLabel: 'Add Sensory Detail',
+      tipDetail: 'Include at least one sight, sound, or physical sensation so the scene feels real instead of abstract.',
+      exampleLabel: 'Sensory Upgrade',
+      exampleDetail: 'Cold wind scraped my face while the metal handle stung my fingers.',
+    });
+  }
+
+  if (narrativeStyle && emotionHits === 0) {
+    addCandidate({
+      id: 'emotion-beat',
+      tipLabel: 'Show Emotion Directly',
+      tipDetail: 'Add one reaction beat that shows what your character feels right after the key event.',
+      exampleLabel: 'Emotion Beat',
+      exampleDetail: 'My hands shook even though I kept my voice steady.',
+    });
+  }
+
+  if (sentences.length >= 4 && transitionHits <= 1) {
+    addCandidate({
+      id: 'transitions',
+      tipLabel: 'Use Clear Transitions',
+      tipDetail: 'Use time or logic transitions so each sentence connects smoothly to the next idea.',
+      exampleLabel: 'Transition Line',
+      exampleDetail: 'A minute later, the hallway emptied, and I finally had to decide.',
+    });
+  }
+
+  if (repeatedWord) {
+    addCandidate({
+      id: 'repetition',
+      tipLabel: 'Vary Repeated Words',
+      tipDetail: `You repeat "${repeatedWord.word}" ${repeatedWord.count} times, so swap some repeats for sharper alternatives.`,
+      exampleLabel: 'Word Variety',
+      exampleDetail: `Replace repeated "${repeatedWord.word}" with a more precise verb or image in at least two lines.`,
+    });
+  }
+
+  if (firstSentence && startsWithWeakSetup(firstSentence)) {
+    addCandidate({
+      id: 'opening-strength',
+      tipLabel: 'Sharpen Opening Line',
+      tipDetail: 'Replace a general opening statement with a specific action or image from your scene.',
+      exampleLabel: 'Stronger Opening',
+      exampleDetail: 'Instead of a broad setup, open on the exact moment when the conflict starts.',
+    });
+  }
+
+  if (persuasiveStyle && words >= 80) {
+    addCandidate({
+      id: 'evidence',
+      tipLabel: 'Add Concrete Evidence',
+      tipDetail: 'Support your main claim with one specific example, fact, or short scenario, not only opinion.',
+      exampleLabel: 'Evidence Add',
+      exampleDetail: 'One concrete example can prove your point faster than two extra opinion sentences.',
+    });
+  }
+
+  addCandidate({
+    id: 'line-edit-pass',
+    tipLabel: 'Run A Line Edit',
+    tipDetail: kidMode ? 'Pick three sentences and replace weak words with stronger, clearer words.' : 'Pick three sentences and replace vague words with precise verbs and nouns.',
+    exampleLabel: 'Line Edit Move',
+    exampleDetail: 'Change one weak phrase into a concrete action so the reader can picture it immediately.',
+  });
+
+  const chosen = candidates.slice(0, 4);
   return {
-    tips: [
-      { type: 'tip', label: 'Sharpen One Image', detail: kidMode ? 'Swap one plain describing phrase for a picture word readers can imagine.' : 'Upgrade one broad description into a specific image the reader can clearly picture.' },
-      { type: 'tip', label: 'Add Emotion Beat', detail: kidMode ? 'Add one short sentence that says how your character feels right then.' : 'Insert one reaction sentence showing exactly what the narrator feels right now.' },
-      { type: 'tip', label: 'Tighten Sentence Rhythm', detail: kidMode ? 'Split one long sentence into two shorter ones so it is easier to read.' : 'Break one long sentence into two to improve pacing during the tense moment.' },
-      { type: 'tip', label: 'Raise Stakes Next', detail: kidMode ? 'Show what could go wrong next so readers care even more.' : 'Show what the character could lose in the next beat to increase urgency.' },
-    ],
-    examples: [
-      { type: 'example', label: 'Dialogue Pivot', detail: kidMode ? 'She crossed her arms and said, If you are just joking, do not start.' : 'She folded her arms and said, If this is another excuse, do not say it.' },
-      { type: 'example', label: 'Emotion Line', detail: kidMode ? 'I tried to sound calm, but my voice shook on every word.' : 'My voice sounded steady, but my hands kept shaking under the table.' },
-      { type: 'example', label: 'Concrete Detail', detail: kidMode ? 'I twisted my lunchbox zipper again and again while she waited.' : 'The plastic straw bent in half as I pressed it between my fingers.' },
-      { type: 'example', label: 'Hook Ending', detail: kidMode ? 'Then she pulled a crumpled note from her pocket and looked me in the eye.' : 'Then she reached into her bag and pulled out the message I never sent.' },
-    ],
+    tips: chosen.map((item) => ({ type: 'tip', label: trimToFiveWords(item.tipLabel), detail: item.tipDetail })),
+    examples: chosen.map((item) => ({ type: 'example', label: trimToFiveWords(item.exampleLabel), detail: item.exampleDetail })),
   };
 }
 
@@ -150,8 +338,8 @@ function normalizeAssistGroup(raw: unknown, forcedType: 'tip' | 'example'): Assi
   return deduped.slice(0, 4);
 }
 
-function normalizeAssistResult(raw: unknown, hasContent: boolean, prompt: string, mappedAgeGroup: string): AssistResult {
-  const fallback = assistFallback(prompt, hasContent, mappedAgeGroup);
+function normalizeAssistResult(raw: unknown, content: string, prompt: string, category: string, mappedAgeGroup: string): AssistResult {
+  const fallback = assistFallback(prompt, content, category, mappedAgeGroup);
   const tipsRaw = raw && typeof raw === 'object' ? (raw as { tips?: unknown }).tips : null;
   const examplesRaw = raw && typeof raw === 'object' ? (raw as { examples?: unknown }).examples : null;
 
@@ -678,11 +866,14 @@ export async function POST(req: Request) {
     if (assistMode) {
       const safeContent = content ?? '';
       const safePrompt = prompt ?? '';
-      const hasContent = safeContent.trim().length > 0;
+      const assistWordCount = typeof wordCount === 'number' ? wordCount : splitWords(safeContent).length;
 
       const userPrompt = [
+        `WRITING CATEGORY:\n${category.trim() || 'General writing'}`,
+        `AGE GROUP:\n${mappedAgeGroup}`,
+        `WORD COUNT:\n${assistWordCount}`,
         `WRITING PROMPT:\n${safePrompt.trim() || '(No prompt provided)'}`,
-        `CURRENT STORY EXCERPT:\n${safeContent.trim() || '(Empty)'}`,
+        `CURRENT DRAFT EXCERPT:\n${safeContent.trim() || '(Empty)'}`,
         'Return only JSON.',
       ].join('\n\n');
 
@@ -733,11 +924,11 @@ export async function POST(req: Request) {
 
         const rawAssist = completion.choices[0]?.message?.content ?? '[]';
         const parsedAssist = JSON.parse(extractJSON(rawAssist)) as unknown;
-        const result = normalizeAssistResult(parsedAssist, hasContent, safePrompt, mappedAgeGroup);
+        const result = normalizeAssistResult(parsedAssist, safeContent, safePrompt, category, mappedAgeGroup);
         return NextResponse.json(result);
       } catch (assistError) {
         console.error('ai-assist via ai-feedback route error:', assistError);
-        return NextResponse.json(normalizeAssistResult({}, hasContent, safePrompt, mappedAgeGroup));
+        return NextResponse.json(normalizeAssistResult({}, safeContent, safePrompt, category, mappedAgeGroup));
       }
     }
 

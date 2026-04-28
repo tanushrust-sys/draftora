@@ -816,6 +816,10 @@ function WritingsContent() {
   const writingMutationLock = useRef(false);
   const writingReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiAssistCopyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiAssistAutoRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiAssistRequestController = useRef<AbortController | null>(null);
+  const aiAssistRequestSeq = useRef(0);
+  const aiAssistLastRequestSignature = useRef('');
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftSignatureRef = useRef('');
   const writingRewardsGrantedRef = useRef(false);
@@ -2036,8 +2040,24 @@ function WritingsContent() {
     void submitForFeedbackSafe({ allowBelowMinimum: true, source: 'timer' });
   }, [content, status, timerEnabled, timerRemainingMs, timerRunning, submitForFeedbackSafe]);
 
-  const runAiAssist = useCallback(async () => {
-    setAiAssistOpen(true);
+  const runAiAssist = useCallback(async (options?: { keepPanelState?: boolean }) => {
+    const keepPanelState = options?.keepPanelState ?? false;
+    if (!keepPanelState) {
+      setAiAssistOpen(true);
+    }
+
+    const requestSignature = `${category}::${prompt.trim()}::${content.trim()}`;
+    aiAssistLastRequestSignature.current = requestSignature;
+
+    const requestId = aiAssistRequestSeq.current + 1;
+    aiAssistRequestSeq.current = requestId;
+
+    if (aiAssistRequestController.current) {
+      aiAssistRequestController.current.abort();
+    }
+    const controller = new AbortController();
+    aiAssistRequestController.current = controller;
+
     setAiAssistLoading(true);
     setAiAssistCopied(false);
 
@@ -2045,13 +2065,21 @@ function WritingsContent() {
       const response = await fetch('/api/ai-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           assistMode: true,
           prompt,
           content,
           category,
+          wordCount,
+          ageGroup: profile?.age_group,
+          writingExperienceScore: profile?.writing_experience_score ?? 0,
         }),
       });
+
+      if (!response.ok) {
+        throw new Error(`AI assist request failed with status ${response.status}`);
+      }
 
       const payload = await response.json() as AssistResponse;
       const tips = Array.isArray(payload?.tips)
@@ -2073,16 +2101,44 @@ function WritingsContent() {
             .slice(0, 4)
         : [];
 
+      if (requestId !== aiAssistRequestSeq.current) return;
       setAiAssistTips(tips);
       setAiAssistExamples(examples);
     } catch (assistError) {
+      if (assistError instanceof Error && assistError.name === 'AbortError') return;
       logSafeError('runAiAssist error:', assistError);
+      if (requestId !== aiAssistRequestSeq.current) return;
       setAiAssistTips([]);
       setAiAssistExamples([]);
     } finally {
-      setAiAssistLoading(false);
+      if (requestId === aiAssistRequestSeq.current) {
+        setAiAssistLoading(false);
+      }
     }
-  }, [category, content, prompt]);
+  }, [category, content, prompt, profile?.age_group, profile?.writing_experience_score, wordCount]);
+
+  useEffect(() => {
+    if (!aiAssistOpen || status !== 'idle') return;
+
+    const requestSignature = `${category}::${prompt.trim()}::${content.trim()}`;
+    if (requestSignature === aiAssistLastRequestSignature.current) return;
+
+    if (aiAssistAutoRefreshTimer.current) {
+      clearTimeout(aiAssistAutoRefreshTimer.current);
+      aiAssistAutoRefreshTimer.current = null;
+    }
+
+    aiAssistAutoRefreshTimer.current = setTimeout(() => {
+      void runAiAssist({ keepPanelState: true });
+    }, 1200);
+
+    return () => {
+      if (aiAssistAutoRefreshTimer.current) {
+        clearTimeout(aiAssistAutoRefreshTimer.current);
+        aiAssistAutoRefreshTimer.current = null;
+      }
+    };
+  }, [aiAssistOpen, category, content, prompt, runAiAssist, status]);
 
   const copyAiAssistTip = useCallback(async (detail: string) => {
     try {
@@ -2098,6 +2154,8 @@ function WritingsContent() {
   useEffect(() => {
     return () => {
       if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
+      if (aiAssistAutoRefreshTimer.current) clearTimeout(aiAssistAutoRefreshTimer.current);
+      if (aiAssistRequestController.current) aiAssistRequestController.current.abort();
       if (reactionGifTimerRef.current) clearTimeout(reactionGifTimerRef.current);
     };
   }, []);
@@ -2275,6 +2333,16 @@ function WritingsContent() {
     hasAttemptedDraftRestoreRef.current = true;
     writingRewardsGrantedRef.current = false;
     setAiAssistLoading(false);
+    aiAssistLastRequestSignature.current = '';
+    aiAssistRequestSeq.current = 0;
+    if (aiAssistRequestController.current) {
+      aiAssistRequestController.current.abort();
+      aiAssistRequestController.current = null;
+    }
+    if (aiAssistAutoRefreshTimer.current) {
+      clearTimeout(aiAssistAutoRefreshTimer.current);
+      aiAssistAutoRefreshTimer.current = null;
+    }
     setAiAssistTips([]);
     setAiAssistExamples([]);
     setAiAssistCopied(false);
@@ -2957,51 +3025,138 @@ function WritingsContent() {
 
                 <div
                   style={{
-                    padding: aiAssistOpen ? '12px 20px 16px' : '0 20px',
-                    maxHeight: aiAssistOpen ? 320 : 0,
+                    padding: aiAssistOpen ? '14px 20px 18px' : '0 20px',
+                    maxHeight: aiAssistOpen ? 460 : 0,
                     opacity: aiAssistOpen ? 1 : 0,
                     overflow: 'hidden',
-                    transition: 'max-height 0.22s ease, opacity 0.22s ease, padding 0.22s ease',
+                    transition: 'max-height 0.24s ease, opacity 0.24s ease, padding 0.24s ease',
                   }}
                 >
                   <div style={{
-                    borderRadius: 16,
-                    border: '1px solid var(--t-brd)',
-                    background: 'linear-gradient(160deg, var(--t-card2), color-mix(in srgb, var(--t-acc-a) 16%, var(--t-card) 84%))',
-                    padding: 12,
+                    position: 'relative',
+                    borderRadius: 22,
+                    border: '1px solid color-mix(in srgb, var(--t-acc) 28%, var(--t-brd) 72%)',
+                    background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card2) 86%, #020b2f 14%), color-mix(in srgb, var(--t-acc-a) 30%, var(--t-card) 70%))',
+                    boxShadow: '0 28px 46px rgba(0, 18, 66, 0.32), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    padding: 14,
+                    overflow: 'hidden',
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div>
-                        <strong style={{ fontSize: 13 }}>AI Assist Studio</strong>
-                        <p style={{ margin: '2px 0 0', fontSize: 11, opacity: 0.75 }}>4 focused tips + 4 ready-to-adapt examples</p>
+                    <div style={{
+                      pointerEvents: 'none',
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'radial-gradient(700px 260px at -4% -16%, color-mix(in srgb, var(--t-acc) 26%, transparent), transparent 65%)',
+                      opacity: 0.95,
+                    }} />
+
+                    <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <div style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 12,
+                          border: '1px solid color-mix(in srgb, #f8d35d 60%, #c48710 40%)',
+                          background: 'linear-gradient(145deg, #fff6cb 0%, #f7d05a 42%, #dd9f2b 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 12px 20px rgba(175, 117, 13, 0.34)',
+                          flexShrink: 0,
+                        }}>
+                          <Sparkles style={{ width: 16, height: 16, color: '#5c3b00' }} />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <strong style={{ fontSize: 14, color: 'var(--t-tx)', fontFamily: '\'Sora\', \'Space Grotesk\', \'Avenir Next\', sans-serif', letterSpacing: '0.01em' }}>AI Assist Studio</strong>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--t-tx3)' }}>
+                            {aiAssistTips.length + aiAssistExamples.length} power moves ready. Auto-updates while you write.
+                          </p>
+                        </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setAiAssistOpen(false)}
                         aria-label="Close AI Assist"
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, padding: 4, border: '1px solid var(--t-brd)' }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 10,
+                          padding: 6,
+                          border: '1px solid color-mix(in srgb, var(--t-acc) 20%, var(--t-brd) 80%)',
+                          background: 'color-mix(in srgb, var(--t-card) 88%, var(--t-acc-a) 12%)',
+                          color: 'var(--t-tx2)',
+                          cursor: 'pointer',
+                        }}
                       >
                         <X style={{ width: 14, height: 14 }} />
                       </button>
                     </div>
 
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '5px 9px',
+                        borderRadius: 999,
+                        border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)',
+                        background: 'color-mix(in srgb, var(--t-acc-a) 55%, transparent)',
+                        color: 'var(--t-acc)',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        letterSpacing: '0.09em',
+                        textTransform: 'uppercase',
+                      }}>
+                        <Zap style={{ width: 11, height: 11 }} />
+                        Writing Upgrade Mode
+                      </span>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '5px 9px',
+                        borderRadius: 999,
+                        border: '1px solid color-mix(in srgb, var(--t-brd) 75%, transparent)',
+                        background: 'color-mix(in srgb, var(--t-card) 70%, transparent)',
+                        color: 'var(--t-tx2)',
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}>
+                        {aiAssistTips.length} tips + {aiAssistExamples.length} examples
+                      </span>
+                    </div>
+
                     {aiAssistCopied && (
-                      <div style={{ marginBottom: 10, fontSize: 12 }}>
-                        Tip copied!
+                      <div style={{
+                        position: 'relative',
+                        marginBottom: 10,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 10px',
+                        borderRadius: 10,
+                        border: '1px solid color-mix(in srgb, var(--t-success) 40%, transparent)',
+                        background: 'color-mix(in srgb, var(--t-success) 10%, var(--t-card) 90%)',
+                        color: 'var(--t-success)',
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}>
+                        <CheckCircle style={{ width: 13, height: 13 }} />
+                        Copied to clipboard
                       </div>
                     )}
 
-                    <div style={{ maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
+                    <div style={{ position: 'relative', maxHeight: 282, overflowY: 'auto', paddingRight: 4 }}>
                       {aiAssistLoading ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                           {Array.from({ length: 2 }).map((_, col) => (
                             <div key={col}>
-                              <div style={{ height: 12, width: 90, borderRadius: 6, background: 'currentColor', opacity: 0.32, marginBottom: 8 }} />
-                              <div style={{ display: 'grid', gap: 8 }}>
+                              <div style={{ height: 12, width: 100, borderRadius: 6, background: 'currentColor', opacity: 0.28, marginBottom: 9 }} />
+                              <div style={{ display: 'grid', gap: 9 }}>
                                 {Array.from({ length: 4 }).map((__, index) => (
-                                  <div key={`${col}-${index}`} style={{ borderRadius: 12, padding: 10, border: '1px solid var(--t-brd)', opacity: 0.5 }}>
-                                    <div style={{ height: 12, marginBottom: 8, borderRadius: 6, background: 'currentColor', opacity: 0.28 }} />
-                                    <div style={{ height: 10, borderRadius: 6, background: 'currentColor', opacity: 0.18 }} />
+                                  <div key={`${col}-${index}`} style={{ borderRadius: 14, padding: 12, border: '1px solid color-mix(in srgb, var(--t-acc) 18%, var(--t-brd) 82%)', background: 'color-mix(in srgb, var(--t-card) 86%, var(--t-acc-a) 14%)', opacity: 0.58 }}>
+                                    <div style={{ height: 12, marginBottom: 8, borderRadius: 6, background: 'currentColor', opacity: 0.27 }} />
+                                    <div style={{ height: 10, borderRadius: 6, background: 'currentColor', opacity: 0.17 }} />
                                   </div>
                                 ))}
                               </div>
@@ -3010,42 +3165,127 @@ function WritingsContent() {
                         </div>
                       ) : (
                         (aiAssistTips.length > 0 || aiAssistExamples.length > 0) ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                             <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Tips</div>
-                              <div style={{ display: 'grid', gap: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t-acc)' }}>Tips</div>
+                              <div style={{ display: 'grid', gap: 9 }}>
                                 {aiAssistTips.map((tip, index) => (
                                   <button
                                     key={`tip-${tip.label}-${index}`}
                                     type="button"
                                     onClick={() => { void copyAiAssistTip(tip.detail); }}
-                                    style={{ textAlign: 'left', borderRadius: 12, padding: 10, border: '1px solid var(--t-brd)', background: 'var(--t-card)', cursor: 'pointer' }}
+                                    style={{
+                                      textAlign: 'left',
+                                      borderRadius: 14,
+                                      padding: 12,
+                                      border: '1px solid color-mix(in srgb, var(--t-acc) 16%, var(--t-brd) 84%)',
+                                      background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 84%, var(--t-acc-a) 16%), color-mix(in srgb, var(--t-card2) 88%, var(--t-acc-a) 12%))',
+                                      cursor: 'pointer',
+                                      transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
+                                      boxShadow: '0 8px 18px rgba(0, 22, 66, 0.2)',
+                                    }}
+                                    onMouseEnter={e => {
+                                      e.currentTarget.style.transform = 'translateY(-1px)';
+                                      e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 28, 77, 0.28)';
+                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--t-acc) 36%, var(--t-brd) 64%)';
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.transform = 'translateY(0)';
+                                      e.currentTarget.style.boxShadow = '0 8px 18px rgba(0, 22, 66, 0.2)';
+                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--t-acc) 16%, var(--t-brd) 84%)';
+                                    }}
                                   >
-                                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{tip.label}</div>
-                                    <div style={{ fontSize: 12, opacity: 0.8 }}>{tip.detail}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                      <span style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: 8,
+                                        border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)',
+                                        background: 'var(--t-acc-a)',
+                                        color: 'var(--t-acc)',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 10,
+                                        fontWeight: 900,
+                                        flexShrink: 0,
+                                      }}>
+                                        {index + 1}
+                                      </span>
+                                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--t-tx)' }}>{tip.label}</div>
+                                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: 'var(--t-acc)' }}>Copy</span>
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{tip.detail}</div>
                                   </button>
                                 ))}
                               </div>
                             </div>
                             <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Examples</div>
-                              <div style={{ display: 'grid', gap: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7ad4ff' }}>Examples</div>
+                              <div style={{ display: 'grid', gap: 9 }}>
                                 {aiAssistExamples.map((example, index) => (
                                   <button
                                     key={`example-${example.label}-${index}`}
                                     type="button"
                                     onClick={() => { void copyAiAssistTip(example.detail); }}
-                                    style={{ textAlign: 'left', borderRadius: 12, padding: 10, border: '1px solid var(--t-brd)', background: 'var(--t-card)', cursor: 'pointer' }}
+                                    style={{
+                                      textAlign: 'left',
+                                      borderRadius: 14,
+                                      padding: 12,
+                                      border: '1px solid color-mix(in srgb, #7ad4ff 24%, var(--t-brd) 76%)',
+                                      background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 80%, #05325b 20%), color-mix(in srgb, var(--t-card2) 90%, #0f3f72 10%))',
+                                      cursor: 'pointer',
+                                      transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
+                                      boxShadow: '0 8px 18px rgba(0, 26, 68, 0.24)',
+                                    }}
+                                    onMouseEnter={e => {
+                                      e.currentTarget.style.transform = 'translateY(-1px)';
+                                      e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 33, 90, 0.3)';
+                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, #7ad4ff 44%, var(--t-brd) 56%)';
+                                    }}
+                                    onMouseLeave={e => {
+                                      e.currentTarget.style.transform = 'translateY(0)';
+                                      e.currentTarget.style.boxShadow = '0 8px 18px rgba(0, 26, 68, 0.24)';
+                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, #7ad4ff 24%, var(--t-brd) 76%)';
+                                    }}
                                   >
-                                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{example.label}</div>
-                                    <div style={{ fontSize: 12, opacity: 0.8 }}>{example.detail}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                      <span style={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: 8,
+                                        border: '1px solid color-mix(in srgb, #7ad4ff 40%, transparent)',
+                                        background: 'rgba(41, 180, 255, 0.16)',
+                                        color: '#a5e5ff',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 10,
+                                        fontWeight: 900,
+                                        flexShrink: 0,
+                                      }}>
+                                        {index + 1}
+                                      </span>
+                                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--t-tx)' }}>{example.label}</div>
+                                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: '#9bdfff' }}>Copy</span>
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{example.detail}</div>
                                   </button>
                                 ))}
                               </div>
                             </div>
                           </div>
                         ) : (
-                          <p style={{ fontSize: 12, margin: 0 }}>No AI assist suggestions right now. Please try again.</p>
+                          <div style={{
+                            borderRadius: 14,
+                            border: '1px solid color-mix(in srgb, var(--t-warning) 30%, var(--t-brd) 70%)',
+                            background: 'color-mix(in srgb, var(--t-warning) 9%, var(--t-card) 91%)',
+                            padding: '12px 13px',
+                          }}>
+                            <p style={{ fontSize: 12, margin: 0, color: 'var(--t-tx2)' }}>
+                              No AI assist suggestions right now. Try adding a few more lines, then tap AI Assist again.
+                            </p>
+                          </div>
                         )
                       )}
                     </div>
