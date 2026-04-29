@@ -2990,7 +2990,7 @@ function WritingsContent() {
                       {status === 'saving' ? 'Saving…' : 'Save Draft'}
                     </button>
                     <button
-                      onClick={runAiAssist}
+                      onClick={() => { void runAiAssist(); }}
                       disabled={status !== 'idle' || aiAssistLoading}
                       style={{
                         display: 'inline-flex',
