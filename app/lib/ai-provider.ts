@@ -1,8 +1,8 @@
 // Universal AI provider adapter
 // Switch providers with: AI_PROVIDER=openai | anthropic  (defaults to openai)
 // OpenAI routing defaults:
-// - nano/fast -> gpt-5.4-nano (vocab + low-cost high-volume tasks)
-// - smart     -> gpt-4.1-mini (feedback/coach/reports; lower cost, similar quality)
+// - nano/fast/smart -> gpt-4.1-mini by default for broad Chat Completions support.
+// Override with AI_NANO_MODEL / AI_FAST_MODEL / AI_SMART_MODEL when needed.
 // Anthropic defaults to Haiku 4.5 across tiers for cost control; override via AI_*_MODEL.
 //
 // Fast tier  → cheap / quick tasks (vocab, sentence check, progress)
@@ -23,7 +23,7 @@ export interface ChatOptions {
 
 // Default model names per provider — override via env vars if needed
 const DEFAULT_MODELS = {
-  openai:    { nano: 'gpt-5.4-nano', fast: 'gpt-5.4-nano', smart: 'gpt-4.1-mini' },
+  openai:    { nano: 'gpt-4.1-mini', fast: 'gpt-4.1-mini', smart: 'gpt-4.1-mini' },
   anthropic: { nano: 'claude-haiku-4-5-20251001', fast: 'claude-haiku-4-5-20251001', smart: 'claude-haiku-4-5-20251001' },
 };
 
@@ -46,6 +46,18 @@ function isModelResolutionError(err: unknown): boolean {
       msg.includes('access') ||
       msg.includes('permission')
     )
+  );
+}
+
+function isOpenAICompatibilityError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('unsupported parameter') ||
+    msg.includes('unsupported value') ||
+    msg.includes('max_tokens') ||
+    msg.includes('max_completion_tokens') ||
+    msg.includes('response_format') ||
+    msg.includes('temperature')
   );
 }
 
@@ -123,7 +135,7 @@ export async function chat({ tier, system, messages, maxTokens = 500, jsonMode =
       break;
     } catch (err) {
       lastError = err;
-      const canFallback = i < modelsToTry.length - 1 && isModelResolutionError(err);
+      const canFallback = i < modelsToTry.length - 1 && (isModelResolutionError(err) || isOpenAICompatibilityError(err));
       if (!canFallback) throw err;
       console.warn(`AI model fallback: "${candidate}" failed, trying next candidate.`);
     }

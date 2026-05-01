@@ -33,21 +33,6 @@ type AssistResult = {
 const AI_FEEDBACK_UNAVAILABLE_MESSAGE =
   'AI feedback is unavailable right now. Your writing was received, so please try again in a moment.';
 
-function isModelResolutionError(err: unknown): boolean {
-  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  return (
-    msg.includes('model') &&
-    (
-      msg.includes('not found') ||
-      msg.includes('does not exist') ||
-      msg.includes('unsupported') ||
-      msg.includes('not available') ||
-      msg.includes('access') ||
-      msg.includes('permission')
-    )
-  );
-}
-
 const AI_ASSIST_SYSTEM_PROMPT = `You are an expert writing revision coach. Your job is to deliver direct, specific, age-appropriate coaching with zero filler.
 Read the writing prompt, writing category, and the user's current draft excerpt.
 Return ONLY a valid JSON object with exactly 2 keys:
@@ -70,6 +55,9 @@ Rules:
 - Each tip must describe one concrete upgrade move, not a broad slogan.
 - Examples must be concrete sample lines or micro-directions that the student can adapt immediately.
 - Examples must sound like writing, not teacher commentary.
+- When the draft is not empty, at least two tips must refer to a specific visible word, phrase, sentence, or missing move from the draft.
+- When selected text is provided, prioritize that selected text over the rest of the draft.
+- For rewrite/shorter/stronger/formal tools, examples should feel like before/after sentence-change directions, not generic advice.
 - If the textarea is empty, all tips must teach how to begin with a strong image, action, or emotion, and all examples must show an actual opening move.
 - If the draft is weak or underdeveloped, explain what is missing and give an exact revision move for stronger wording, structure, or clarity.
 - Always favor specificity over general statements.
@@ -848,6 +836,8 @@ export async function POST(req: Request) {
     wordCount?: number;
     ageGroup?: string;
     writingExperienceScore?: number;
+    toolMode?: string;
+    selectedText?: string;
   } = {};
 
   try {
@@ -860,75 +850,46 @@ export async function POST(req: Request) {
       wordCount,
       ageGroup,
       writingExperienceScore = 0,
+      toolMode = 'ai',
+      selectedText = '',
     } = payload;
     const mappedAgeGroup = mapAgeGroup(ageGroup);
 
     if (assistMode) {
       const safeContent = content ?? '';
       const safePrompt = prompt ?? '';
+      const safeToolMode = typeof toolMode === 'string' && toolMode.trim() ? toolMode.trim() : 'ai';
+      const safeSelectedText = typeof selectedText === 'string' ? selectedText.trim() : '';
       const assistWordCount = typeof wordCount === 'number' ? wordCount : splitWords(safeContent).length;
 
       const userPrompt = [
+        `ACTIVE WRITING TOOL:\n${safeToolMode}`,
         `WRITING CATEGORY:\n${category.trim() || 'General writing'}`,
         `AGE GROUP:\n${mappedAgeGroup}`,
         `WORD COUNT:\n${assistWordCount}`,
         `WRITING PROMPT:\n${safePrompt.trim() || '(No prompt provided)'}`,
+        `SELECTED TEXT:\n${safeSelectedText || '(No selection)'}`,
         `CURRENT DRAFT EXCERPT:\n${safeContent.trim() || '(Empty)'}`,
         'Return only JSON.',
       ].join('\n\n');
 
       try {
-        const { default: OpenAI } = await import('openai');
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-          throw new Error('Missing OPENAI_API_KEY.');
-        }
-
-        const client = new OpenAI({ apiKey });
-        const model = process.env.AI_ASSIST_MODEL || process.env.AI_FAST_MODEL || process.env.AI_SMART_MODEL || 'gpt-5.4-nano';
-        const fallbackCandidates = [
-          process.env.AI_FALLBACK_MODEL,
-          process.env.AI_SMART_MODEL,
-          'gpt-5-mini',
-          'gpt-4.1-mini',
-        ].filter((m): m is string => Boolean(m && m.trim()));
-        const modelsToTry = Array.from(new Set([model, ...fallbackCandidates.filter((m) => m !== model)]));
-
-        let completion: Awaited<ReturnType<typeof client.chat.completions.create>> | null = null;
-        let lastError: unknown = null;
-
-        for (let i = 0; i < modelsToTry.length; i++) {
-          const candidate = modelsToTry[i];
-          try {
-            completion = await client.chat.completions.create({
-              model: candidate,
-              temperature: 0.4,
-              max_tokens: 420,
-              messages: [
-                { role: 'system', content: AI_ASSIST_SYSTEM_PROMPT },
-                { role: 'user', content: userPrompt },
-              ],
-            });
-            break;
-          } catch (err) {
-            lastError = err;
-            const canFallback = i < modelsToTry.length - 1 && isModelResolutionError(err);
-            if (!canFallback) throw err;
-            console.warn(`AI assist model fallback: "${candidate}" failed, trying next candidate.`);
-          }
-        }
-
-        if (!completion) {
-          throw lastError instanceof Error ? lastError : new Error('AI assist failed for all candidate models.');
-        }
-
-        const rawAssist = completion.choices[0]?.message?.content ?? '[]';
-        const parsedAssist = JSON.parse(extractJSON(rawAssist)) as unknown;
+        const rawAssist = await chat({
+          tier: 'fast',
+          system: AI_ASSIST_SYSTEM_PROMPT,
+          maxTokens: 420,
+          jsonMode: true,
+          messages: [{ role: 'user', content: userPrompt }],
+        });
+        const parsedAssist = JSON.parse(repairJSON(extractJSON(rawAssist))) as unknown;
         const result = normalizeAssistResult(parsedAssist, safeContent, safePrompt, category, mappedAgeGroup);
         return NextResponse.json(result);
       } catch (assistError) {
         console.error('ai-assist via ai-feedback route error:', assistError);
-        return NextResponse.json(normalizeAssistResult({}, safeContent, safePrompt, category, mappedAgeGroup));
+        return NextResponse.json(
+          normalizeAssistResult({}, safeContent, safePrompt, category, mappedAgeGroup),
+          { headers: { 'x-ai-assist-fallback': 'true' } },
+        );
       }
     }
 

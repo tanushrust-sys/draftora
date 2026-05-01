@@ -1,7 +1,7 @@
 'use client';
 
 // WRITING STUDIO — Write, Journal, and Progress in one place
-// Three tabs: Write (editor + AI feedback) | Journal (all writings) | My Progress (improvement chart)
+// Tabs: Write | Journal | My Progress
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense, startTransition, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -52,6 +52,27 @@ type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
 type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_version: string };
 type AssistSuggestion = { type: 'tip' | 'example'; label: string; detail: string };
 type AssistResponse = { tips?: AssistSuggestion[]; examples?: AssistSuggestion[] };
+type WritingToolMode = 'ai' | 'grammar' | 'rewrite' | 'shorter' | 'stronger' | 'formal' | 'explain';
+type GrammarPanelItem = { label: string; count: number; detail: string };
+type GrammarAnalysis = {
+  score: number;
+  totalIssues: number;
+  corrections: GrammarPanelItem[];
+  refinements: GrammarPanelItem[];
+  strongestArea: string;
+  focusArea: string;
+};
+type WritingToolSuggestion = {
+  title: string;
+  detail: string;
+  before?: string;
+  after?: string;
+};
+type FocusSentenceResult = {
+  sentence: string;
+  reason: string;
+  score: number;
+};
 type StudentHomeworkResponse = {
   today: string;
   overallPct: number;
@@ -429,6 +450,349 @@ function countWords(text: string) {
   return normalized.split(/\s+/).length;
 }
 
+function expandContractions(text: string) {
+  const replacements: Array<[RegExp, string]> = [
+    [/\bcan't\b/gi, 'cannot'],
+    [/\bwon't\b/gi, 'will not'],
+    [/\bdon't\b/gi, 'do not'],
+    [/\bdoesn't\b/gi, 'does not'],
+    [/\bdidn't\b/gi, 'did not'],
+    [/\bisn't\b/gi, 'is not'],
+    [/\baren't\b/gi, 'are not'],
+    [/\bwasn't\b/gi, 'was not'],
+    [/\bweren't\b/gi, 'were not'],
+    [/\bit's\b/gi, 'it is'],
+    [/\bi'm\b/gi, 'I am'],
+    [/\bthat's\b/gi, 'that is'],
+  ];
+
+  return replacements.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), text);
+}
+
+function transformSelectedText(input: string, mode: 'clearer' | 'shorter' | 'stronger' | 'formal') {
+  const text = input.trim();
+  if (!text) return text;
+
+  if (mode === 'shorter') {
+    const words = text.split(/\s+/);
+    const keepCount = Math.max(5, Math.floor(words.length * 0.78));
+    const shortened = words.slice(0, keepCount).join(' ');
+    return shortened.endsWith('.') ? shortened : `${shortened}.`;
+  }
+
+  if (mode === 'formal') {
+    return expandContractions(text)
+      .replace(/\ba lot of\b/gi, 'many')
+      .replace(/\bstuff\b/gi, 'evidence')
+      .replace(/\bthings\b/gi, 'factors')
+      .replace(/\bthing\b/gi, 'factor')
+      .replace(/\bkids\b/gi, 'students')
+      .replace(/\bget\b/gi, 'receive')
+      .replace(/\bgot\b/gi, 'received')
+      .replace(/\bgood\b/gi, 'effective')
+      .replace(/\bbad\b/gi, 'harmful');
+  }
+
+  if (mode === 'stronger') {
+    return text
+      .replace(/\bvery\b/gi, '')
+      .replace(/\breally\b/gi, '')
+      .replace(/\bgood\b/gi, 'effective')
+      .replace(/\bbad\b/gi, 'ineffective')
+      .replace(/\bthing\b/gi, 'idea')
+      .replace(/\bsaid\b/gi, 'argued')
+      .replace(/\bshow\b/gi, 'reveal')
+      .replace(/\bimportant\b/gi, 'essential')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  return text
+    .replace(/\bkind of\b/gi, '')
+    .replace(/\bsort of\b/gi, '')
+    .replace(/\ba lot of\b/gi, 'many')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function cleanGrammarAndPunctuation(input: string) {
+  const cleaned = input
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/([,.;:!?])(?=\S)/g, '$1 ')
+    .replace(/\bi\b/g, 'I')
+    .replace(/([!?.,])\1+/g, '$1')
+    .trim()
+    .replace(/(^\s*\w|[.!?]\s+\w)/g, match => match.toUpperCase());
+
+  if (!cleaned) return cleaned;
+  return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+}
+
+function countPattern(text: string, pattern: RegExp) {
+  return text.match(pattern)?.length ?? 0;
+}
+
+function getDraftSentences(text: string) {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/([.!?])\s+/g, '$1|')
+    .split('|')
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+}
+
+function scoreSentenceNeed(sentence: string, index: number): FocusSentenceResult {
+  const words = sentence.trim().split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
+  const vagueCount = countPattern(sentence, /\b(thing|things|stuff|good|bad|nice|very|really|kind of|sort of|a lot of|important|interesting)\b/gi);
+  const fillerCount = countPattern(sentence, /\b(just|basically|actually|really|very|in order to|due to the fact that|there is|there are)\b/gi);
+  const formalityCount = countPattern(sentence, /\b(can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|it's|i'm|that's|kids|gonna|wanna|stuff)\b/gi);
+  const punctuationCount =
+    countPattern(sentence, /\s+[,.;:!?]/g) +
+    countPattern(sentence, /[,.;:!?](?=\S)/g) +
+    countPattern(sentence, /([!?.,])\1+/g) +
+    (/[.!?]$/.test(sentence.trim()) ? 0 : 1);
+  const repeatedWordCount = countPattern(sentence, /\b(\w+)\s+\1\b/gi);
+  const weakStart = /^(there is|there are|it is|it was|i am|i was|this is)\b/i.test(sentence.trim()) ? 1 : 0;
+  const lowercaseStart = /^[a-z]/.test(sentence.trim()) ? 1 : 0;
+  const lowercaseI = countPattern(sentence, /\bi\b/g);
+  const tooLong = Math.max(0, wordCount - 24);
+  const tooShort = wordCount > 0 && wordCount < 5 ? 5 : 0;
+
+  const score =
+    tooLong * 1.5 +
+    tooShort +
+    vagueCount * 5 +
+    fillerCount * 4 +
+    formalityCount * 3 +
+    punctuationCount * 5 +
+    repeatedWordCount * 6 +
+    weakStart * 6 +
+    lowercaseStart * 4 +
+    lowercaseI * 5;
+
+  const reasons = [
+    tooLong ? 'too long' : '',
+    tooShort ? 'too short' : '',
+    vagueCount ? 'vague wording' : '',
+    fillerCount ? 'extra filler' : '',
+    punctuationCount ? 'punctuation issues' : '',
+    repeatedWordCount ? 'repetition' : '',
+    weakStart ? 'weak opening' : '',
+    formalityCount ? 'tone/formality' : '',
+    lowercaseI || lowercaseStart ? 'grammar mechanics' : '',
+  ].filter(Boolean);
+
+  return {
+    sentence,
+    reason: reasons.length ? reasons.slice(0, 3).join(', ') : index === 0 ? 'opening sentence sets the tone' : 'best sentence to sharpen next',
+    score,
+  };
+}
+
+function getFocusSentenceResult(content: string): FocusSentenceResult {
+  const sentences = getDraftSentences(content);
+  if (sentences.length === 0) {
+    return {
+      sentence: content.trim().slice(0, 180),
+      reason: 'write a complete sentence first',
+      score: 0,
+    };
+  }
+
+  return sentences
+    .map((sentence, index) => scoreSentenceNeed(sentence, index))
+    .reduce((highest, current) => {
+      if (current.score > highest.score) return current;
+      if (current.score === highest.score && current.sentence.length > highest.sentence.length) return current;
+      return highest;
+    });
+}
+
+function getFocusSentence(content: string, _selectedText?: string) {
+  return getFocusSentenceResult(content).sentence;
+}
+
+function analyzeGrammarAndStyle(content: string): GrammarAnalysis {
+  const text = content.trim();
+  if (!text) {
+    return {
+      score: 0,
+      totalIssues: 0,
+      corrections: [
+        { label: 'Spelling', count: 0, detail: 'No draft text to scan yet.' },
+        { label: 'Grammar', count: 0, detail: 'Start writing to check sentence mechanics.' },
+        { label: 'Punctuation', count: 0, detail: 'Punctuation scan begins once you write.' },
+      ],
+      refinements: [
+        { label: 'Clarity', count: 0, detail: 'Clarity notes will appear here.' },
+        { label: 'Conciseness', count: 0, detail: 'Conciseness notes will appear here.' },
+        { label: 'Formality', count: 0, detail: 'Tone notes will appear here.' },
+      ],
+      strongestArea: 'Start drafting',
+      focusArea: 'Write a few sentences first',
+    };
+  }
+
+  const sentences = getDraftSentences(text);
+  const longSentences = sentences.filter(sentence => countWords(sentence) >= 28).length;
+  const lowercaseSentenceStarts = sentences.filter(sentence => /^[a-z]/.test(sentence)).length;
+  const commonMisspellings = [
+    /\bteh\b/gi,
+    /\brecieve\b/gi,
+    /\bdefinately\b/gi,
+    /\bseperate\b/gi,
+    /\bgrammer\b/gi,
+    /\bpunctuotion\b/gi,
+    /\bwritting\b/gi,
+    /\bbecuase\b/gi,
+    /\balot\b/gi,
+    /\bthier\b/gi,
+  ].reduce((total, pattern) => total + countPattern(text, pattern), 0);
+
+  const spelling = commonMisspellings;
+  const grammar = countPattern(text, /\bi\b/g) +
+    countPattern(text, /\b(\w+)\s+\1\b/gi) +
+    lowercaseSentenceStarts;
+  const punctuation = countPattern(text, /\s+[,.;:!?]/g) +
+    countPattern(text, /[,.;:!?](?=\S)/g) +
+    countPattern(text, /([!?.,])\1+/g) +
+    (/[.!?]$/.test(text) ? 0 : 1);
+  const clarity = countPattern(text, /\b(thing|things|stuff|good|bad|nice|very|really|kind of|sort of)\b/gi) + longSentences;
+  const conciseness = countPattern(text, /\b(just|basically|actually|really|very|in order to|due to the fact that|there is|there are)\b/gi) + longSentences;
+  const formality = countPattern(text, /\b(can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|it's|i'm|that's|kids|stuff|gonna|wanna)\b/gi);
+
+  const corrections: GrammarPanelItem[] = [
+    { label: 'Spelling', count: spelling, detail: spelling ? 'Possible misspellings or commonly confused words.' : 'No obvious spelling issues found.' },
+    { label: 'Grammar', count: grammar, detail: grammar ? 'Check repeated words, lowercase I, or sentence starts.' : 'Grammar mechanics look clean.' },
+    { label: 'Punctuation', count: punctuation, detail: punctuation ? 'Check spacing, repeated marks, or ending punctuation.' : 'Punctuation spacing looks clean.' },
+  ];
+  const refinements: GrammarPanelItem[] = [
+    { label: 'Clarity', count: clarity, detail: clarity ? 'Some words or sentences may be too vague or long.' : 'Ideas are reading clearly.' },
+    { label: 'Conciseness', count: conciseness, detail: conciseness ? 'Trim filler phrases or split long sentences.' : 'No major wordiness flags.' },
+    { label: 'Formality', count: formality, detail: formality ? 'Consider more polished wording for formal tasks.' : 'Tone looks appropriate.' },
+  ];
+  const totalIssues = [...corrections, ...refinements].reduce((total, item) => total + item.count, 0);
+  const correctionPenalty = corrections.reduce((total, item) => total + item.count, 0) * 7;
+  const refinementPenalty = refinements.reduce((total, item) => total + item.count, 0) * 3;
+  const score = Math.max(1, Math.min(100, Math.round(100 - correctionPenalty - refinementPenalty)));
+  const allItems = [...corrections, ...refinements];
+  const strongestArea = allItems.find(item => item.count === 0)?.label ?? 'Draft momentum';
+  const focusArea = allItems.reduce((highest, item) => (item.count > highest.count ? item : highest), allItems[0]).label;
+
+  return { score, totalIssues, corrections, refinements, strongestArea, focusArea };
+}
+
+function buildWritingToolSuggestions(mode: WritingToolMode, content: string, selectedText: string): WritingToolSuggestion[] {
+  const focusResult = getFocusSentenceResult(content);
+  const focus = focusResult.sentence;
+  const hasFocus = Boolean(focus);
+  const clearer = hasFocus ? cleanGrammarAndPunctuation(transformSelectedText(focus, 'clearer')) : '';
+  const shorter = hasFocus ? transformSelectedText(focus, 'shorter') : '';
+  const stronger = hasFocus ? cleanGrammarAndPunctuation(transformSelectedText(focus, 'stronger')) : '';
+  const formal = hasFocus ? cleanGrammarAndPunctuation(transformSelectedText(focus, 'formal')) : '';
+
+  if (mode === 'rewrite') {
+    return [
+      {
+        title: 'Make the point land faster',
+        detail: `This sentence needs the most help because of ${focusResult.reason}. Start with the exact idea you want the reader to remember, then add the reason.`,
+        before: focus,
+        after: clearer || 'Write the claim first, then explain why it matters.',
+      },
+      {
+        title: 'Add one vivid proof detail',
+        detail: 'A strong draft usually has a concrete example, number, scene, or consequence instead of a general statement.',
+      },
+      {
+        title: 'Upgrade the ending',
+        detail: 'End the paragraph by showing what changed, what the reader should believe, or what action should happen next.',
+      },
+    ];
+  }
+
+  if (mode === 'shorter') {
+    return [
+      {
+        title: 'Trim without losing meaning',
+        detail: `This sentence is the best trim target because of ${focusResult.reason}. Cut filler first: very, really, just, basically, actually, kind of, and sort of.`,
+        before: focus,
+        after: shorter || 'Keep the core idea and remove filler.',
+      },
+      {
+        title: 'One sentence, one job',
+        detail: 'If a sentence has two ideas joined by and/because/but, split it or choose the more important idea.',
+      },
+      {
+        title: 'Use sharper verbs',
+        detail: 'A precise verb often removes three extra explanation words.',
+      },
+    ];
+  }
+
+  if (mode === 'stronger') {
+    return [
+      {
+        title: 'Replace weak words',
+        detail: `This sentence is the strongest editing target because of ${focusResult.reason}. Swap good/bad/thing/stuff for a word that names the exact effect.`,
+        before: focus,
+        after: stronger || 'Name the exact effect instead of using a general word.',
+      },
+      {
+        title: 'Raise the stakes',
+        detail: 'Explain why the idea matters to the audience, not only what happened.',
+      },
+      {
+        title: 'Use confident structure',
+        detail: 'Try: claim -> evidence -> why it matters. That shape makes the writing feel controlled.',
+      },
+    ];
+  }
+
+  if (mode === 'formal') {
+    return [
+      {
+        title: 'Polish the tone',
+        detail: `This sentence is the best tone target because of ${focusResult.reason}. Use complete words, avoid slang, and replace casual phrases with precise academic language.`,
+        before: focus,
+        after: formal || 'Use complete words and precise phrasing.',
+      },
+      {
+        title: 'Sound more credible',
+        detail: 'Avoid exaggeration unless you can prove it. Specific evidence sounds more mature than huge claims.',
+      },
+      {
+        title: 'Keep your voice',
+        detail: 'Formal does not mean boring. Keep the idea bold; just make the wording cleaner.',
+      },
+    ];
+  }
+
+  if (mode === 'explain') {
+    return [
+      {
+        title: 'Why this section can improve',
+        detail: hasFocus
+          ? `This one sentence was picked from the full draft because of ${focusResult.reason}; it can get stronger if it becomes more specific, shorter, and easier to prove.`
+          : 'Select a sentence or write a few more lines, then this panel can explain what to improve.',
+        before: focus,
+      },
+      {
+        title: 'Revision test',
+        detail: 'Ask: can a reader repeat my point after one read? If not, simplify the sentence or move the main idea earlier.',
+      },
+    ];
+  }
+
+  return [
+    {
+      title: 'Use AI Assist as a coach',
+      detail: 'Read the suggestions, then rewrite in your own words so the draft still sounds like you.',
+    },
+  ];
+}
+
 function clampTimerSeconds(value: number) {
   return Math.max(TIMER_MIN_TOTAL_SECONDS, Math.min(TIMER_MAX_TOTAL_SECONDS, Math.round(value)));
 }
@@ -763,6 +1127,10 @@ function WritingsContent() {
   const [aiAssistTips, setAiAssistTips] = useState<AssistSuggestion[]>([]);
   const [aiAssistExamples, setAiAssistExamples] = useState<AssistSuggestion[]>([]);
   const [aiAssistCopied, setAiAssistCopied] = useState(false);
+  const [aiAssistResultSignature, setAiAssistResultSignature] = useState('');
+  const [toolNotice, setToolNotice] = useState('');
+  const [activeWritingTool, setActiveWritingTool] = useState<WritingToolMode>('grammar');
+  const [editorSelection, setEditorSelection] = useState<{ start: number; end: number; text: string }>({ start: 0, end: 0, text: '' });
   const [todayWords, setTodayWords] = useState(0);
   const [weekWords, setWeekWords]   = useState(0);
   const [todayHomework, setTodayHomework] = useState<StudentHomeworkResponse | null>(null);
@@ -820,6 +1188,7 @@ function WritingsContent() {
   const aiAssistRequestController = useRef<AbortController | null>(null);
   const aiAssistRequestSeq = useRef(0);
   const aiAssistLastRequestSignature = useRef('');
+  const editorTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedDraftSignatureRef = useRef('');
   const writingRewardsGrantedRef = useRef(false);
@@ -2040,13 +2409,15 @@ function WritingsContent() {
     void submitForFeedbackSafe({ allowBelowMinimum: true, source: 'timer' });
   }, [content, status, timerEnabled, timerRemainingMs, timerRunning, submitForFeedbackSafe]);
 
-  const runAiAssist = useCallback(async (options?: { keepPanelState?: boolean }) => {
+  const runAiAssist = useCallback(async (options?: { keepPanelState?: boolean; toolMode?: WritingToolMode }) => {
     const keepPanelState = options?.keepPanelState ?? false;
+    const toolMode = options?.toolMode ?? activeWritingTool;
+    const toolFocusText = toolMode === 'ai' ? editorSelection.text : getFocusSentence(content);
     if (!keepPanelState) {
       setAiAssistOpen(true);
     }
 
-    const requestSignature = `${category}::${prompt.trim()}::${content.trim()}`;
+    const requestSignature = `${toolMode}::${category}::${prompt.trim()}::${content.trim()}::${toolFocusText.trim()}`;
     aiAssistLastRequestSignature.current = requestSignature;
 
     const requestId = aiAssistRequestSeq.current + 1;
@@ -2060,6 +2431,7 @@ function WritingsContent() {
 
     setAiAssistLoading(true);
     setAiAssistCopied(false);
+    setToolNotice('');
 
     try {
       const response = await fetch('/api/ai-feedback', {
@@ -2074,14 +2446,16 @@ function WritingsContent() {
           wordCount,
           ageGroup: profile?.age_group,
           writingExperienceScore: profile?.writing_experience_score ?? 0,
+          toolMode,
+          selectedText: toolFocusText,
         }),
       });
+      const { data: payload, rawText } = await readJsonSafely<(AssistResponse & { error?: string })>(response);
 
       if (!response.ok) {
-        throw new Error(`AI assist request failed with status ${response.status}`);
+        throw new Error(payload?.error || rawText || `AI assist request failed with status ${response.status}`);
       }
 
-      const payload = await response.json() as AssistResponse;
       const tips = Array.isArray(payload?.tips)
         ? payload.tips
             .filter((item) =>
@@ -2104,23 +2478,41 @@ function WritingsContent() {
       if (requestId !== aiAssistRequestSeq.current) return;
       setAiAssistTips(tips);
       setAiAssistExamples(examples);
+      setAiAssistResultSignature(requestSignature);
     } catch (assistError) {
       if (assistError instanceof Error && assistError.name === 'AbortError') return;
       logSafeError('runAiAssist error:', assistError);
       if (requestId !== aiAssistRequestSeq.current) return;
-      setAiAssistTips([]);
-      setAiAssistExamples([]);
+
+      const localSuggestions = buildWritingToolSuggestions(toolMode === 'grammar' || toolMode === 'ai' ? 'rewrite' : toolMode, content, editorSelection.text);
+      const toLabel = (value: string) => value.trim().split(/\s+/).slice(0, 5).join(' ');
+      setAiAssistTips(localSuggestions.slice(0, 4).map((suggestion) => ({
+        type: 'tip' as const,
+        label: toLabel(suggestion.title),
+        detail: suggestion.detail,
+      })));
+      setAiAssistExamples(localSuggestions.slice(0, 4).map((suggestion) => ({
+        type: 'example' as const,
+        label: toLabel(suggestion.title),
+        detail: suggestion.after || suggestion.before || suggestion.detail,
+      })));
+      setAiAssistResultSignature(requestSignature);
+      setToolNotice('AI API is unavailable, so local coach notes are showing.');
+      setAiAssistCopied(true);
+      if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
+      aiAssistCopyTimer.current = setTimeout(() => setAiAssistCopied(false), 2200);
     } finally {
       if (requestId === aiAssistRequestSeq.current) {
         setAiAssistLoading(false);
       }
     }
-  }, [category, content, prompt, profile?.age_group, profile?.writing_experience_score, wordCount]);
+  }, [activeWritingTool, category, content, editorSelection.text, prompt, profile?.age_group, profile?.writing_experience_score, wordCount]);
 
   useEffect(() => {
-    if (!aiAssistOpen || status !== 'idle') return;
+    if (!aiAssistOpen || activeWritingTool === 'grammar' || status !== 'idle') return;
 
-    const requestSignature = `${category}::${prompt.trim()}::${content.trim()}`;
+    const toolFocusText = activeWritingTool === 'ai' ? editorSelection.text : getFocusSentence(content);
+    const requestSignature = `${activeWritingTool}::${category}::${prompt.trim()}::${content.trim()}::${toolFocusText.trim()}`;
     if (requestSignature === aiAssistLastRequestSignature.current) return;
 
     if (aiAssistAutoRefreshTimer.current) {
@@ -2129,7 +2521,7 @@ function WritingsContent() {
     }
 
     aiAssistAutoRefreshTimer.current = setTimeout(() => {
-      void runAiAssist({ keepPanelState: true });
+      void runAiAssist({ keepPanelState: true, toolMode: activeWritingTool });
     }, 1200);
 
     return () => {
@@ -2138,16 +2530,20 @@ function WritingsContent() {
         aiAssistAutoRefreshTimer.current = null;
       }
     };
-  }, [aiAssistOpen, category, content, prompt, runAiAssist, status]);
+  }, [activeWritingTool, aiAssistOpen, category, content, editorSelection.text, prompt, runAiAssist, status]);
 
   const copyAiAssistTip = useCallback(async (detail: string) => {
     try {
       await navigator.clipboard.writeText(detail);
+      setToolNotice('Copied to clipboard');
       setAiAssistCopied(true);
       if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
       aiAssistCopyTimer.current = setTimeout(() => setAiAssistCopied(false), 1300);
     } catch {
-      // Clipboard failures are non-fatal for writing flow.
+      setToolNotice('Clipboard is unavailable right now');
+      setAiAssistCopied(true);
+      if (aiAssistCopyTimer.current) clearTimeout(aiAssistCopyTimer.current);
+      aiAssistCopyTimer.current = setTimeout(() => setAiAssistCopied(false), 1300);
     }
   }, []);
 
@@ -2346,6 +2742,9 @@ function WritingsContent() {
     setAiAssistTips([]);
     setAiAssistExamples([]);
     setAiAssistCopied(false);
+    setAiAssistResultSignature('');
+    setToolNotice('');
+    setAiAssistOpen(false);
     setReactionGifCard(null);
     lastCompletionReactionRef.current = null;
     if (reactionGifTimerRef.current) {
@@ -2353,6 +2752,8 @@ function WritingsContent() {
       reactionGifTimerRef.current = null;
     }
     setFeedback(null); setWritingId(null); setStatus('idle'); setXpEarned(0); setError('');
+    setActiveWritingTool('grammar');
+    setEditorSelection({ start: 0, end: 0, text: '' });
     setTimerRunning(false);
     setTimerSetupOpen(false);
     setTimerRemainingMs(timerDurationMs);
@@ -2441,6 +2842,24 @@ function WritingsContent() {
     clearPromptContextFromUrl();
   }, [category, prompt, profile, profile?.age_group, clearPromptContextFromUrl]);
 
+  const handleEditorSelection = useCallback(() => {
+    const target = editorTextareaRef.current;
+    if (!target) return;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? start;
+    setEditorSelection({ start, end, text: content.slice(start, end) });
+  }, [content]);
+
+  const openWritingTool = useCallback((mode: WritingToolMode) => {
+    setActiveWritingTool(mode);
+    setAiAssistOpen(true);
+    setError('');
+
+    if (mode !== 'grammar') {
+      void runAiAssist({ keepPanelState: true, toolMode: mode });
+    }
+  }, [runAiAssist]);
+
   // ── Journal actions ──
   const toggleFavorite = async (w: Writing) => {
     const { data: updated, error } = await supabase
@@ -2508,7 +2927,33 @@ function WritingsContent() {
     });
     return map;
   }, [reviewedWritings]);
-
+  const grammarAnalysis = useMemo(() => analyzeGrammarAndStyle(content), [content]);
+  const focusSentenceResult = useMemo(() => getFocusSentenceResult(content), [content]);
+  const activeToolSuggestions = useMemo(
+    () => buildWritingToolSuggestions(activeWritingTool, content, editorSelection.text),
+    [activeWritingTool, content, editorSelection.text]
+  );
+  const currentAiAssistSignature = useMemo(
+    () => `${activeWritingTool}::${category}::${prompt.trim()}::${content.trim()}::${(activeWritingTool === 'ai' ? editorSelection.text : focusSentenceResult.sentence).trim()}`,
+    [activeWritingTool, category, content, editorSelection.text, focusSentenceResult.sentence, prompt]
+  );
+  const hasLiveAssistForCurrentDraft = aiAssistResultSignature === currentAiAssistSignature && (aiAssistTips.length > 0 || aiAssistExamples.length > 0);
+  const displayedToolSuggestions = useMemo<WritingToolSuggestion[]>(() => {
+    if (!hasLiveAssistForCurrentDraft) return activeToolSuggestions;
+    const focus = focusSentenceResult.sentence;
+    return [
+      ...aiAssistTips.map((tip) => ({
+        title: tip.label,
+        detail: tip.detail,
+      })),
+      ...aiAssistExamples.map((example) => ({
+        title: example.label,
+        detail: 'Sentence-change example generated from the current draft.',
+        before: focus,
+        after: example.detail,
+      })),
+    ].slice(0, 6);
+  }, [activeToolSuggestions, aiAssistExamples, aiAssistTips, focusSentenceResult.sentence, hasLiveAssistForCurrentDraft]);
   const filteredWritings = useMemo(() => {
     const query = journalSearch.trim().toLowerCase();
     return writings.filter(w => {
@@ -2956,10 +3401,12 @@ function WritingsContent() {
 
                 {/* Text area */}
                 <textarea
+                  ref={editorTextareaRef}
                   value={content}
                   onChange={e => handleContentChange(e.target.value)}
                   onKeyDown={handleContentKeyDown}
                   onPaste={handleContentPaste}
+                  onSelect={handleEditorSelection}
                   placeholder={prompt ? 'Write your response to the prompt above…' : 'Start writing here…'}
                   disabled={status !== 'idle'}
                   style={{
@@ -2990,8 +3437,12 @@ function WritingsContent() {
                       {status === 'saving' ? 'Saving…' : 'Save Draft'}
                     </button>
                     <button
-                      onClick={() => { void runAiAssist(); }}
-                      disabled={status !== 'idle' || aiAssistLoading}
+                      onClick={() => {
+                        const nextOpen = !aiAssistOpen;
+                        setAiAssistOpen(nextOpen);
+                        if (nextOpen && activeWritingTool !== 'grammar') void runAiAssist({ keepPanelState: true, toolMode: activeWritingTool });
+                      }}
+                      disabled={status !== 'idle'}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -3007,12 +3458,12 @@ function WritingsContent() {
                         fontSize: 13,
                         fontWeight: 700,
                         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.75), 0 8px 18px rgba(218,156,36,0.35)',
-                        cursor: (status !== 'idle' || aiAssistLoading) ? 'not-allowed' : 'pointer',
-                        opacity: (status !== 'idle' || aiAssistLoading) ? 0.6 : 1,
+                        cursor: status !== 'idle' ? 'not-allowed' : 'pointer',
+                        opacity: status !== 'idle' ? 0.6 : 1,
                       }}
                     >
                       <Sparkles style={{ width: 15, height: 15 }} />
-                      {aiAssistLoading ? 'Thinking…' : 'AI Assist'}
+                      Tools
                     </button>
                     <button onClick={() => { void submitForFeedbackSafe(); }} disabled={status !== 'idle' || wordCount < minimumWordsToSubmit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 12, padding: '8px 20px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: (status !== 'idle' || wordCount < minimumWordsToSubmit) ? 0.4 : 1 }}>
                       {['submitting', 'reviewing'].includes(status)
@@ -3026,7 +3477,7 @@ function WritingsContent() {
                 <div
                   style={{
                     padding: aiAssistOpen ? '14px 20px 18px' : '0 20px',
-                    maxHeight: aiAssistOpen ? 460 : 0,
+                    maxHeight: aiAssistOpen ? 720 : 0,
                     opacity: aiAssistOpen ? 1 : 0,
                     overflow: 'hidden',
                     transition: 'max-height 0.24s ease, opacity 0.24s ease, padding 0.24s ease',
@@ -3066,16 +3517,16 @@ function WritingsContent() {
                           <Sparkles style={{ width: 16, height: 16, color: '#5c3b00' }} />
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <strong style={{ fontSize: 14, color: 'var(--t-tx)', fontFamily: '\'Sora\', \'Space Grotesk\', \'Avenir Next\', sans-serif', letterSpacing: '0.01em' }}>AI Assist Studio</strong>
+                          <strong style={{ fontSize: 14, color: 'var(--t-tx)', fontFamily: '\'Sora\', \'Space Grotesk\', \'Avenir Next\', sans-serif', letterSpacing: '0.01em' }}>Writing Tools</strong>
                           <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--t-tx3)' }}>
-                            {aiAssistTips.length + aiAssistExamples.length} power moves ready. Auto-updates while you write.
+                            Grammar score, rewrite coaching, and sharper revision notes live here.
                           </p>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setAiAssistOpen(false)}
-                        aria-label="Close AI Assist"
+                        aria-label="Close writing tools"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -3092,202 +3543,279 @@ function WritingsContent() {
                       </button>
                     </div>
 
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '5px 9px',
-                        borderRadius: 999,
-                        border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)',
-                        background: 'color-mix(in srgb, var(--t-acc-a) 55%, transparent)',
-                        color: 'var(--t-acc)',
-                        fontSize: 10,
-                        fontWeight: 800,
-                        letterSpacing: '0.09em',
-                        textTransform: 'uppercase',
-                      }}>
-                        <Zap style={{ width: 11, height: 11 }} />
-                        Writing Upgrade Mode
-                      </span>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '5px 9px',
-                        borderRadius: 999,
-                        border: '1px solid color-mix(in srgb, var(--t-brd) 75%, transparent)',
-                        background: 'color-mix(in srgb, var(--t-card) 70%, transparent)',
-                        color: 'var(--t-tx2)',
-                        fontSize: 10,
-                        fontWeight: 700,
-                      }}>
-                        {aiAssistTips.length} tips + {aiAssistExamples.length} examples
-                      </span>
-                    </div>
+                    <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 14, alignItems: 'stretch' }}>
+                      <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                          <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Tool boxes</p>
+                          <span style={{ border: '1px solid color-mix(in srgb, var(--t-acc) 28%, transparent)', background: 'color-mix(in srgb, var(--t-acc-a) 55%, transparent)', color: 'var(--t-acc)', borderRadius: 999, padding: '4px 8px', fontSize: 10, fontWeight: 800 }}>
+                            Full draft scan
+                          </span>
+                        </div>
 
-                    {aiAssistCopied && (
-                      <div style={{
-                        position: 'relative',
-                        marginBottom: 10,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 10px',
-                        borderRadius: 10,
-                        border: '1px solid color-mix(in srgb, var(--t-success) 40%, transparent)',
-                        background: 'color-mix(in srgb, var(--t-success) 10%, var(--t-card) 90%)',
-                        color: 'var(--t-success)',
-                        fontSize: 11,
-                        fontWeight: 700,
-                      }}>
-                        <CheckCircle style={{ width: 13, height: 13 }} />
-                        Copied to clipboard
+                        {([
+                          { mode: 'grammar', label: 'Grammar & Punctuation', detail: `${grammarAnalysis.score}% accuracy`, icon: CheckCircle, accent: 'var(--t-success)' },
+                          { mode: 'rewrite', label: 'Rewrite Coach', detail: 'Tips + before/after examples', icon: PenLine, accent: 'var(--t-acc)' },
+                          { mode: 'shorter', label: 'Trim / Shorter', detail: 'Conciseness suggestions only', icon: Zap, accent: 'var(--t-warning)' },
+                          { mode: 'stronger', label: 'Stronger Writing', detail: 'Sharper claims, no auto-edits', icon: Trophy, accent: 'var(--t-mod-write)' },
+                          { mode: 'formal', label: 'Formal Tone', detail: 'Polish without changing for you', icon: BookOpen, accent: 'var(--t-mod-vocab)' },
+                          { mode: 'explain', label: 'Explain Why', detail: 'Learn what makes it better', icon: Search, accent: '#2563eb' },
+                          { mode: 'ai', label: aiAssistLoading ? 'AI Thinking...' : 'AI Assist Studio', detail: `${aiAssistTips.length + aiAssistExamples.length} coach notes ready`, icon: Sparkles, accent: '#e0a11b' },
+                        ] as { mode: WritingToolMode; label: string; detail: string; icon: typeof PenLine; accent: string }[]).map((tool) => {
+                          const ToolIcon = tool.icon;
+                          const isActiveTool = activeWritingTool === tool.mode;
+                          return (
+                            <button
+                              key={tool.mode}
+                              type="button"
+                              onClick={() => openWritingTool(tool.mode)}
+                              aria-pressed={isActiveTool}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                minHeight: 66,
+                                borderRadius: 17,
+                                padding: '10px 12px',
+                                border: `1px solid ${isActiveTool ? tool.accent : 'color-mix(in srgb, var(--t-acc) 18%, var(--t-brd) 82%)'}`,
+                                background: isActiveTool
+                                  ? `linear-gradient(145deg, color-mix(in srgb, ${tool.accent} 18%, var(--t-card) 82%), color-mix(in srgb, var(--t-card2) 86%, ${tool.accent} 14%))`
+                                  : 'linear-gradient(145deg, color-mix(in srgb, var(--t-card) 88%, var(--t-acc-a) 12%), color-mix(in srgb, var(--t-card2) 94%, var(--t-acc-a) 6%))',
+                                color: 'var(--t-tx)',
+                                boxShadow: isActiveTool ? `0 14px 28px color-mix(in srgb, ${tool.accent} 24%, transparent)` : '0 8px 16px rgba(0, 22, 66, 0.14)',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transform: isActiveTool ? 'translateX(2px)' : 'translateX(0)',
+                                transition: 'transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease',
+                              }}
+                            >
+                              <span style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: 14,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: `color-mix(in srgb, ${tool.accent} 16%, white 84%)`,
+                                color: tool.accent,
+                                flexShrink: 0,
+                              }}>
+                                <ToolIcon style={{ width: 17, height: 17 }} />
+                              </span>
+                              <span style={{ minWidth: 0, flex: 1 }}>
+                                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 950, lineHeight: 1.18 }}>{tool.label}</span>
+                                <span style={{ display: 'block', marginTop: 3, fontSize: 10.5, fontWeight: 750, color: 'var(--t-tx3)', lineHeight: 1.25 }}>{tool.detail}</span>
+                              </span>
+                              {isActiveTool && <ChevronDown style={{ width: 14, height: 14, color: tool.accent, transform: 'rotate(-90deg)' }} />}
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
 
-                    <div style={{ position: 'relative', maxHeight: 282, overflowY: 'auto', paddingRight: 4 }}>
-                      {aiAssistLoading ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                          {Array.from({ length: 2 }).map((_, col) => (
-                            <div key={col}>
-                              <div style={{ height: 12, width: 100, borderRadius: 6, background: 'currentColor', opacity: 0.28, marginBottom: 9 }} />
-                              <div style={{ display: 'grid', gap: 9 }}>
-                                {Array.from({ length: 4 }).map((__, index) => (
-                                  <div key={`${col}-${index}`} style={{ borderRadius: 14, padding: 12, border: '1px solid color-mix(in srgb, var(--t-acc) 18%, var(--t-brd) 82%)', background: 'color-mix(in srgb, var(--t-card) 86%, var(--t-acc-a) 14%)', opacity: 0.58 }}>
-                                    <div style={{ height: 12, marginBottom: 8, borderRadius: 6, background: 'currentColor', opacity: 0.27 }} />
-                                    <div style={{ height: 10, borderRadius: 6, background: 'currentColor', opacity: 0.17 }} />
+                      <div style={{
+                        borderRadius: 20,
+                        border: '1px solid color-mix(in srgb, var(--t-acc) 26%, var(--t-brd) 74%)',
+                        background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 92%, white 8%), color-mix(in srgb, var(--t-card2) 90%, var(--t-acc-a) 10%))',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 16px 34px rgba(0, 20, 64, 0.18)',
+                        padding: 14,
+                        minHeight: 430,
+                        maxHeight: 540,
+                        overflowY: 'auto',
+                      }}>
+                        {activeWritingTool === 'grammar' ? (
+                          <div style={{ display: 'grid', gap: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                              <div>
+                                <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--t-success)' }}>Editor</p>
+                                <h3 style={{ marginTop: 4, fontSize: 18, fontWeight: 950, color: 'var(--t-tx)' }}>Grammar Check</h3>
+                                <p style={{ marginTop: 4, fontSize: 12, color: 'var(--t-tx3)', lineHeight: 1.45 }}>Word-style score, correction counts, and refinement flags.</p>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--t-tx3)' }}>Accuracy</p>
+                                <p style={{ fontSize: 34, lineHeight: 1, fontWeight: 950, color: grammarAnalysis.score >= 90 ? 'var(--t-success)' : grammarAnalysis.score >= 70 ? 'var(--t-warning)' : 'var(--t-danger)' }}>{grammarAnalysis.score}%</p>
+                              </div>
+                            </div>
+
+                            <div style={{ borderRadius: 999, height: 10, background: 'color-mix(in srgb, var(--t-brd) 60%, transparent)', overflow: 'hidden', border: '1px solid color-mix(in srgb, var(--t-brd) 70%, transparent)' }}>
+                              <div style={{ width: `${grammarAnalysis.score}%`, height: '100%', borderRadius: 999, background: grammarAnalysis.score >= 90 ? 'linear-gradient(90deg, #4ade80, #22c55e)' : grammarAnalysis.score >= 70 ? 'linear-gradient(90deg, #facc15, #f59e0b)' : 'linear-gradient(90deg, #fb7185, #ef4444)' }} />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                              <div style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 14, padding: 10 }}>
+                                <p style={{ fontSize: 10, fontWeight: 850, color: 'var(--t-tx3)' }}>Total flags</p>
+                                <p style={{ marginTop: 3, fontSize: 20, fontWeight: 950, color: 'var(--t-tx)' }}>{grammarAnalysis.totalIssues}</p>
+                              </div>
+                              <div style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 14, padding: 10 }}>
+                                <p style={{ fontSize: 10, fontWeight: 850, color: 'var(--t-tx3)' }}>Strongest</p>
+                                <p style={{ marginTop: 3, fontSize: 13, fontWeight: 900, color: 'var(--t-success)' }}>{grammarAnalysis.strongestArea}</p>
+                              </div>
+                              <div style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 14, padding: 10 }}>
+                                <p style={{ fontSize: 10, fontWeight: 850, color: 'var(--t-tx3)' }}>Focus next</p>
+                                <p style={{ marginTop: 3, fontSize: 13, fontWeight: 900, color: 'var(--t-warning)' }}>{grammarAnalysis.focusArea}</p>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
+                              <div style={{ display: 'grid', gap: 7 }}>
+                                <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Corrections</p>
+                                {grammarAnalysis.corrections.map((item) => (
+                                  <div key={item.label} style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 13, padding: '9px 10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                      <p style={{ fontSize: 12, fontWeight: 900, color: 'var(--t-tx)' }}>{item.label}</p>
+                                      <span style={{ minWidth: 28, height: 24, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: item.count ? tone('var(--t-warning)', 14) : tone('var(--t-success)', 12), color: item.count ? 'var(--t-warning)' : 'var(--t-success)', fontSize: 11, fontWeight: 950 }}>
+                                        {item.count || <CheckCircle style={{ width: 13, height: 13 }} />}
+                                      </span>
+                                    </div>
+                                    <p style={{ marginTop: 4, fontSize: 11, lineHeight: 1.42, color: 'var(--t-tx3)' }}>{item.detail}</p>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div style={{ display: 'grid', gap: 7 }}>
+                                <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Refinements</p>
+                                {grammarAnalysis.refinements.map((item) => (
+                                  <div key={item.label} style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 13, padding: '9px 10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                      <p style={{ fontSize: 12, fontWeight: 900, color: 'var(--t-tx)' }}>{item.label}</p>
+                                      <span style={{ minWidth: 28, height: 24, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: item.count ? tone('var(--t-acc)', 12) : tone('var(--t-success)', 12), color: item.count ? 'var(--t-acc)' : 'var(--t-success)', fontSize: 11, fontWeight: 950 }}>
+                                        {item.count || <CheckCircle style={{ width: 13, height: 13 }} />}
+                                      </span>
+                                    </div>
+                                    <p style={{ marginTop: 4, fontSize: 11, lineHeight: 1.42, color: 'var(--t-tx3)' }}>{item.detail}</p>
                                   </div>
                                 ))}
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        (aiAssistTips.length > 0 || aiAssistExamples.length > 0) ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t-acc)' }}>Tips</div>
+                          </div>
+                        ) : activeWritingTool === 'ai' ? (
+                          <div style={{ display: 'grid', gap: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                              <div>
+                                <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d99b13' }}>AI Assist Studio</p>
+                                <h3 style={{ marginTop: 4, fontSize: 18, fontWeight: 950, color: 'var(--t-tx)' }}>Coach Notes</h3>
+                                <p style={{ marginTop: 4, fontSize: 12, color: 'var(--t-tx3)', lineHeight: 1.45 }}>Hints you can use to revise yourself. No auto-writing.</p>
+                              </div>
+                              <button type="button" onClick={() => { void runAiAssist({ keepPanelState: true, toolMode: 'ai' }); }} disabled={aiAssistLoading || status !== 'idle'} style={{ border: '1px solid #c88d1e', background: 'linear-gradient(135deg, #fff3bf 0%, #f8d35d 45%, #d8971f 100%)', color: '#4a3200', borderRadius: 12, padding: '8px 11px', fontSize: 11, fontWeight: 900, cursor: aiAssistLoading || status !== 'idle' ? 'not-allowed' : 'pointer', opacity: aiAssistLoading || status !== 'idle' ? 0.55 : 1 }}>
+                                {aiAssistLoading ? 'Thinking...' : 'Refresh'}
+                              </button>
+                            </div>
+
+                            {aiAssistCopied && (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifySelf: 'start', padding: '6px 10px', borderRadius: 10, border: '1px solid color-mix(in srgb, var(--t-success) 40%, transparent)', background: 'color-mix(in srgb, var(--t-success) 10%, var(--t-card) 90%)', color: 'var(--t-success)', fontSize: 11, fontWeight: 800 }}>
+                                <CheckCircle style={{ width: 13, height: 13 }} />
+                                {toolNotice || 'Copied'}
+                              </div>
+                            )}
+
+                            {aiAssistLoading ? (
                               <div style={{ display: 'grid', gap: 9 }}>
-                                {aiAssistTips.map((tip, index) => (
-                                  <button
-                                    key={`tip-${tip.label}-${index}`}
-                                    type="button"
-                                    onClick={() => { void copyAiAssistTip(tip.detail); }}
-                                    style={{
-                                      textAlign: 'left',
-                                      borderRadius: 14,
-                                      padding: 12,
-                                      border: '1px solid color-mix(in srgb, var(--t-acc) 16%, var(--t-brd) 84%)',
-                                      background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 84%, var(--t-acc-a) 16%), color-mix(in srgb, var(--t-card2) 88%, var(--t-acc-a) 12%))',
-                                      cursor: 'pointer',
-                                      transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
-                                      boxShadow: '0 8px 18px rgba(0, 22, 66, 0.2)',
-                                    }}
-                                    onMouseEnter={e => {
-                                      e.currentTarget.style.transform = 'translateY(-1px)';
-                                      e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 28, 77, 0.28)';
-                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--t-acc) 36%, var(--t-brd) 64%)';
-                                    }}
-                                    onMouseLeave={e => {
-                                      e.currentTarget.style.transform = 'translateY(0)';
-                                      e.currentTarget.style.boxShadow = '0 8px 18px rgba(0, 22, 66, 0.2)';
-                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--t-acc) 16%, var(--t-brd) 84%)';
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                      <span style={{
-                                        width: 20,
-                                        height: 20,
-                                        borderRadius: 8,
-                                        border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)',
-                                        background: 'var(--t-acc-a)',
-                                        color: 'var(--t-acc)',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: 10,
-                                        fontWeight: 900,
-                                        flexShrink: 0,
-                                      }}>
-                                        {index + 1}
-                                      </span>
-                                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--t-tx)' }}>{tip.label}</div>
-                                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: 'var(--t-acc)' }}>Copy</span>
-                                    </div>
-                                    <div style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{tip.detail}</div>
-                                  </button>
+                                {Array.from({ length: 5 }).map((_, index) => (
+                                  <div key={index} style={{ borderRadius: 14, padding: 12, border: '1px solid color-mix(in srgb, var(--t-acc) 18%, var(--t-brd) 82%)', background: 'color-mix(in srgb, var(--t-card) 86%, var(--t-acc-a) 14%)', opacity: 0.58 }}>
+                                    <div style={{ height: 12, marginBottom: 8, borderRadius: 6, background: 'currentColor', opacity: 0.22 }} />
+                                    <div style={{ height: 10, borderRadius: 6, background: 'currentColor', opacity: 0.14 }} />
+                                  </div>
                                 ))}
                               </div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7ad4ff' }}>Examples</div>
-                              <div style={{ display: 'grid', gap: 9 }}>
-                                {aiAssistExamples.map((example, index) => (
-                                  <button
-                                    key={`example-${example.label}-${index}`}
-                                    type="button"
-                                    onClick={() => { void copyAiAssistTip(example.detail); }}
-                                    style={{
-                                      textAlign: 'left',
-                                      borderRadius: 14,
-                                      padding: 12,
-                                      border: '1px solid color-mix(in srgb, #7ad4ff 24%, var(--t-brd) 76%)',
-                                      background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 80%, #05325b 20%), color-mix(in srgb, var(--t-card2) 90%, #0f3f72 10%))',
-                                      cursor: 'pointer',
-                                      transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
-                                      boxShadow: '0 8px 18px rgba(0, 26, 68, 0.24)',
-                                    }}
-                                    onMouseEnter={e => {
-                                      e.currentTarget.style.transform = 'translateY(-1px)';
-                                      e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 33, 90, 0.3)';
-                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, #7ad4ff 44%, var(--t-brd) 56%)';
-                                    }}
-                                    onMouseLeave={e => {
-                                      e.currentTarget.style.transform = 'translateY(0)';
-                                      e.currentTarget.style.boxShadow = '0 8px 18px rgba(0, 26, 68, 0.24)';
-                                      e.currentTarget.style.borderColor = 'color-mix(in srgb, #7ad4ff 24%, var(--t-brd) 76%)';
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                      <span style={{
-                                        width: 20,
-                                        height: 20,
-                                        borderRadius: 8,
-                                        border: '1px solid color-mix(in srgb, #7ad4ff 40%, transparent)',
-                                        background: 'rgba(41, 180, 255, 0.16)',
-                                        color: '#a5e5ff',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: 10,
-                                        fontWeight: 900,
-                                        flexShrink: 0,
-                                      }}>
-                                        {index + 1}
-                                      </span>
-                                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--t-tx)' }}>{example.label}</div>
-                                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: '#9bdfff' }}>Copy</span>
-                                    </div>
-                                    <div style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{example.detail}</div>
-                                  </button>
-                                ))}
+                            ) : (aiAssistTips.length > 0 || aiAssistExamples.length > 0) ? (
+                              <div style={{ display: 'grid', gap: 12 }}>
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                  <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-acc)' }}>Tips</p>
+                                  {aiAssistTips.map((tip, index) => (
+                                    <button key={`tip-${tip.label}-${index}`} type="button" onClick={() => { void copyAiAssistTip(tip.detail); }} style={{ textAlign: 'left', borderRadius: 14, padding: 12, border: '1px solid color-mix(in srgb, var(--t-acc) 16%, var(--t-brd) 84%)', background: 'color-mix(in srgb, var(--t-card) 88%, var(--t-acc-a) 12%)', cursor: 'pointer' }}>
+                                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 5 }}>
+                                        <span style={{ width: 22, height: 22, borderRadius: 8, background: 'var(--t-acc-a)', color: 'var(--t-acc)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 950 }}>{index + 1}</span>
+                                        <p style={{ fontSize: 12, fontWeight: 900, color: 'var(--t-tx)' }}>{tip.label}</p>
+                                        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 850, color: 'var(--t-acc)' }}>Copy tip</span>
+                                      </div>
+                                      <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{tip.detail}</p>
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                  <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#2563eb' }}>Sentence examples</p>
+                                  {aiAssistExamples.map((example, index) => (
+                                    <button key={`example-${example.label}-${index}`} type="button" onClick={() => { void copyAiAssistTip(example.detail); }} style={{ textAlign: 'left', borderRadius: 14, padding: 12, border: '1px solid color-mix(in srgb, #2563eb 20%, var(--t-brd) 80%)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-bg) 94%, white 6%), color-mix(in srgb, #dbeafe 24%, var(--t-bg) 76%))', cursor: 'pointer', boxShadow: '0 8px 16px rgba(37, 99, 235, 0.08)' }}>
+                                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 5 }}>
+                                        <span style={{ width: 22, height: 22, borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 950 }}>{index + 1}</span>
+                                        <p style={{ fontSize: 12, fontWeight: 900, color: 'var(--t-tx)' }}>{example.label}</p>
+                                        <span style={{ marginLeft: 'auto', border: '1px solid color-mix(in srgb, #2563eb 22%, transparent)', background: '#dbeafe', color: '#1e40af', borderRadius: 999, padding: '3px 8px', fontSize: 10, fontWeight: 900 }}>Copy example</span>
+                                      </div>
+                                      <p style={{ fontSize: 12, color: 'color-mix(in srgb, var(--t-tx2) 92%, #1e3a8a 8%)', lineHeight: 1.55 }}>{example.detail}</p>
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              <div style={{ borderRadius: 16, border: '1px solid color-mix(in srgb, var(--t-warning) 30%, var(--t-brd) 70%)', background: 'color-mix(in srgb, var(--t-warning) 9%, var(--t-card) 91%)', padding: 14 }}>
+                                <p style={{ fontSize: 12, margin: 0, color: 'var(--t-tx2)', lineHeight: 1.55 }}>Write a few more lines, then refresh AI Assist Studio for stronger notes.</p>
+                              </div>
+                            )}
                           </div>
                         ) : (
-                          <div style={{
-                            borderRadius: 14,
-                            border: '1px solid color-mix(in srgb, var(--t-warning) 30%, var(--t-brd) 70%)',
-                            background: 'color-mix(in srgb, var(--t-warning) 9%, var(--t-card) 91%)',
-                            padding: '12px 13px',
-                          }}>
-                            <p style={{ fontSize: 12, margin: 0, color: 'var(--t-tx2)' }}>
-                              No AI assist suggestions right now. Try adding a few more lines, then tap AI Assist again.
-                            </p>
+                          <div style={{ display: 'grid', gap: 12 }}>
+                            <div>
+                              <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--t-acc)' }}>
+                                {activeWritingTool === 'rewrite' ? 'Rewrite coach' : activeWritingTool === 'shorter' ? 'Trim coach' : activeWritingTool === 'stronger' ? 'Strength coach' : activeWritingTool === 'formal' ? 'Tone coach' : 'Revision coach'}
+                              </p>
+                              <h3 style={{ marginTop: 4, fontSize: 18, fontWeight: 950, color: 'var(--t-tx)' }}>
+                                {activeWritingTool === 'rewrite' ? 'Make It Outstanding' : activeWritingTool === 'shorter' ? 'Make It Shorter' : activeWritingTool === 'stronger' ? 'Make It Stronger' : activeWritingTool === 'formal' ? 'Make It More Formal' : 'Explain the Move'}
+                              </h3>
+                              <p style={{ marginTop: 4, fontSize: 12, color: 'var(--t-tx3)', lineHeight: 1.45 }}>
+                                Suggestion-only help. It shows what to look for, but it does not rewrite your draft for you.
+                              </p>
+                              <p style={{ marginTop: 7, display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid color-mix(in srgb, var(--t-acc) 18%, var(--t-brd) 82%)', background: 'color-mix(in srgb, var(--t-acc-a) 22%, transparent)', color: 'var(--t-acc)', borderRadius: 999, padding: '4px 8px', fontSize: 10.5, fontWeight: 850 }}>
+                                {aiAssistLoading
+                                  ? 'Generating from your draft...'
+                                  : hasLiveAssistForCurrentDraft
+                                    ? 'Generated from your current draft'
+                                    : 'Live local scan while API warms up'}
+                              </p>
+                            </div>
+
+                            <div style={{ border: '1px solid color-mix(in srgb, var(--t-acc) 18%, var(--t-brd) 82%)', background: 'color-mix(in srgb, var(--t-acc-a) 18%, var(--t-bg) 82%)', borderRadius: 15, padding: 12 }}>
+                              <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--t-acc)', marginBottom: 5 }}>Highest-need sentence</p>
+                              <p style={{ fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>
+                                {focusSentenceResult.sentence || 'Write a complete sentence first, and this panel will pick the line that needs the most editing help.'}
+                              </p>
+                              {focusSentenceResult.sentence && (
+                                <p style={{ marginTop: 7, fontSize: 10.5, color: 'var(--t-tx3)', lineHeight: 1.45 }}>
+                                  Picked because: {focusSentenceResult.reason}.
+                                </p>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'grid', gap: 10 }}>
+                              {displayedToolSuggestions.map((suggestion, index) => (
+                                <div key={`${suggestion.title}-${index}`} style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 16, padding: 12, boxShadow: '0 8px 18px rgba(0, 20, 64, 0.08)' }}>
+                                  <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                                    <span style={{ width: 24, height: 24, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-acc-a)', color: 'var(--t-acc)', fontSize: 11, fontWeight: 950, flexShrink: 0 }}>{index + 1}</span>
+                                    <div style={{ minWidth: 0 }}>
+                                      <p style={{ fontSize: 13, fontWeight: 950, color: 'var(--t-tx)' }}>{suggestion.title}</p>
+                                      <p style={{ marginTop: 4, fontSize: 12, color: 'var(--t-tx2)', lineHeight: 1.55 }}>{suggestion.detail}</p>
+                                    </div>
+                                  </div>
+                                  {(suggestion.before || suggestion.after) && (
+                                    <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+                                      {suggestion.before && (
+                                        <div style={{ border: '1px solid color-mix(in srgb, var(--t-warning) 28%, var(--t-brd) 72%)', background: tone('var(--t-warning)', 7), borderRadius: 12, padding: 10 }}>
+                                          <p style={{ fontSize: 10, fontWeight: 900, color: 'var(--t-warning)', marginBottom: 5 }}>Before</p>
+                                          <p style={{ fontSize: 11.5, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{suggestion.before}</p>
+                                        </div>
+                                      )}
+                                      {suggestion.after && (
+                                        <div style={{ border: '1px solid color-mix(in srgb, var(--t-success) 28%, var(--t-brd) 72%)', background: tone('var(--t-success)', 7), borderRadius: 12, padding: 10 }}>
+                                          <p style={{ fontSize: 10, fontWeight: 900, color: 'var(--t-success)', marginBottom: 5 }}>Example direction</p>
+                                          <p style={{ fontSize: 11.5, color: 'var(--t-tx2)', lineHeight: 1.5 }}>{suggestion.after}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        )
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
