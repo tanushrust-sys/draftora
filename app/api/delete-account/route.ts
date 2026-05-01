@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRouteAuth } from '@/app/lib/server-auth';
+import { isPracticeEmail, PRACTICE_DISPLAY_USERNAME } from '@/app/lib/practice-mode';
 
 export async function POST(req: NextRequest) {
   const auth = await requireRouteAuth(req);
@@ -9,16 +10,21 @@ export async function POST(req: NextRequest) {
 
   const { userId, profile } = auth.auth;
   const { adminSupabase } = auth;
+  const isPracticeAccount =
+    isPracticeEmail(profile.email) ||
+    (profile.username || '').trim().toUpperCase() === PRACTICE_DISPLAY_USERNAME;
 
-  const { error: tombstoneError } = await adminSupabase.from('deleted_accounts').insert({
-    user_id: userId,
-    email: profile.email,
-    username: profile.username,
-    account_type: profile.account_type,
-  });
+  if (!isPracticeAccount) {
+    const { error: tombstoneError } = await adminSupabase.from('deleted_accounts').insert({
+      user_id: userId,
+      email: profile.email,
+      username: profile.username,
+      account_type: profile.account_type,
+    });
 
-  if (tombstoneError) {
-    return NextResponse.json({ error: tombstoneError.message }, { status: 500 });
+    if (tombstoneError) {
+      return NextResponse.json({ error: tombstoneError.message }, { status: 500 });
+    }
   }
 
   if (profile.account_type === 'teacher') {

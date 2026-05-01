@@ -407,7 +407,11 @@ export default function CoachPage() {
         reviewed: reviewedRes.data ?? [],
       };
       const res = await fetchWithTimeout('/api/ai-coach', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           messages: updated, mode, trainerType, userId: profile.id,
           accessToken,

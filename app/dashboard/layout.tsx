@@ -28,6 +28,7 @@ import { getAccountHomePath } from '@/app/lib/account-type';
 import BrandLogo from '@/app/components/BrandLogo';
 import { getLocalDateKey, updateStreak } from '@/app/lib/xp';
 import { STREAK_UP_GIF } from '@/app/lib/reaction-gifs';
+import { endPracticeSessionKeepalive } from '@/app/lib/practice-session-client';
 
 function createNavLinks() {
   return [
@@ -57,10 +58,11 @@ const SIDEBAR_W  = 264;
 const COLLAPSED_W = 72;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, refreshProfile } = useAuth();
+  const { user, session, profile, isPracticeMode, loading, refreshProfile } = useAuth();
   const router   = useRouter();
   const pathname = usePathname();
   const hasAuthContext = Boolean(user || profile);
+  const isPublicDashboardRoute = pathname === '/dashboard';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLargeViewport, setIsLargeViewport] = useState(false);
   const [streakGifPopup, setStreakGifPopup] = useState<{ streak: number } | null>(null);
@@ -81,8 +83,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   useEffect(() => {
-    if (!loading && !hasAuthContext) router.replace('/login');
-  }, [hasAuthContext, loading, router]);
+    if (!loading && !hasAuthContext && !isPublicDashboardRoute) router.replace('/login');
+  }, [hasAuthContext, isPublicDashboardRoute, loading, router]);
 
   useEffect(() => {
     if (loading || !profile?.account_type) return;
@@ -147,6 +149,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (profile?.id) {
       clearAccountTypeOverride(profile.id);
     }
+    if (isPracticeMode && session?.access_token) {
+      void endPracticeSessionKeepalive(session.access_token, 'manual-signout');
+    }
     router.replace('/login');
     window.location.replace('/login');
     void hardSignOut();
@@ -201,9 +206,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
+  if (!hasAuthContext && isPublicDashboardRoute) {
+    return (
+      <div className="app-frame min-h-screen" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--t-acc) 10%, transparent) 0%, transparent 32%), var(--t-bg)' }}>
+        <div className="dashboard-main">
+          <div className="dashboard-content app-surface">
+            <div className="dashboard-topbar">
+              <div className="dashboard-topbar__meta">
+                <div>
+                  <h1>Dashboard</h1>
+                  <p>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                </div>
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Link href="/login" className="dashboard-topbar__badge" style={{ textDecoration: 'none' }}>
+                  Log in
+                </Link>
+                <Link href="/signup" className="dashboard-topbar__badge" style={{ textDecoration: 'none' }}>
+                  Create account
+                </Link>
+              </div>
+            </div>
+            <main className="theme-main">{children}</main>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAuthContext && !isPublicDashboardRoute) {
+    return (
+      <div className="app-frame min-h-screen" style={{ display: 'grid', placeItems: 'center' }}>
+        <div style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 600 }}>Redirecting to login…</div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-frame">
-      <OnboardingModal />
+      {!isPracticeMode && <OnboardingModal />}
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -535,6 +576,52 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
                 )}
               </div>
+              {isPracticeMode && (
+                <div
+                  style={{
+                    margin: '0 0 12px',
+                    borderRadius: 18,
+                    border: '1px solid color-mix(in srgb, var(--t-warning) 55%, var(--t-brd))',
+                    background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-warning) 20%, var(--t-card2)) 0%, color-mix(in srgb, var(--t-acc) 16%, var(--t-card2)) 100%)',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 14,
+                    flexWrap: 'wrap',
+                    boxShadow: '0 12px 26px color-mix(in srgb, var(--t-warning) 22%, transparent)',
+                  }}
+                >
+                  <div style={{ minWidth: 240 }}>
+                    <p style={{ margin: 0, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 900, color: 'var(--t-warning)' }}>
+                      Practice Mode
+                    </p>
+                    <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--t-tx2)', lineHeight: 1.5 }}>
+                      You are writing in a temporary practice account. Your data resets after you close all tabs.
+                    </p>
+                  </div>
+                  <Link
+                    href="/signup"
+                    style={{
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '10px 14px',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      border: '1px solid color-mix(in srgb, var(--t-acc) 50%, transparent)',
+                      color: 'var(--t-btn-color)',
+                      background: 'linear-gradient(135deg, var(--t-btn) 0%, color-mix(in srgb, var(--t-btn) 72%, white 28%) 100%)',
+                      boxShadow: '0 10px 22px color-mix(in srgb, var(--t-acc) 24%, transparent)',
+                    }}
+                  >
+                    <Star style={{ width: 14, height: 14 }} />
+                    Create Account To Save Progress
+                  </Link>
+                </div>
+              )}
               <main className="theme-main">{children}</main>
               <LevelUpPopup />
             </div>

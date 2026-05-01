@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle2,
   MessageSquareText,
+  FlaskConical,
   X,
 } from 'lucide-react';
 import BrandLogo from '@/app/components/BrandLogo';
@@ -527,6 +528,15 @@ export default function MarketingHome() {
                 </span>
                 <span className={styles.ctaArrowWrap}>
                   <ArrowRight size={16} />
+                </span>
+              </Link>
+              <Link href="/dashboard?practice=1" className={styles.practiceHeroCta}>
+                <span className={styles.practiceHeroIcon}>
+                  <FlaskConical size={15} />
+                </span>
+                <span className={styles.practiceHeroCopy}>
+                  <span>Try Practice Mode (No Signup)</span>
+                  <small>Sign in as USER and auto-reset after all tabs close</small>
                 </span>
               </Link>
               <a href="#showcase" className={styles.secondaryHeroCta}>

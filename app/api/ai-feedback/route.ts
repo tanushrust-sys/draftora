@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { chat, extractJSON } from '@/app/lib/ai-provider';
 import { getWritingExperienceLabel } from '@/app/lib/writing-experience';
+import { consumePracticeRateLimit } from '@/app/lib/practice-rate-limit';
+import { getTokenFromRequest, resolvePracticeIdentity } from '@/app/lib/practice-route-auth';
 
 type WritingFeedback = {
   overall: string;
@@ -854,6 +856,29 @@ export async function POST(req: Request) {
       selectedText = '',
     } = payload;
     const mappedAgeGroup = mapAgeGroup(ageGroup);
+    const token = getTokenFromRequest(req);
+    const practiceIdentity = await resolvePracticeIdentity(token);
+
+    if (practiceIdentity?.isPractice) {
+      const limiter = consumePracticeRateLimit({
+        userId: practiceIdentity.userId,
+        bucket: assistMode ? 'ai-feedback-assist' : 'ai-feedback-review',
+        limit: assistMode ? 48 : 24,
+        windowMs: 10 * 60 * 1000,
+      });
+
+      if (!limiter.allowed) {
+        return NextResponse.json(
+          { error: 'Practice Mode AI is cooling down for a moment. Please try again shortly.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.max(1, Math.ceil(limiter.retryAfterMs / 1000))),
+            },
+          },
+        );
+      }
+    }
 
     if (assistMode) {
       const safeContent = content ?? '';

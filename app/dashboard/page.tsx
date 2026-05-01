@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
+  ArrowRight,
   Award,
   BookOpen,
   CheckCircle2,
@@ -17,7 +19,8 @@ import {
 import { useAuth } from '@/app/context/AuthContext';
 import { useTheme } from '@/app/context/ThemeContext';
 import { StudentHomeworkWidget } from '@/app/components/student-homework-widget';
-import { supabase } from '@/app/lib/supabase';
+import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
+import { bootstrapPracticeSession } from '@/app/lib/practice-session-client';
 import { getTitleForLevel, getXPProgress } from '@/app/types/database';
 import type { DailyStats } from '@/app/types/database';
 import { getWeekWords } from '@/app/lib/vocab-utils';
@@ -35,10 +38,15 @@ type DashCache = {
 type DashboardRole = 'student' | 'teacher' | 'parent';
 
 export default function DashboardPage() {
-  const { profile, session } = useAuth();
+  const { profile, session, loading } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [practiceStarting, setPracticeStarting] = useState(false);
+  const [practiceError, setPracticeError] = useState('');
+  const practiceAutoStartAttemptedRef = useRef(false);
+  const shouldForcePractice = searchParams.get('practice') === '1';
   const ageGroup = profile?.age_group ?? '';
   const accountType: DashboardRole = pathname === '/dashboard/teacher'
     ? 'teacher'
@@ -57,6 +65,50 @@ export default function DashboardPage() {
   const [vocabMastered, setVocabMastered]       = useState(cached?.vocabMastered ?? 0);
   const [vocabTotal, setVocabTotal]             = useState(cached?.vocabTotal ?? 0);
   const [weekStats, setWeekStats]               = useState<DailyStats[]>(cached?.weekStats ?? []);
+
+  const startPracticeMode = useCallback(async () => {
+    if (practiceStarting) return;
+    setPracticeError('');
+    setPracticeStarting(true);
+
+    try {
+      clearSupabaseClientSession();
+
+      const startRes = await fetch('/api/practice-session/start', { method: 'POST' });
+      const startPayload = await startRes.json().catch(() => ({} as { error?: string; email?: string; password?: string }));
+
+      if (!startRes.ok || !startPayload?.email || !startPayload?.password) {
+        throw new Error(startPayload?.error || 'Could not start Practice Mode right now.');
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: startPayload.email,
+        password: startPayload.password,
+      });
+
+      if (error || !data.user) {
+        throw new Error(error?.message || 'Could not enter Practice Mode right now.');
+      }
+
+      bootstrapPracticeSession(data.user.id);
+      router.replace('/dashboard');
+      window.location.assign('/dashboard');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not enter Practice Mode right now.';
+      setPracticeError(message);
+      setPracticeStarting(false);
+    }
+  }, [practiceStarting, router]);
+
+  useEffect(() => {
+    if (!shouldForcePractice) {
+      practiceAutoStartAttemptedRef.current = false;
+      return;
+    }
+    if (practiceAutoStartAttemptedRef.current) return;
+    practiceAutoStartAttemptedRef.current = true;
+    void startPracticeMode();
+  }, [shouldForcePractice, startPracticeMode]);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -101,11 +153,108 @@ export default function DashboardPage() {
   }, [loadData, profile?.id]);
 
   if (!profile) {
+    if (loading) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderRadius: 16, background: 'var(--t-card)', border: '1px solid var(--t-brd)', boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--t-acc)', animation: 'pulse 1.4s infinite' }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-tx2)' }}>Loading your dashboard…</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-bg)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderRadius: 16, background: 'var(--t-card)', border: '1px solid var(--t-brd)', boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
-          <div style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--t-acc)', animation: 'pulse 1.4s infinite' }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t-tx2)' }}>Loading your dashboard…</span>
+      <div style={{ minHeight: '100vh', padding: 'clamp(0.75rem, 2vw, 1.3125rem) clamp(0.75rem, 2.8vw, 2.4rem) 4rem', background: 'var(--t-bg)' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', display: 'grid', gap: '1.1rem' }}>
+          <section
+            style={{
+              borderRadius: 30,
+              border: '1px solid color-mix(in srgb, var(--t-warning) 55%, var(--t-brd))',
+              background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-warning) 28%, var(--t-card2)) 0%, color-mix(in srgb, var(--t-acc) 18%, var(--t-card2)) 48%, color-mix(in srgb, var(--t-acc-light) 14%, var(--t-card2)) 100%)',
+              boxShadow: '0 24px 54px color-mix(in srgb, var(--t-warning) 24%, transparent), inset 0 1px 0 rgba(255,255,255,0.42)',
+              padding: 'clamp(1.2rem, 3.6vw, 2.2rem)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ position: 'absolute', top: -80, right: -60, width: 250, height: 250, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-warning) 26%, transparent)', filter: 'blur(34px)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: -92, left: -20, width: 210, height: 210, borderRadius: '50%', background: 'color-mix(in srgb, var(--t-acc) 24%, transparent)', filter: 'blur(30px)', pointerEvents: 'none' }} />
+
+            <div style={{ position: 'relative', zIndex: 1, display: 'grid', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--t-warning)' }}>
+                  Instant Practice
+                </p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11, fontWeight: 700, color: 'var(--t-tx2)', padding: '6px 10px', borderRadius: 999, border: '1px solid color-mix(in srgb, var(--t-warning) 36%, transparent)', background: 'color-mix(in srgb, var(--t-warning) 14%, transparent)' }}>
+                  <Sparkles style={{ width: 13, height: 13, color: 'var(--t-warning)' }} />
+                  Temporary account: USER
+                </div>
+              </div>
+
+              <h2 style={{ margin: 0, color: 'var(--t-tx)', fontSize: 'clamp(2rem, 4vw, 2.9rem)', lineHeight: 1.06, letterSpacing: '-0.04em', maxWidth: 700 }}>
+                Start Writing Now In Practice Mode
+              </h2>
+              <p style={{ margin: 0, maxWidth: 760, color: 'var(--t-tx2)', fontSize: 15, lineHeight: 1.7 }}>
+                Jump straight into the real Draftora student workspace with no signup. Everything works as normal while your tabs stay open.
+                Close all tabs and the practice data resets automatically.
+              </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => void startPracticeMode()}
+                  disabled={practiceStarting}
+                  style={{
+                    minHeight: 46,
+                    borderRadius: 12,
+                    border: '1px solid color-mix(in srgb, var(--t-acc) 44%, transparent)',
+                    background: 'linear-gradient(135deg, var(--t-btn) 0%, color-mix(in srgb, var(--t-btn) 72%, white 28%) 100%)',
+                    color: 'var(--t-btn-color)',
+                    fontWeight: 800,
+                    fontSize: 14,
+                    padding: '0 16px',
+                    cursor: practiceStarting ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    boxShadow: '0 14px 26px color-mix(in srgb, var(--t-acc) 30%, transparent)',
+                  }}
+                >
+                  {practiceStarting ? 'Starting Practice…' : 'Start Practice Mode'}
+                  <ArrowRight style={{ width: 15, height: 15 }} />
+                </button>
+                <Link href="/login" style={{ textDecoration: 'none', minHeight: 44, borderRadius: 12, border: '1px solid var(--t-brd)', padding: '0 13px', display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 700, color: 'var(--t-tx2)', background: 'var(--t-card)' }}>
+                  Log in
+                </Link>
+                <Link href="/signup" style={{ textDecoration: 'none', minHeight: 44, borderRadius: 12, border: '1px solid var(--t-brd)', padding: '0 13px', display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 700, color: 'var(--t-tx2)', background: 'var(--t-card)' }}>
+                  Create account
+                </Link>
+              </div>
+
+              {practiceError ? (
+                <div style={{ borderRadius: 12, border: '1px solid color-mix(in srgb, var(--t-danger) 38%, transparent)', background: 'color-mix(in srgb, var(--t-danger) 12%, transparent)', color: 'var(--t-danger)', fontSize: 13, lineHeight: 1.5, padding: '10px 12px', maxWidth: 620 }}>
+                  {practiceError}
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+            {[
+              { icon: PenLine, title: 'Real Writing Studio', copy: 'Drafts, prompts, journaling, and progress tools are all available.' },
+              { icon: BookOpen, title: 'Live Vocab Practice', copy: 'Try word-bank and sentence checks in the same student workflow.' },
+              { icon: Target, title: 'Temporary By Design', copy: 'Practice stays while your tabs are open, then resets after close.' },
+            ].map(({ icon: Icon, title, copy }) => (
+              <article key={title} style={{ borderRadius: 16, padding: '14px 14px', background: 'linear-gradient(165deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, var(--t-card) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 12, display: 'grid', placeItems: 'center', border: '1px solid color-mix(in srgb, var(--t-acc) 36%, transparent)', background: 'color-mix(in srgb, var(--t-acc) 12%, transparent)' }}>
+                  <Icon style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />
+                </div>
+                <h3 style={{ margin: '10px 0 6px', color: 'var(--t-tx)', fontSize: 15, fontWeight: 850 }}>{title}</h3>
+                <p style={{ margin: 0, color: 'var(--t-tx2)', fontSize: 12.5, lineHeight: 1.6 }}>{copy}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     );

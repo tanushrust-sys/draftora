@@ -573,7 +573,7 @@ function dedupeVocabWords(words: VocabWord[]) {
 }
 
 export default function VocabPage() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile } = useAuth();
   const profileId = profile?.id ?? null;
   const [words, setWords] = useState<VocabWord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -826,7 +826,10 @@ export default function VocabPage() {
         '/api/check-vocab-sentence',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
           body: JSON.stringify({ word, meaning, sentence, ageGroup: profile.age_group, writingExperienceScore: profile.writing_experience_score ?? 0 }),
         },
         SENTENCE_FEEDBACK_TIMEOUT_MS,
@@ -838,6 +841,18 @@ export default function VocabPage() {
         if (normalized && (normalized.strengths || normalized.improvements || normalized.summary)) {
           nextFeedback = normalized;
         }
+      } else {
+        const payload = await res.json().catch(() => null) as { error?: string } | null;
+        const serverMessage = payload?.error?.trim() || 'Sentence check is unavailable right now.';
+        nextFeedback = {
+          grade: 'mostly incorrect',
+          correct: false,
+          strengths: '',
+          improvements: serverMessage,
+          summary: 'Please retry shortly.',
+          suggestion: '',
+          vocabularySuggestions: [],
+        };
       }
     } catch (error) {
       timedOut = error instanceof FetchTimeoutError;
@@ -874,7 +889,7 @@ export default function VocabPage() {
           });
       }
     }
-  }, [persistSentenceFeedback, profile]);
+  }, [persistSentenceFeedback, profile, session?.access_token]);
 
   useEffect(() => { loadWords(); }, [loadWords]);
 
@@ -948,7 +963,10 @@ export default function VocabPage() {
     let feedbackData: SentenceFeedback = { correct: false, strengths: '', improvements: 'Could not check — try again.', summary: '', suggestion: '' };
     try {
       const res = await fetch('/api/check-vocab-sentence', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ word: dw.word, meaning: dw.meaning, sentence, ageGroup: profile.age_group, writingExperienceScore: profile.writing_experience_score ?? 0 }),
       });
       if (res.ok) {
@@ -957,6 +975,17 @@ export default function VocabPage() {
         if (normalized) {
           feedbackData = normalized;
         }
+      } else {
+        const payload = await res.json().catch(() => null) as { error?: string } | null;
+        feedbackData = {
+          grade: 'mostly incorrect',
+          correct: false,
+          strengths: '',
+          improvements: payload?.error || 'Could not check right now. Try again shortly.',
+          summary: 'Please retry shortly.',
+          suggestion: '',
+          vocabularySuggestions: [],
+        };
       }
     } catch { /* keep error placeholder */ }
 
@@ -1302,13 +1331,27 @@ export default function VocabPage() {
             '/api/check-vocab-sentence',
             {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+              },
               body: JSON.stringify({ word: challenge.word, meaning: challenge.meaning, sentence: answer, ageGroup: profile?.age_group, writingExperienceScore: profile?.writing_experience_score ?? 0 }),
             },
             SENTENCE_FEEDBACK_TIMEOUT_MS,
           );
           if (res.ok) {
             fb = normalizeSentenceFeedback(await res.json());
+          } else {
+            const payload = await res.json().catch(() => null) as { error?: string } | null;
+            fb = {
+              grade: 'mostly incorrect',
+              correct: false,
+              strengths: '',
+              improvements: payload?.error || 'Sentence feedback is cooling down. Please retry shortly.',
+              summary: 'Please retry shortly.',
+              suggestion: '',
+              vocabularySuggestions: [],
+            };
           }
           if (fb) {
             feedbackGrade = fb.grade ?? (fb.correct ? 'correct' : 'incorrect');

@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { chat, extractJSON } from '@/app/lib/ai-provider';
 import { getWritingExperienceBand, getWritingExperienceLabel, getWritingExperiencePromptContext } from '@/app/lib/writing-experience';
+import { consumePracticeRateLimit } from '@/app/lib/practice-rate-limit';
+import { getTokenFromRequest, resolvePracticeIdentity } from '@/app/lib/practice-route-auth';
 
 type SentenceFeedbackGrade = 'correct' | 'mostly correct' | 'mostly incorrect' | 'incorrect';
 
@@ -554,6 +556,29 @@ export async function POST(req: Request) {
   try {
     payload = await req.json();
     const { word, meaning, sentence, ageGroup, writingExperienceScore = 0 } = payload;
+    const token = getTokenFromRequest(req);
+    const practiceIdentity = await resolvePracticeIdentity(token);
+
+    if (practiceIdentity?.isPractice) {
+      const limiter = consumePracticeRateLimit({
+        userId: practiceIdentity.userId,
+        bucket: 'vocab-sentence-check',
+        limit: 120,
+        windowMs: 10 * 60 * 1000,
+      });
+
+      if (!limiter.allowed) {
+        return NextResponse.json(
+          { error: 'Practice Mode sentence checks are cooling down. Please retry in a moment.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.max(1, Math.ceil(limiter.retryAfterMs / 1000))),
+            },
+          },
+        );
+      }
+    }
 
     if (!word || !sentence || sentence.trim().length < 3) {
       return NextResponse.json({ error: 'Word and sentence are required' }, { status: 400 });

@@ -243,6 +243,55 @@
   flex-wrap: wrap;
 }
 
+.practiceHeroCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 999px;
+  padding: 0.66rem 0.86rem 0.66rem 0.74rem;
+  text-decoration: none;
+  border: 1px solid rgba(58, 144, 218, 0.34);
+  background: linear-gradient(140deg, rgba(228, 244, 255, 0.97) 0%, rgba(201, 231, 255, 0.95) 52%, rgba(236, 247, 255, 0.97) 100%);
+  box-shadow: 0 12px 26px rgba(60, 147, 214, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  color: #0f4e87;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.practiceHeroCta:hover {
+  transform: translateY(-2px);
+  border-color: rgba(43, 126, 199, 0.45);
+  box-shadow: 0 16px 30px rgba(43, 126, 199, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.practiceHeroIcon {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(58, 144, 218, 0.34);
+  background: rgba(255, 255, 255, 0.62);
+  color: #1770b9;
+  flex-shrink: 0;
+}
+
+.practiceHeroCopy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.005em;
+}
+
+.practiceHeroCopy small {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #2b6497;
+  line-height: 1.22;
+}
+
 .secondaryHeroCta {
   display: inline-flex;
   align-items: center;

@@ -3,6 +3,8 @@ import { chat } from '@/app/lib/ai-provider';
 import { createClient } from '@supabase/supabase-js';
 import { getWritingExperienceLabel, getWritingExperiencePromptContext } from '@/app/lib/writing-experience';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
+import { consumePracticeRateLimit } from '@/app/lib/practice-rate-limit';
+import { getTokenFromRequest, resolvePracticeIdentity } from '@/app/lib/practice-route-auth';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -329,6 +331,31 @@ FINAL RESPONSE RULES
 export async function POST(req: Request) {
   try {
     const { messages, trainerType, userContext, userId, accessToken, clientContext } = await req.json();
+    const token = typeof accessToken === 'string' && accessToken.trim()
+      ? accessToken.trim()
+      : getTokenFromRequest(req);
+    const practiceIdentity = await resolvePracticeIdentity(token);
+
+    if (practiceIdentity?.isPractice) {
+      const limiter = consumePracticeRateLimit({
+        userId: practiceIdentity.userId,
+        bucket: 'ai-coach-chat',
+        limit: 40,
+        windowMs: 10 * 60 * 1000,
+      });
+
+      if (!limiter.allowed) {
+        return NextResponse.json(
+          { error: 'Practice Mode coach is cooling down briefly. Please retry soon.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.max(1, Math.ceil(limiter.retryAfterMs / 1000))),
+            },
+          },
+        );
+      }
+    }
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: 'No messages provided' }, { status: 400 });

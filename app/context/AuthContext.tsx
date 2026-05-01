@@ -8,6 +8,13 @@ import { applyWritingExperienceOverride, clearWritingExperienceOverride } from '
 import { applyProfileOverrides, clearProfileOverrides } from '@/app/lib/profile-overrides';
 import { applyAccountTypeOverride, clearAccountTypeOverride } from '@/app/lib/account-type';
 import { normalizeTeacherSubscriptionPlan } from '@/app/lib/teacher-subscription';
+import { applyPracticeDisplayUsername, isPracticeProfile, isPracticeUser } from '@/app/lib/practice-mode';
+import {
+  clearPracticeClientState,
+  endPracticeSessionKeepalive,
+  isStalePracticeSessionOnLoad,
+  startPracticeHeartbeat,
+} from '@/app/lib/practice-session-client';
 import type { Profile } from '@/app/types/database';
 import { getTitleForLevel } from '@/app/types/database';
 
@@ -37,6 +44,7 @@ type AuthState = {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  isPracticeMode: boolean;
   loading: boolean;
   refreshProfile: () => Promise<void>;
   levelUpEvent: { level: number; title: string } | null;
@@ -47,6 +55,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   session: null,
   profile: null,
+  isPracticeMode: false,
   loading: true,
   refreshProfile: async () => {},
   levelUpEvent: null,
@@ -214,6 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(() => readCachedProfile());
+  const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [levelUpEvent, setLevelUpEvent] = useState<{ level: number; title: string } | null>(null);
   const clearLevelUpEvent = useCallback(() => setLevelUpEvent(null), []);
@@ -221,8 +231,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mountedRef = useRef(true);
   const profileRef = useRef<Profile | null>(profile);
   const sessionRef = useRef<Session | null>(null);
+  const practiceHeartbeatCleanupRef = useRef<(() => void) | null>(null);
 
   const clearProfileState = useCallback((reason: 'signed-out' | 'invalid-session') => {
+    if (reason === 'signed-out' && isPracticeProfile(profileRef.current)) {
+      clearPracticeClientState(profileRef.current?.id);
+    }
     clearCachedProfile();
     if (profileRef.current?.id) {
       clearWritingExperienceOverride(profileRef.current.id);
@@ -234,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (reason === 'invalid-session') {
       setUser(null);
       setSession(null);
+      setIsPracticeMode(false);
     }
   }, []);
 
@@ -291,14 +306,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ),
         );
         if (!nextProfile || !mountedRef.current) return null;
+        const displayProfile = applyPracticeDisplayUsername(
+          nextProfile,
+          isPracticeUser(sessionRef.current?.user ?? null),
+        );
         // Detect level-up (only fire if user was already loaded, not on initial login)
-        if (profileRef.current && nextProfile.level > profileRef.current.level) {
-          setLevelUpEvent({ level: nextProfile.level, title: getTitleForLevel(nextProfile.level) });
+        if (profileRef.current && displayProfile.level > profileRef.current.level) {
+          setLevelUpEvent({ level: displayProfile.level, title: getTitleForLevel(displayProfile.level) });
         }
-        setProfile(nextProfile);
-        profileRef.current = nextProfile;
-        writeCachedProfile(nextProfile);
-        return nextProfile;
+        setProfile(displayProfile);
+        profileRef.current = displayProfile;
+        writeCachedProfile(displayProfile);
+        return displayProfile;
       }
 
       // Profile row not found — could be a race condition right after account creation.
@@ -329,12 +348,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async (session) => {
         if (!mountedRef.current) return;
         clearTimeout(timeout);
-        sessionRef.current = session;
-        setSession(session);
-        setUser(session?.user ?? null);
+        let nextSession = session;
 
-        if (session?.user) {
-          await fetchProfile(session.user.id);
+        if (nextSession?.user && isPracticeUser(nextSession.user)) {
+          const isStaleSession = isStalePracticeSessionOnLoad(nextSession.user.id);
+          if (isStaleSession) {
+            await endPracticeSessionKeepalive(nextSession.access_token, 'stale-session-reopen');
+            clearPracticeClientState(nextSession.user.id);
+            await hardSignOut().catch(() => {});
+            nextSession = null;
+          }
+        }
+
+        sessionRef.current = nextSession;
+        setSession(nextSession);
+        setUser(nextSession?.user ?? null);
+        setIsPracticeMode(isPracticeUser(nextSession?.user ?? null));
+
+        if (nextSession?.user) {
+          await fetchProfile(nextSession.user.id);
         } else {
           clearProfileState('invalid-session');
         }
@@ -351,6 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Failed to resolve auth session:', error);
         clearCachedProfile();
         setProfile(null);
+        setIsPracticeMode(false);
         setLoading(false);
       });
 
@@ -359,6 +392,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionRef.current = nextSession;
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      setIsPracticeMode(isPracticeUser(nextSession?.user ?? null));
 
       if (nextSession?.user) {
         window.setTimeout(() => {
@@ -380,8 +414,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [clearProfileState, fetchProfile]);
 
+  useEffect(() => {
+    if (practiceHeartbeatCleanupRef.current) {
+      practiceHeartbeatCleanupRef.current();
+      practiceHeartbeatCleanupRef.current = null;
+    }
+
+    if (!isPracticeMode || !session?.user?.id || !session.access_token) return;
+
+    practiceHeartbeatCleanupRef.current = startPracticeHeartbeat({
+      userId: session.user.id,
+    });
+
+    return () => {
+      if (practiceHeartbeatCleanupRef.current) {
+        practiceHeartbeatCleanupRef.current();
+        practiceHeartbeatCleanupRef.current = null;
+      }
+    };
+  }, [isPracticeMode, session?.access_token, session?.user?.id]);
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, refreshProfile, levelUpEvent, clearLevelUpEvent }}>
+    <AuthContext.Provider value={{ user, session, profile, isPracticeMode, loading, refreshProfile, levelUpEvent, clearLevelUpEvent }}>
       {children}
     </AuthContext.Provider>
   );

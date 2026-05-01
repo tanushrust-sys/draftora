@@ -1103,7 +1103,7 @@ function ProgressChart({ data, timeRange }: { data: { date: string; score: numbe
 
 /* ─── Main Component ─────────────────────────────────────────── */
 function WritingsContent() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, session, refreshProfile } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -2271,7 +2271,10 @@ function WritingsContent() {
       try {
         const res = await fetchWithTimeout('/api/ai-feedback', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
           body: JSON.stringify({ content, category, prompt, wordCount, ageGroup: profile?.age_group, writingExperienceScore: profile?.writing_experience_score ?? 0 }),
         }, AI_FEEDBACK_TIMEOUT_MS);
         const { data, rawText } = await readJsonSafely<{ error?: string; feedback?: WritingFeedback }>(res);
@@ -2436,7 +2439,10 @@ function WritingsContent() {
     try {
       const response = await fetch('/api/ai-feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         signal: controller.signal,
         body: JSON.stringify({
           assistMode: true,
@@ -2506,7 +2512,7 @@ function WritingsContent() {
         setAiAssistLoading(false);
       }
     }
-  }, [activeWritingTool, category, content, editorSelection.text, prompt, profile?.age_group, profile?.writing_experience_score, wordCount]);
+  }, [activeWritingTool, category, content, editorSelection.text, prompt, profile?.age_group, profile?.writing_experience_score, session?.access_token, wordCount]);
 
   useEffect(() => {
     if (!aiAssistOpen || activeWritingTool === 'grammar' || status !== 'idle') return;
