@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  ArrowRight,
   Bot,
+  Clock3,
   ChevronRight,
+  FlaskConical,
   Flame,
   GraduationCap,
   Home,
@@ -577,50 +580,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
               </div>
               {isPracticeMode && (
-                <div
-                  style={{
-                    margin: '0 0 12px',
-                    borderRadius: 18,
-                    border: '1px solid color-mix(in srgb, var(--t-warning) 55%, var(--t-brd))',
-                    background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-warning) 20%, var(--t-card2)) 0%, color-mix(in srgb, var(--t-acc) 16%, var(--t-card2)) 100%)',
-                    padding: '14px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 14,
-                    flexWrap: 'wrap',
-                    boxShadow: '0 12px 26px color-mix(in srgb, var(--t-warning) 22%, transparent)',
-                  }}
-                >
-                  <div style={{ minWidth: 240 }}>
-                    <p style={{ margin: 0, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 900, color: 'var(--t-warning)' }}>
-                      Practice Mode
+                <section className="practice-banner" role="status" aria-live="polite">
+                  <div className="practice-banner__tone" aria-hidden="true" />
+                  <div className="practice-banner__content">
+                    <div className="practice-banner__kicker">
+                      <span className="practice-banner__label">
+                        <FlaskConical style={{ width: 13, height: 13 }} />
+                        Practice Mode
+                      </span>
+                      <span className="practice-banner__identity">USER</span>
+                    </div>
+                    <h2 className="practice-banner__title">Temporary workspace active</h2>
+                    <p className="practice-banner__copy">
+                      Everything works like a real student account, but your drafts reset after the last browser tab closes.
                     </p>
-                    <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--t-tx2)', lineHeight: 1.5 }}>
-                      You are writing in a temporary practice account. Your data resets after you close all tabs.
-                    </p>
+                    <div className="practice-banner__facts">
+                      <span>
+                        <Clock3 style={{ width: 13, height: 13 }} />
+                        Session survives tab switches
+                      </span>
+                      <span>
+                        <Star style={{ width: 13, height: 13 }} />
+                        Create an account to keep progress forever
+                      </span>
+                    </div>
                   </div>
-                  <Link
-                    href="/signup"
-                    style={{
-                      textDecoration: 'none',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '10px 14px',
-                      borderRadius: 12,
-                      fontSize: 12,
-                      fontWeight: 800,
-                      border: '1px solid color-mix(in srgb, var(--t-acc) 50%, transparent)',
-                      color: 'var(--t-btn-color)',
-                      background: 'linear-gradient(135deg, var(--t-btn) 0%, color-mix(in srgb, var(--t-btn) 72%, white 28%) 100%)',
-                      boxShadow: '0 10px 22px color-mix(in srgb, var(--t-acc) 24%, transparent)',
-                    }}
-                  >
-                    <Star style={{ width: 14, height: 14 }} />
+                  <Link href="/signup" className="practice-banner__cta">
+                    <span className="practice-banner__cta-icon">
+                      <Star style={{ width: 14, height: 14 }} />
+                    </span>
                     Create Account To Save Progress
+                    <ArrowRight style={{ width: 14, height: 14 }} />
                   </Link>
-                </div>
+                </section>
               )}
               <main className="theme-main">{children}</main>
               <LevelUpPopup />
