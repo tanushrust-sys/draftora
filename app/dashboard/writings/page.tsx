@@ -1511,6 +1511,27 @@ function WritingsContent() {
     }
   }, [profile?.id]);
 
+  const ensureJournalContent = useCallback(async (writing: Writing) => {
+    if (!profile?.id) return;
+    if ((writing.content ?? '').trim().length > 0) return;
+
+    const { data, error } = await supabase
+      .from('writings')
+      .select('*')
+      .eq('user_id', profile.id)
+      .eq('id', writing.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return;
+
+    const fullWriting = data as Writing;
+    setWritings((prev) => prev.map((row) => (row.id === fullWriting.id ? fullWriting : row)));
+    if (fullWriting.status === 'reviewed') {
+      setReviewedWritings((prev) => prev.map((row) => (row.id === fullWriting.id ? fullWriting : row)));
+    }
+  }, [profile?.id]);
+
   useEffect(() => {
     if (!profile?.id) return;
     if (hasAttemptedDraftRestoreRef.current) return;
