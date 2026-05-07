@@ -103,6 +103,7 @@ type ShopResponse = {
     equipped: boolean;
     item: {
       id: string;
+      slug: string;
       name: string;
       description: string;
       category: CosmeticCategory;
