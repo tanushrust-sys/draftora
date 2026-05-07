@@ -1590,7 +1590,7 @@ function WritingsContent() {
 
   const incrementWritingsCreated = useCallback(async () => {
     if (!profile?.id) return;
-    incrementProfileOverride(profile.id, { writings_created: 1 });
+    incrementProfileOverride(profile.id, 'writings_created', 1);
     try {
       await supabase.rpc('increment_profile_counter', {
         profile_id: profile.id,
