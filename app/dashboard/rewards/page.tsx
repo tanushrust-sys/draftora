@@ -290,7 +290,7 @@ export default function RewardsPage() {
 
   const runQueuedCosmeticMutation = useCallback(async (task: () => Promise<unknown>): Promise<unknown> => {
     const previous = cosmeticMutationQueue.current;
-    let release: (() => void) | null = null;
+    let release: () => void = () => {};
     cosmeticMutationQueue.current = new Promise<void>((resolve) => {
       release = resolve;
     });
@@ -299,7 +299,7 @@ export default function RewardsPage() {
     try {
       return await task();
     } finally {
-      release?.();
+      release();
     }
   }, []);
 
