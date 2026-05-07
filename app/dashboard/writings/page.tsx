@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense, startTransition, type KeyboardEvent, type ClipboardEvent } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
+import EditorThemeOverlay from '@/app/components/rewards/EditorThemeOverlay';
 import { fetchWithTimeout, FetchTimeoutError } from '@/app/lib/fetch-with-timeout';
 import { PromiseTimeoutError, withPromiseTimeout } from '@/app/lib/promise-with-timeout';
 import { ensureActiveSessionGracefully, supabase } from '@/app/lib/supabase';
@@ -16,7 +17,15 @@ import {
   removeStoredWritingHistory,
   upsertStoredWritingHistory,
 } from '@/app/lib/writing-history-storage';
-import { awardXP, getLocalDateKey, msUntilNextLocalMidnight, updateDailyStats, XP_REWARDS } from '@/app/lib/xp';
+import {
+  awardRewardEvent,
+  awardXP,
+  createIdempotencyKey,
+  getLocalDateKey,
+  msUntilNextLocalMidnight,
+  updateDailyStats,
+  XP_REWARDS,
+} from '@/app/lib/xp';
 import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import { buildAgeAwareProgressAnalysis, buildProgressScores } from '@/app/lib/progress-scoring';
@@ -53,7 +62,7 @@ type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_
 type AssistSuggestion = { type: 'tip' | 'example'; label: string; detail: string };
 type AssistResponse = { tips?: AssistSuggestion[]; examples?: AssistSuggestion[] };
 type WritingToolMode = 'ai' | 'grammar' | 'rewrite' | 'shorter' | 'stronger' | 'formal' | 'explain';
-type GrammarPanelItem = { label: string; count: number; detail: string };
+type GrammarPanelItem = { label: string; count: number; detail: string; issues: string[] };
 type GrammarAnalysis = {
   score: number;
   totalIssues: number;
@@ -614,6 +623,86 @@ function getFocusSentence(content: string, _selectedText?: string) {
   return getFocusSentenceResult(content).sentence;
 }
 
+function issueSnippet(text: string, index: number, matchLength: number, radius = 26) {
+  const start = Math.max(0, index - radius);
+  const end = Math.min(text.length, index + matchLength + radius);
+  const clipped = text.slice(start, end).replace(/\s+/g, ' ').trim();
+  const needsLeadingEllipsis = start > 0;
+  const needsTrailingEllipsis = end < text.length;
+  return `${needsLeadingEllipsis ? '…' : ''}${clipped}${needsTrailingEllipsis ? '…' : ''}`;
+}
+
+function pushUniqueIssue(target: string[], issue: string, limit = 4) {
+  if (!issue) return;
+  if (target.includes(issue)) return;
+  if (target.length >= limit) return;
+  target.push(issue);
+}
+
+function capitalizeSentenceStart(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getGrammarAreaSummary(label: string) {
+  if (label === 'Spelling') return 'Checks misspelled or commonly confused words.';
+  if (label === 'Grammar') return 'Checks sentence mechanics like capitalization and repeats.';
+  if (label === 'Punctuation') return 'Checks punctuation spacing, repeats, and sentence endings.';
+  if (label === 'Clarity') return 'Checks how specific and easy to follow your ideas are.';
+  if (label === 'Conciseness') return 'Checks for filler phrases and overly long wording.';
+  if (label === 'Formality') return 'Checks tone for more polished academic phrasing.';
+  return 'Checks writing quality and style patterns.';
+}
+
+function getGrammarIssueFix(label: string, issue: string) {
+  if (label === 'Spelling') {
+    const suggestion = issue.match(/Try "([^"]+)"/i)?.[1];
+    if (suggestion) return `Replace with "${suggestion}" and read the full sentence again.`;
+    return 'Fix spelling first, then reread for meaning and flow.';
+  }
+
+  if (label === 'Grammar') {
+    if (/Sentence starts lowercase/i.test(issue)) {
+      const snippet = issue.match(/"([^"]+)"/)?.[1];
+      if (snippet) {
+        const fixed = capitalizeSentenceStart(snippet);
+        return `Capitalize the first letter. Try: "${fixed}"`;
+      }
+      return 'Capitalize the first letter of the sentence.';
+    }
+    if (/Repeated word detected/i.test(issue)) return 'Delete one repeated word so the sentence reads once.';
+    if (/standalone "I"/i.test(issue)) return 'Use uppercase "I" whenever referring to yourself.';
+    return 'Check capitalization, repeated words, and sentence openings.';
+  }
+
+  if (label === 'Punctuation') {
+    if (/Extra space before punctuation/i.test(issue)) return 'Remove the space before punctuation marks.';
+    if (/Missing space after punctuation/i.test(issue)) return 'Add one space after punctuation before the next word.';
+    if (/Repeated punctuation/i.test(issue)) return 'Keep one punctuation mark unless emphasis is intentional.';
+    if (/missing final punctuation/i.test(issue)) return 'Add a final period, question mark, or exclamation mark.';
+    return 'Fix punctuation spacing and sentence endings for cleaner flow.';
+  }
+
+  if (label === 'Clarity') {
+    if (/Vague wording/i.test(issue)) return 'Replace vague words with specific nouns or precise verbs.';
+    if (/Long sentence may blur meaning/i.test(issue)) return 'Split this into two shorter sentences or remove extra clauses.';
+    return 'Make each sentence more specific and easier to understand.';
+  }
+
+  if (label === 'Conciseness') {
+    if (/Filler phrase detected/i.test(issue)) return 'Remove filler and keep only words that add meaning.';
+    if (/Consider splitting this long sentence/i.test(issue)) return 'Break the sentence into smaller parts with one idea each.';
+    return 'Trim extra wording and keep the strongest version of each idea.';
+  }
+
+  if (label === 'Formality') {
+    if (/Informal wording found/i.test(issue)) return 'Swap informal phrasing for precise, formal wording.';
+    return 'Use complete words and avoid slang or casual phrasing.';
+  }
+
+  return 'Revise this sentence once, then read it aloud to verify the fix.';
+}
+
 function analyzeGrammarAndStyle(content: string): GrammarAnalysis {
   const text = content.trim();
   if (!text) {
@@ -621,14 +710,14 @@ function analyzeGrammarAndStyle(content: string): GrammarAnalysis {
       score: 0,
       totalIssues: 0,
       corrections: [
-        { label: 'Spelling', count: 0, detail: 'No draft text to scan yet.' },
-        { label: 'Grammar', count: 0, detail: 'Start writing to check sentence mechanics.' },
-        { label: 'Punctuation', count: 0, detail: 'Punctuation scan begins once you write.' },
+        { label: 'Spelling', count: 0, detail: 'No draft text to scan yet.', issues: [] },
+        { label: 'Grammar', count: 0, detail: 'Start writing to check sentence mechanics.', issues: [] },
+        { label: 'Punctuation', count: 0, detail: 'Punctuation scan begins once you write.', issues: [] },
       ],
       refinements: [
-        { label: 'Clarity', count: 0, detail: 'Clarity notes will appear here.' },
-        { label: 'Conciseness', count: 0, detail: 'Conciseness notes will appear here.' },
-        { label: 'Formality', count: 0, detail: 'Tone notes will appear here.' },
+        { label: 'Clarity', count: 0, detail: 'Clarity notes will appear here.', issues: [] },
+        { label: 'Conciseness', count: 0, detail: 'Conciseness notes will appear here.', issues: [] },
+        { label: 'Formality', count: 0, detail: 'Tone notes will appear here.', issues: [] },
       ],
       strongestArea: 'Start drafting',
       focusArea: 'Write a few sentences first',
@@ -636,42 +725,146 @@ function analyzeGrammarAndStyle(content: string): GrammarAnalysis {
   }
 
   const sentences = getDraftSentences(text);
-  const longSentences = sentences.filter(sentence => countWords(sentence) >= 28).length;
-  const lowercaseSentenceStarts = sentences.filter(sentence => /^[a-z]/.test(sentence)).length;
-  const commonMisspellings = [
-    /\bteh\b/gi,
-    /\brecieve\b/gi,
-    /\bdefinately\b/gi,
-    /\bseperate\b/gi,
-    /\bgrammer\b/gi,
-    /\bpunctuotion\b/gi,
-    /\bwritting\b/gi,
-    /\bbecuase\b/gi,
-    /\balot\b/gi,
-    /\bthier\b/gi,
-  ].reduce((total, pattern) => total + countPattern(text, pattern), 0);
+  const longSentenceList = sentences.filter(sentence => countWords(sentence) >= 28);
+  const lowercaseStartSentenceList = sentences.filter(sentence => /^[a-z]/.test(sentence));
 
-  const spelling = commonMisspellings;
-  const grammar = countPattern(text, /\bi\b/g) +
-    countPattern(text, /\b(\w+)\s+\1\b/gi) +
-    lowercaseSentenceStarts;
-  const punctuation = countPattern(text, /\s+[,.;:!?]/g) +
-    countPattern(text, /[,.;:!?](?=\S)/g) +
-    countPattern(text, /([!?.,])\1+/g) +
-    (/[.!?]$/.test(text) ? 0 : 1);
-  const clarity = countPattern(text, /\b(thing|things|stuff|good|bad|nice|very|really|kind of|sort of)\b/gi) + longSentences;
-  const conciseness = countPattern(text, /\b(just|basically|actually|really|very|in order to|due to the fact that|there is|there are)\b/gi) + longSentences;
-  const formality = countPattern(text, /\b(can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|it's|i'm|that's|kids|stuff|gonna|wanna)\b/gi);
+  const spellingIssues: string[] = [];
+  const commonMisspellings: Array<{ pattern: RegExp; fix: string }> = [
+    { pattern: /\bteh\b/gi, fix: 'the' },
+    { pattern: /\brecieve\b/gi, fix: 'receive' },
+    { pattern: /\bdefinately\b/gi, fix: 'definitely' },
+    { pattern: /\bseperate\b/gi, fix: 'separate' },
+    { pattern: /\bgrammer\b/gi, fix: 'grammar' },
+    { pattern: /\bpunctuotion\b/gi, fix: 'punctuation' },
+    { pattern: /\bwritting\b/gi, fix: 'writing' },
+    { pattern: /\bbecuase\b/gi, fix: 'because' },
+    { pattern: /\balot\b/gi, fix: 'a lot' },
+    { pattern: /\bthier\b/gi, fix: 'their' },
+  ];
+  let spelling = 0;
+  for (const { pattern, fix } of commonMisspellings) {
+    const matches = Array.from(text.matchAll(pattern));
+    spelling += matches.length;
+    if (matches.length > 0) {
+      const sample = matches[0][0];
+      pushUniqueIssue(spellingIssues, `"${sample}" may be misspelled. Try "${fix}".`);
+    }
+  }
+
+  const lowercaseIMatches = Array.from(text.matchAll(/\bi\b/g));
+  const repeatedWordMatches = Array.from(text.matchAll(/\b(\w+)\s+\1\b/gi));
+  const grammar = lowercaseIMatches.length + repeatedWordMatches.length + lowercaseStartSentenceList.length;
+  const grammarIssues: string[] = [];
+  if (lowercaseIMatches.length > 0) {
+    pushUniqueIssue(grammarIssues, 'Capitalize standalone "I" when referring to yourself.');
+  }
+  for (const match of repeatedWordMatches.slice(0, 2)) {
+    const repeatedWord = match[1];
+    pushUniqueIssue(grammarIssues, `Repeated word detected: "${repeatedWord} ${repeatedWord}".`);
+  }
+  for (const sentence of lowercaseStartSentenceList.slice(0, 2)) {
+    pushUniqueIssue(grammarIssues, `Sentence starts lowercase: "${sentence.slice(0, 70).trim()}${sentence.length > 70 ? '…' : ''}"`);
+  }
+
+  const punctuationIssues: string[] = [];
+  const spacingBeforePunctuationMatches = Array.from(text.matchAll(/\s+[,.;:!?]/g));
+  const noSpaceAfterPunctuationMatches = Array.from(text.matchAll(/[,.;:!?](?=\S)/g));
+  const repeatedPunctuationMatches = Array.from(text.matchAll(/([!?.,])\1+/g));
+  const missingEndingPunctuation = !/[.!?]$/.test(text);
+  const punctuation =
+    spacingBeforePunctuationMatches.length +
+    noSpaceAfterPunctuationMatches.length +
+    repeatedPunctuationMatches.length +
+    (missingEndingPunctuation ? 1 : 0);
+
+  for (const match of spacingBeforePunctuationMatches.slice(0, 2)) {
+    pushUniqueIssue(
+      punctuationIssues,
+      `Extra space before punctuation near "${issueSnippet(text, match.index ?? 0, match[0].length)}"`,
+    );
+  }
+  for (const match of noSpaceAfterPunctuationMatches.slice(0, 2)) {
+    pushUniqueIssue(
+      punctuationIssues,
+      `Missing space after punctuation near "${issueSnippet(text, match.index ?? 0, match[0].length)}"`,
+    );
+  }
+  for (const match of repeatedPunctuationMatches.slice(0, 2)) {
+    pushUniqueIssue(
+      punctuationIssues,
+      `Repeated punctuation "${match[0]}" near "${issueSnippet(text, match.index ?? 0, match[0].length)}"`,
+    );
+  }
+  if (missingEndingPunctuation) {
+    pushUniqueIssue(punctuationIssues, 'Draft ending is missing final punctuation.');
+  }
+
+  const vagueWordMatches = Array.from(text.matchAll(/\b(thing|things|stuff|good|bad|nice|very|really|kind of|sort of)\b/gi));
+  const clarity = vagueWordMatches.length + longSentenceList.length;
+  const clarityIssues: string[] = [];
+  for (const match of vagueWordMatches.slice(0, 3)) {
+    pushUniqueIssue(clarityIssues, `Vague wording: "${match[0]}" can be more specific.`);
+  }
+  for (const sentence of longSentenceList.slice(0, 2)) {
+    pushUniqueIssue(clarityIssues, `Long sentence may blur meaning: "${sentence.slice(0, 80).trim()}${sentence.length > 80 ? '…' : ''}"`);
+  }
+
+  const fillerMatches = Array.from(text.matchAll(/\b(just|basically|actually|really|very|in order to|due to the fact that|there is|there are)\b/gi));
+  const conciseness = fillerMatches.length + longSentenceList.length;
+  const concisenessIssues: string[] = [];
+  for (const match of fillerMatches.slice(0, 3)) {
+    pushUniqueIssue(concisenessIssues, `Filler phrase detected: "${match[0]}".`);
+  }
+  for (const sentence of longSentenceList.slice(0, 2)) {
+    pushUniqueIssue(concisenessIssues, `Consider splitting this long sentence: "${sentence.slice(0, 80).trim()}${sentence.length > 80 ? '…' : ''}"`);
+  }
+
+  const formalityMatches = Array.from(text.matchAll(/\b(can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|it's|i'm|that's|kids|stuff|gonna|wanna)\b/gi));
+  const formality = formalityMatches.length;
+  const formalityIssues: string[] = [];
+  for (const match of formalityMatches.slice(0, 4)) {
+    pushUniqueIssue(formalityIssues, `Informal wording found: "${match[0]}".`);
+  }
 
   const corrections: GrammarPanelItem[] = [
-    { label: 'Spelling', count: spelling, detail: spelling ? 'Possible misspellings or commonly confused words.' : 'No obvious spelling issues found.' },
-    { label: 'Grammar', count: grammar, detail: grammar ? 'Check repeated words, lowercase I, or sentence starts.' : 'Grammar mechanics look clean.' },
-    { label: 'Punctuation', count: punctuation, detail: punctuation ? 'Check spacing, repeated marks, or ending punctuation.' : 'Punctuation spacing looks clean.' },
+    {
+      label: 'Spelling',
+      count: spelling,
+      detail: spelling ? 'Possible misspellings or commonly confused words.' : 'No obvious spelling issues found.',
+      issues: spellingIssues,
+    },
+    {
+      label: 'Grammar',
+      count: grammar,
+      detail: grammar ? 'Check repeated words, lowercase I, or sentence starts.' : 'Grammar mechanics look clean.',
+      issues: grammarIssues,
+    },
+    {
+      label: 'Punctuation',
+      count: punctuation,
+      detail: punctuation ? 'Check spacing, repeated marks, or ending punctuation.' : 'Punctuation spacing looks clean.',
+      issues: punctuationIssues,
+    },
   ];
   const refinements: GrammarPanelItem[] = [
-    { label: 'Clarity', count: clarity, detail: clarity ? 'Some words or sentences may be too vague or long.' : 'Ideas are reading clearly.' },
-    { label: 'Conciseness', count: conciseness, detail: conciseness ? 'Trim filler phrases or split long sentences.' : 'No major wordiness flags.' },
-    { label: 'Formality', count: formality, detail: formality ? 'Consider more polished wording for formal tasks.' : 'Tone looks appropriate.' },
+    {
+      label: 'Clarity',
+      count: clarity,
+      detail: clarity ? 'Some words or sentences may be too vague or long.' : 'Ideas are reading clearly.',
+      issues: clarityIssues,
+    },
+    {
+      label: 'Conciseness',
+      count: conciseness,
+      detail: conciseness ? 'Trim filler phrases or split long sentences.' : 'No major wordiness flags.',
+      issues: concisenessIssues,
+    },
+    {
+      label: 'Formality',
+      count: formality,
+      detail: formality ? 'Consider more polished wording for formal tasks.' : 'Tone looks appropriate.',
+      issues: formalityIssues,
+    },
   ];
   const totalIssues = [...corrections, ...refinements].reduce((total, item) => total + item.count, 0);
   const correctionPenalty = corrections.reduce((total, item) => total + item.count, 0) * 7;
@@ -836,6 +1029,59 @@ function getEditorBackupKey(userId: string) {
 
 function getEditorPreferenceKey(userId: string) {
   return `draftora:writing-editor-preference:${userId}`;
+}
+
+function parseEditorBackup(rawBackup: string): EditorBackup | null {
+  try {
+    const parsed = JSON.parse(rawBackup) as EditorBackup;
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const toOptionalNullableString = (value: unknown) =>
+      value === null ? null : (typeof value === 'string' ? value : undefined);
+
+    const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
+
+    return {
+      writingId: toOptionalNullableString(parsed.writingId),
+      title: toOptionalNullableString(parsed.title),
+      content: toOptionalNullableString(parsed.content),
+      prompt: toOptionalNullableString(parsed.prompt),
+      category: toOptionalNullableString(parsed.category),
+      updatedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readEditorBackup(userId: string | undefined | null) {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    const rawBackup = window.localStorage.getItem(getEditorBackupKey(userId));
+    if (!rawBackup) return null;
+    return parseEditorBackup(rawBackup);
+  } catch {
+    return null;
+  }
+}
+
+function persistEditorBackup(userId: string | undefined | null, nextBackup: EditorBackup) {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      getEditorBackupKey(userId),
+      JSON.stringify({
+        writingId: nextBackup.writingId ?? null,
+        title: nextBackup.title ?? null,
+        content: nextBackup.content ?? null,
+        prompt: nextBackup.prompt ?? null,
+        category: nextBackup.category ?? null,
+        updatedAt: nextBackup.updatedAt ?? new Date().toISOString(),
+      } satisfies EditorBackup),
+    );
+  } catch {
+    // Backup save is best-effort only.
+  }
 }
 
 function parseEditorPreference(rawPreference: string): EditorPreference | null {
@@ -1119,7 +1365,7 @@ function WritingsContent() {
   const [status, setStatus]     = useState<'idle' | 'saving' | 'submitting' | 'reviewing' | 'done'>('idle');
   const [feedback, setFeedback] = useState<WritingFeedback | null>(null);
   const [writingId, setWritingId] = useState<string | null>(null);
-  const [wordCount, setWordCount] = useState(0);
+  const wordCount = useMemo(() => countWords(content), [content]);
   const [xpEarned, setXpEarned]  = useState(0);
   const [error, setError]        = useState('');
   const [aiAssistOpen, setAiAssistOpen] = useState(false);
@@ -1130,6 +1376,7 @@ function WritingsContent() {
   const [aiAssistResultSignature, setAiAssistResultSignature] = useState('');
   const [toolNotice, setToolNotice] = useState('');
   const [activeWritingTool, setActiveWritingTool] = useState<WritingToolMode>('grammar');
+  const [selectedGrammarLabel, setSelectedGrammarLabel] = useState<string | null>(null);
   const [editorSelection, setEditorSelection] = useState<{ start: number; end: number; text: string }>({ start: 0, end: 0, text: '' });
   const [todayWords, setTodayWords] = useState(0);
   const [weekWords, setWeekWords]   = useState(0);
@@ -1143,9 +1390,6 @@ function WritingsContent() {
   const [timerSetupMinutes, setTimerSetupMinutes] = useState(15);
   const [timerSetupSeconds, setTimerSetupSeconds] = useState(0);
   const [reactionGifCard, setReactionGifCard] = useState<{ kind: 'encourage' | 'success'; src: string } | null>(null);
-  // (daily limit removed — users can write unlimited pieces per day up to their total cap)
-
-  // ── Journal tab state ──
   const [writings, setWritings] = useState<Writing[]>([]);
   const [journalLoading, setJournalLoading] = useState(false);
   const [journalError, setJournalError] = useState('');
@@ -1156,8 +1400,6 @@ function WritingsContent() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showFeedbackId, setShowFeedbackId] = useState<string | null>(null);
   const [expandedContentLoadingId, setExpandedContentLoadingId] = useState<string | null>(null);
-
-  // ── Progress tab state ──
   const [progressScores, setProgressScores] = useState<{ id: string; score: number; note: string }[]>([]);
   const [progressAnalysis, setProgressAnalysis] = useState<{
     summary: string; strengths: string[]; areasToImprove: string[];
@@ -1170,7 +1412,7 @@ function WritingsContent() {
   const [reviewedWritings, setReviewedWritings] = useState<Writing[]>([]);
   const [progressRefreshToken, setProgressRefreshToken] = useState(0);
   const progressLoadInFlight = useRef(false);
-  const aiAnalysisFetched = useRef<string | null>(null); // tracks last fetched writing IDs hash
+  const aiAnalysisFetched = useRef<string | null>(null);
   const hasAutoExpandedRef = useRef(false);
   const hasAttemptedDraftRestoreRef = useRef(false);
   const restoringDraftRef = useRef(false);
@@ -1204,6 +1446,8 @@ function WritingsContent() {
   const todayWordsAtSubmitStartRef = useRef(0);
   const encourageGifCursorRef = useRef(0);
   const successGifCursorRef = useRef(0);
+  const journalReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBackupSignatureRef = useRef('');
 
   const shuffledEncourageGifs = useMemo(() => {
     const deck = [...ENCOURAGE_GIFS];
@@ -1223,980 +1467,213 @@ function WritingsContent() {
     return deck;
   }, []);
 
-  const switchTab = useCallback((nextTab: ActiveTab) => {
-    startTransition(() => {
-      setActiveTab(nextTab);
-    });
-    if (typeof window === 'undefined') return;
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-    if (nextTab === 'write') nextParams.delete('tab');
-    else nextParams.set('tab', nextTab);
-
-    const nextQuery = nextParams.toString();
-    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
-    router.replace(nextUrl, { scroll: false });
-  }, [pathname, router, searchParams]);
-
   const clearPromptContextFromUrl = useCallback(() => {
-    const nextParams = new URLSearchParams(searchParams.toString());
-    const hadPromptContext = nextParams.has('prompt') || nextParams.has('category');
-    if (!hadPromptContext) return;
+    const current = searchParams?.toString() ?? '';
+    if (!current) return;
 
+    const nextParams = new URLSearchParams(current);
     nextParams.delete('prompt');
     nextParams.delete('category');
-    const nextQuery = nextParams.toString();
-    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
-    router.replace(nextUrl, { scroll: false });
+    nextParams.delete('style');
+    nextParams.delete('source');
+
+    const next = nextParams.toString();
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
-  const incrementWritingsCreated = useCallback(async () => {
-    if (!profile) return;
-
-    try {
-      const nextCount = (profile.writings_created ?? 0) + 1;
-      incrementProfileOverride(profile.id, 'writings_created', 1);
-      await withPromiseTimeout(
-        supabase.from('profiles')
-          .update({ writings_created: nextCount })
-          .eq('id', profile.id),
-        PROFILE_REFRESH_TIMEOUT_MS,
-        'Updating the writings counter took too long.',
-      );
-      await withPromiseTimeout(
-        refreshProfile(),
-        PROFILE_REFRESH_TIMEOUT_MS,
-        'Refreshing your profile took too long.',
-      );
-    } catch {
-      // Keep the writing saved even if the lifetime counter fails to refresh.
-    }
-  }, [profile, refreshProfile]);
-
   const syncStoredWriting = useCallback((writing: Writing) => {
-    if (!profile) return;
+    if (!profile?.id) return;
     upsertStoredWritingHistory(profile.id, writing);
-  }, [profile]);
+  }, [profile?.id]);
 
-  const restoreLatestInProgressDraft = useCallback(async () => {
-    if (!profile) return;
-    if (restoringDraftRef.current) return;
-    if (writingId || content.trim() || feedback || status !== 'idle') return;
-    restoringDraftRef.current = true;
-
-    const applyDraft = (draft: {
-      id?: string | null;
-      title?: string | null;
-      content?: string | null;
-      prompt?: string | null;
-      category?: string | null;
-    }) => {
-      const preferredEditorPreference = readEditorPreference(profile.id);
-      const preferredCategory = preferredEditorPreference?.category || null;
-      const preferredPrompt = preferredEditorPreference?.prompt || null;
-      const nextCategory = draft.category || preferredCategory || 'Creative Story';
-      const resolvedPrompt = (draft.prompt || '').trim()
-        || (
-          preferredPrompt &&
-          preferredCategory === nextCategory
-            ? preferredPrompt
-            : resolvePromptForCategory(nextCategory, profile.age_group ?? undefined)
-        );
-      setTitle(draft.title || '');
-      setContent(draft.content || '');
-      setCategory(nextCategory);
-      setPrompt(resolvedPrompt);
-      setWritingId(draft.id ?? null);
-      lastSavedDraftSignatureRef.current = buildDraftSignature({
-        title: draft.title || 'Untitled Draft',
-        content: draft.content || '',
-        prompt: resolvedPrompt,
-        category: nextCategory,
-      });
-    };
-
+  const loadJournal = useCallback(async () => {
+    if (!profile?.id) return;
+    setJournalLoading(true);
+    setJournalError('');
     try {
-      const localBackupRaw = window.localStorage.getItem(getEditorBackupKey(profile.id));
-      let localBackup: EditorBackup | null = null;
-      const todayKey = getLocalDateKey();
-
-      if (localBackupRaw) {
-        try {
-          const parsed = JSON.parse(localBackupRaw) as EditorBackup;
-          const backupDateKey = parsed?.updatedAt ? getLocalDateKey(new Date(parsed.updatedAt)) : '';
-          const isBackupFromToday = backupDateKey === todayKey;
-          if (parsed?.content && parsed.content.trim() && isBackupFromToday) {
-            localBackup = parsed;
-          } else if (!isBackupFromToday) {
-            window.localStorage.removeItem(getEditorBackupKey(profile.id));
-          }
-        } catch {
-          // Ignore malformed local backup.
-        }
-      }
-
-      let localAppliedSignature: string | null = null;
-      if (localBackup) {
-        applyDraft({
-          id: localBackup.writingId ?? null,
-          title: localBackup.title ?? '',
-          content: localBackup.content ?? '',
-          prompt: localBackup.prompt ?? '',
-          category: localBackup.category ?? 'Creative Story',
-        });
-        localAppliedSignature = buildDraftSignature({
-          title: localBackup.title || 'Untitled Draft',
-          content: localBackup.content || '',
-          prompt: localBackup.prompt || '',
-          category: localBackup.category || 'Creative Story',
-        });
-      }
-
-      let cloudDraft: Writing | null = null;
-      try {
-        const { data, error } = await supabase
-          .from('writings')
-          .select('id,title,content,prompt,category,status,word_count,feedback,strengths,improvements,created_at,updated_at')
-          .eq('user_id', profile.id)
-          .eq('status', 'in_progress')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (!error && data?.content?.trim()) {
-          const draftDateKey = getLocalDateKey(new Date(data.updated_at || data.created_at || ''));
-          if (draftDateKey === todayKey) {
-            cloudDraft = data as Writing;
-          } else {
-            // Expire stale in-progress drafts from previous days.
-            await supabase
-              .from('writings')
-              .delete()
-              .eq('id', data.id)
-              .eq('user_id', profile.id)
-              .eq('status', 'in_progress');
-          }
-        }
-      } catch {
-        // Ignore cloud errors and use local fallback.
-      }
-
-      if (cloudDraft && localBackup) {
-        const currentEditorSignature = buildDraftSignature({
-          title: latestEditorStateRef.current.title || 'Untitled Draft',
-          content: latestEditorStateRef.current.content || '',
-          prompt: latestEditorStateRef.current.prompt || '',
-          category: latestEditorStateRef.current.category || 'Creative Story',
-        });
-        if (localAppliedSignature && currentEditorSignature !== localAppliedSignature) {
-          return;
-        }
-
-        const cloudUpdatedAt = Date.parse(cloudDraft.updated_at || cloudDraft.created_at || '');
-        const localUpdatedAt = Date.parse(localBackup.updatedAt || '');
-        if (!Number.isFinite(localUpdatedAt) || cloudUpdatedAt > localUpdatedAt) {
-          applyDraft(cloudDraft);
-        }
-        return;
-      }
-
-      if (cloudDraft) {
-        applyDraft(cloudDraft);
-        return;
-      }
+      const { data, error } = await supabase
+        .from('writings')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      const rows = (data ?? []) as Writing[];
+      setWritings(rows);
+      setReviewedWritings(rows.filter((row) => row.status === 'reviewed'));
+    } catch (journalLoadError) {
+      const message = journalLoadError instanceof Error ? journalLoadError.message : 'Could not load journal.';
+      setJournalError(message);
+      const fallbackRows = readStoredWritingHistory(profile.id);
+      setWritings(fallbackRows as Writing[]);
+      setReviewedWritings((fallbackRows as Writing[]).filter((row) => row.status === 'reviewed'));
     } finally {
-      restoringDraftRef.current = false;
+      setJournalLoading(false);
     }
-  }, [content, feedback, profile, status, writingId]);
+  }, [profile?.id]);
 
-  const grantWritingSubmitRewards = useCallback(async () => {
-    if (!profile || writingRewardsGrantedRef.current) return;
+  useEffect(() => {
+    if (!profile?.id) return;
+    if (hasAttemptedDraftRestoreRef.current) return;
+    hasAttemptedDraftRestoreRef.current = true;
 
-    try {
-      const ratio = uniqueWordRatio(content);
-      const effectiveWords = ratio >= 0.35 ? wordCount : Math.round(wordCount * (ratio / 0.35));
+    const backup = readEditorBackup(profile.id);
+    if (!backup) return;
 
-      await awardXP(profile.id, XP_REWARDS.WRITING_SUBMIT, 'Completed writing session');
-      await awardXP(profile.id, XP_REWARDS.AI_FEEDBACK, 'Received AI feedback');
-      await updateDailyStats(profile.id, {
-        words_written: effectiveWords,
-        writings_completed: 1,
-        xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK,
+    const hasAnyCurrentDraft = Boolean((title || '').trim() || (content || '').trim() || writingId);
+    if (hasAnyCurrentDraft) return;
+
+    if (typeof backup.title === 'string') setTitle(backup.title);
+    if (typeof backup.content === 'string') setContent(backup.content);
+    if (typeof backup.prompt === 'string') setPrompt(backup.prompt);
+    if (typeof backup.category === 'string' && CATEGORIES.includes(backup.category)) setCategory(backup.category);
+    if (typeof backup.writingId === 'string') setWritingId(backup.writingId);
+  }, [content, profile?.id, title, writingId]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const signature = buildDraftSignature({
+      title: title || '',
+      content: content || '',
+      prompt: prompt || '',
+      category: category || '',
+    });
+    if (signature === lastBackupSignatureRef.current) return;
+    lastBackupSignatureRef.current = signature;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null;
+      persistEditorBackup(profile.id, {
+        writingId,
+        title: title || null,
+        content: content || null,
+        prompt: prompt || null,
+        category: category || null,
+        updatedAt: new Date().toISOString(),
       });
-      writingRewardsGrantedRef.current = true;
-      void persistWritingExperienceScore(
-        profile.id,
-        (readWritingExperienceOverride(profile.id) ?? profile.writing_experience_score ?? 0) + getExperienceIncreaseForAction('writing'),
-      ).catch(() => {});
-      await withPromiseTimeout(
-        refreshProfile(),
-        PROFILE_REFRESH_TIMEOUT_MS,
-        'Refreshing your profile took too long.',
-      ).catch(() => {});
-      setTodayWords(prev => prev + effectiveWords);
-      setWeekWords(prev => prev + effectiveWords);
-    } catch (sideEffectError) {
-      logSafeError('grantWritingSubmitRewards error:', sideEffectError);
-    }
-  }, [content, profile, refreshProfile, wordCount]);
+    }, 250);
 
-  const recoverTimedOutWriting = useCallback(async (fallbackTitle: string) => {
-    if (!profile || !content.trim()) return null;
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [category, content, profile?.id, prompt, title, writingId]);
 
+  const debouncedLoadJournal = useCallback(() => {
+    if (journalReloadTimerRef.current) clearTimeout(journalReloadTimerRef.current);
+    journalReloadTimerRef.current = setTimeout(() => {
+      journalReloadTimerRef.current = null;
+      void loadJournal();
+    }, 220);
+  }, [loadJournal]);
+
+  const recoverTimedOutWritingWithRetry = useCallback(async (fallbackTitle: string) => {
+    if (!profile?.id) return null;
     try {
       const { data, error } = await supabase
         .from('writings')
         .select('*')
         .eq('user_id', profile.id)
         .eq('title', fallbackTitle)
-        .eq('content', content)
-        .eq('category', category)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-
-      if (error || !data) return null;
-      return data as Writing;
+      if (error) return null;
+      return (data ?? null) as Writing | null;
     } catch {
       return null;
     }
-  }, [profile, content, category]);
-
-  const recoverTimedOutWritingWithRetry = useCallback(async (fallbackTitle: string) => {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const recovered = await recoverTimedOutWriting(fallbackTitle);
-      if (recovered) return recovered;
-      if (attempt < 3) {
-        await wait(2000);
-      }
-    }
-    return null;
-  }, [recoverTimedOutWriting]);
-
-  // ── Read URL params without overriding an already-restored draft ──
-  useEffect(() => {
-    const p = searchParams.get('prompt');
-    const c = searchParams.get('category');
-    const hasExplicitPrompt = Boolean(p);
-    const hasExplicitCategory = Boolean(c);
-    const hasActiveDraftState = Boolean(writingId || content.trim() || title.trim() || feedback);
-
-    if (!hasExplicitPrompt && !hasExplicitCategory) {
-      setActiveTab(getRequestedTab(searchParams));
-      return;
-    }
-
-    // If there is already draft/editor state, never let stale URL prompt/category
-    // override the in-editor category/prompt selection.
-    if (hasActiveDraftState) {
-      setActiveTab(getRequestedTab(searchParams));
-      return;
-    }
-
-    const savedPreference = profile ? readEditorPreference(profile.id) : null;
-    const savedCategory = (savedPreference?.category || '').trim();
-    const savedPrompt = (savedPreference?.prompt || '').trim();
-    const hasSavedPreference = Boolean(savedCategory && CATEGORIES.includes(savedCategory));
-    if (hasSavedPreference) {
-      setCategory(savedCategory);
-      setPrompt(savedPrompt || resolvePromptForCategory(savedCategory, profile?.age_group ?? undefined));
-      setActiveTab(getRequestedTab(searchParams));
-
-      if (hasExplicitPrompt || hasExplicitCategory) {
-        const nextParams = new URLSearchParams(searchParams.toString());
-        nextParams.delete('prompt');
-        nextParams.delete('category');
-        const nextQuery = nextParams.toString();
-        const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
-        router.replace(nextUrl, { scroll: false });
-      }
-      return;
-    }
-
-    const resolvedCategory = c ? decodeURIComponent(c) : 'Creative Story';
-
-    setCategory(resolvedCategory);
-    setPrompt(
-      resolvedCategory === FREE_WRITING_CATEGORY
-        ? FREE_WRITING_PROMPT
-        : (p ? decodeURIComponent(p) : resolvePromptForCategory(resolvedCategory, profile?.age_group ?? undefined)),
-    );
-    setActiveTab(getRequestedTab(searchParams));
-  }, [profile, profile?.age_group, searchParams, writingId, content, title, feedback, pathname, router]);
-
-  useEffect(() => {
-    const hasPromptContext = searchParams.has('prompt') || searchParams.has('category');
-    const hasDraftState = Boolean(writingId || content.trim() || title.trim() || feedback);
-    if (!hasPromptContext || !hasDraftState) return;
-
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete('prompt');
-    nextParams.delete('category');
-    const nextQuery = nextParams.toString();
-    const nextUrl = `${pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
-    router.replace(nextUrl, { scroll: false });
-  }, [searchParams, writingId, content, title, feedback, pathname, router]);
-
-  useEffect(() => {
-    if (!content.trim()) return;
-    if (!searchParams.has('prompt') && !searchParams.has('category')) return;
-    clearPromptContextFromUrl();
-  }, [content, searchParams, clearPromptContextFromUrl]);
-
-  useEffect(() => {
-    if (searchParams.get('prompt')) return;
-    if (writingId || content.trim() || title.trim() || feedback) return;
-
-    const savedPreference = profile ? readEditorPreference(profile.id) : null;
-    const savedCategory = (savedPreference?.category || '').trim();
-    const savedPrompt = (savedPreference?.prompt || '').trim();
-    if (categoryPreferenceHydratedRef.current && savedPrompt && savedCategory === category) {
-      setPrompt(savedPrompt);
-      return;
-    }
-
-    setPrompt(resolvePromptForCategory(category, profile?.age_group ?? undefined));
-  }, [category, profile?.age_group, profile?.id, searchParams, writingId, content, title, feedback]);
-
-  // ── Live word count ──
-  useEffect(() => {
-    setWordCount(countWords(content));
-  }, [content]);
-
-  useEffect(() => {
-    if (!profile || profile.account_type !== 'student') {
-      setTodayHomework(null);
-      setHomeworkError('');
-    }
-  }, [profile]);
-
-  const loadTodayHomeworkSnapshot = useCallback(async (silent = false) => {
-    if (!profile || profile.account_type !== 'student') {
-      setTodayHomework(null);
-      if (!silent) setHomeworkError('');
-      return;
-    }
-    if (!silent) setHomeworkError('');
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token ?? '';
-      if (!token) throw new Error('Missing session.');
-      const res = await authFetchJson<StudentHomeworkResponse>(`/api/homework?_ts=${Date.now()}`, { token });
-      setTodayHomework(res);
-    } catch (err) {
-      if (!silent) {
-        setTodayHomework(null);
-        setHomeworkError(err instanceof Error ? err.message : 'Could not load homework.');
-      }
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    void loadTodayHomeworkSnapshot(false);
-  }, [loadTodayHomeworkSnapshot]);
-
-  useEffect(() => {
-    if (!profile || profile.account_type !== 'student') return;
-    const interval = setInterval(() => {
-      void loadTodayHomeworkSnapshot(true);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [profile, loadTodayHomeworkSnapshot]);
-
-  useEffect(() => {
-    if (!profile || profile.account_type !== 'student' || typeof window === 'undefined') return;
-    const onFocus = () => {
-      void loadTodayHomeworkSnapshot(true);
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') void loadTodayHomeworkSnapshot(true);
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [profile, loadTodayHomeworkSnapshot]);
-
-  // ── Load daily + weekly progress ──
-  const loadProgress = useCallback(async () => {
-    if (!profile) return;
-    const today = getLocalDateKey();
-    // Week starts on Monday
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
-    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const monday = new Date(now);
-    monday.setDate(monday.getDate() - mondayOffset);
-    monday.setHours(0, 0, 0, 0);
-
-    // Fetch today + week stats in parallel
-    const [todayResult, weekResult] = await Promise.all([
-      supabase.from('daily_stats').select('words_written')
-        .eq('user_id', profile.id).eq('date', today).single(),
-      supabase.from('daily_stats').select('words_written')
-        .eq('user_id', profile.id).gte('date', getLocalDateKey(monday)),
-    ]);
-
-    setTodayWords(todayResult.data?.words_written ?? 0);
-    setWeekWords((weekResult.data || []).reduce((s, d) => s + d.words_written, 0));
-  }, [profile]);
-
-  useEffect(() => { loadProgress(); }, [loadProgress]);
-
-  useEffect(() => {
-    latestEditorStateRef.current = {
-      title,
-      content,
-      prompt,
-      category,
-    };
-  }, [title, content, prompt, category]);
-
-  useEffect(() => {
-    hasAttemptedDraftRestoreRef.current = false;
-    categoryPreferenceHydratedRef.current = false;
-    skipNextPreferencePersistRef.current = false;
   }, [profile?.id]);
 
-  useEffect(() => {
-    if (!profile) return;
-    if (categoryPreferenceHydratedRef.current) return;
-
+  const incrementWritingsCreated = useCallback(async () => {
+    if (!profile?.id) return;
+    incrementProfileOverride(profile.id, { writings_created: 1 });
     try {
-      const savedPreference = readEditorPreference(profile.id);
-      const preferredCategory = savedPreference?.category;
-      if (preferredCategory) {
-        const preferredPrompt = (savedPreference?.prompt || '').trim();
-        // Prevent the immediate post-hydration persist cycle from writing stale
-        // initial state (Creative Story) before these state updates apply.
-        skipNextPreferencePersistRef.current = true;
-        setCategory(preferredCategory);
-        setPrompt(
-          preferredPrompt || resolvePromptForCategory(preferredCategory, profile.age_group ?? undefined),
-        );
-      }
+      await supabase.rpc('increment_profile_counter', {
+        profile_id: profile.id,
+        field_name: 'writings_created',
+        amount: 1,
+      });
     } catch {
-      // Ignore malformed local preferences.
-    } finally {
-      categoryPreferenceHydratedRef.current = true;
+      // Best-effort only.
     }
-  }, [profile]);
+  }, [profile?.id]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadProgress();
-    }, msUntilNextLocalMidnight() + 1000);
-    return () => clearTimeout(timer);
-  }, [loadProgress, profile?.id]);
+  const loadProgress = useCallback(() => {
+    const reviewed = writings.filter((row) => row.status === 'reviewed');
+    setReviewedWritings(reviewed);
+    setProgressScores(
+      reviewed.map((row) => ({
+        id: row.id,
+        score: buildProgressScores(row).overall,
+        note: row.feedback || 'Reviewed',
+      })),
+    );
+  }, [writings]);
 
-  // ── Load journal writings ──
-  const loadJournal = useCallback(async () => {
-    if (!profile) return;
-    const storedWritings = readStoredWritingHistory(profile.id);
-    if (storedWritings.length > 0) {
-      setWritings(storedWritings);
-      setJournalError('');
-      setJournalLoading(false);
-    } else {
-      setJournalLoading(true);
-    }
-
-    const { controller, timeoutId } = createAbortController(JOURNAL_LOAD_TIMEOUT_MS);
-
-    try {
-      const { data, error } = await supabase
-        .from('writings')
-        .select('id,title,prompt,category,status,word_count,feedback,strengths,improvements,is_favorite,created_at,updated_at,xp_earned')
-        .eq('user_id', profile.id)
-        .order('created_at', { ascending: false })
-        .abortSignal(controller.signal);
-
-      if (error) throw error;
-
-      const storedById = new Map(storedWritings.map(writing => [writing.id, writing] as const));
-      const merged = mergeStoredWritingHistory(profile.id, (data || []).map((writing) => ({
-        ...writing,
-        content: storedById.get(writing.id)?.content ?? '',
-      })) as Writing[]);
-      setWritings(merged);
-      setJournalError('');
-
-      if (!hasAutoExpandedRef.current) {
-        const todayStr = getLocalDateKey();
-        const todayEntry = merged.find(w => w.created_at.startsWith(todayStr) && ['submitted', 'reviewed'].includes(w.status));
-        if (todayEntry) {
-          hasAutoExpandedRef.current = true;
-          setExpanded(todayEntry.id);
-          setShowFeedbackId(todayEntry.id);
-        }
-      }
-    } catch (error) {
-      if (isAbortLikeError(error)) {
-        setWritings(storedWritings);
-        setJournalError(
-          storedWritings.length > 0
-            ? 'Showing journal history saved on this device while cloud sync catches up.'
-            : 'Loading your journal took too long. Please try again in a moment.',
-        );
-        return;
-      }
-      logSafeError('loadJournal error:', error);
-      setWritings(storedWritings);
-      setJournalError(
-        storedWritings.length > 0
-          ? 'Showing journal history saved on this device while cloud sync catches up.'
-          : 'We could not load your journal right now. Please refresh or try again in a moment.',
-      );
-    } finally {
-      clearTimeout(timeoutId);
-      setJournalLoading(false);
-    }
-  }, [profile]);
-
-  // Debounced journal reload — avoids hammering Supabase after every write operation
-  const ensureJournalContent = useCallback(async (writing: Writing) => {
-    if (!profile || writing.content.trim()) return writing.content;
-
-    const { data, error } = await supabase
-      .from('writings')
-      .select('content,updated_at')
-      .eq('user_id', profile.id)
-      .eq('id', writing.id)
-      .single();
-
-    if (error) throw error;
-
-    const nextWriting = {
-      ...writing,
-      content: data?.content ?? '',
-      updated_at: data?.updated_at ?? writing.updated_at,
-    };
-
-    setWritings(prev => prev.map(item => item.id === writing.id ? nextWriting : item));
-    syncStoredWriting(nextWriting);
-    return nextWriting.content;
-  }, [profile, syncStoredWriting]);
-
-  const journalReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedLoadJournal = useCallback(() => {
-    if (journalReloadTimer.current) clearTimeout(journalReloadTimer.current);
-    journalReloadTimer.current = setTimeout(() => { void loadJournal(); }, 2000);
-  }, [loadJournal]);
-
-  useEffect(() => {
-    if (activeTab === 'journal' && profile && !journalLoadedRef.current) {
-      journalLoadedRef.current = true;
-      void loadJournal();
-    }
-  }, [activeTab, loadJournal, profile]);
-
-  useEffect(() => {
-    if (activeTab !== 'write') return;
-    if (!profile) return;
-    if (hasAttemptedDraftRestoreRef.current) return;
-    hasAttemptedDraftRestoreRef.current = true;
-    void restoreLatestInProgressDraft();
-  }, [activeTab, profile, restoreLatestInProgressDraft]);
-
-  // ── Load progress data ──
-  const loadProgressData = useCallback(async () => {
-    if (!profile || progressLoadInFlight.current) return;
-    progressLoadInFlight.current = true;
-    setProgressError('');
-    const storedReviewed = readStoredWritingHistory(profile.id).filter(writing => writing.status === 'reviewed');
-    if (storedReviewed.length > 0) {
-      setReviewedWritings(storedReviewed);
-      setProgressScores(buildProgressScores(storedReviewed, profile.age_group));
-      setProgressLoading(false);
-    } else {
-      setProgressLoading(true);
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('writings')
-        .select('id,title,content,prompt,category,status,word_count,feedback,strengths,improvements,created_at,updated_at')
-        .eq('user_id', profile.id)
-        .eq('status', 'reviewed')
-        .order('created_at', { ascending: true })
-
-      if (error) throw error;
-
-      const reviewed = (data || []) as Writing[];
-      setReviewedWritings(reviewed);
-      setProgressScores(buildProgressScores(reviewed, profile.age_group));
-      setProgressError('');
-
-      // Only fetch AI analysis if the set of writings has changed
-      const writingHash = reviewed.map(w => w.id).sort().join(',');
-      if (reviewed.length > 0 && aiAnalysisFetched.current !== writingHash) {
-        aiAnalysisFetched.current = writingHash;
-        setProgressAnalysisLoading(true);
-        fetch('/api/ai-progress', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ writings: reviewed, ageGroup: profile.age_group }),
-        })
-          .then(r => r.json())
-          .then(result => {
-            if (result.analysis) setProgressAnalysis(result.analysis);
-            if (result.scores?.length) setProgressScores(result.scores);
-          })
-          .catch(() => { setProgressAnalysis(buildAgeAwareProgressAnalysis(reviewed, profile.age_group)); })
-          .finally(() => setProgressAnalysisLoading(false));
-      }
-
-    } catch (error) {
-      logSafeError('loadProgressData error:', error);
-      if (storedReviewed.length > 0) {
-        setReviewedWritings(storedReviewed);
-        setProgressScores(buildProgressScores(storedReviewed, profile.age_group));
-        setProgressAnalysis(buildAgeAwareProgressAnalysis(storedReviewed, profile.age_group));
-        setProgressError('Showing saved progress from this device while cloud sync catches up.');
-      } else {
-        setReviewedWritings([]);
-        setProgressScores([]);
-        setProgressAnalysis(null);
-        setProgressError('We could not load your progress right now. Please refresh or try again in a moment.');
-      }
-    } finally {
-      setProgressLoading(false);
-      progressLoadInFlight.current = false;
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    if (activeTab === 'progress' && profile && !progressLoadedRef.current) {
-      progressLoadedRef.current = true;
-      progressLoadedTokenRef.current = progressRefreshToken;
-      void loadProgressData();
-      return;
-    }
-
-    if (
-      activeTab === 'progress' &&
-      profile &&
-      progressLoadedRef.current &&
-      progressLoadedTokenRef.current !== progressRefreshToken
-    ) {
-      progressLoadedTokenRef.current = progressRefreshToken;
-      void loadProgressData();
-    }
-  }, [activeTab, loadProgressData, profile, progressRefreshToken]);
-
-  // ── Write tab actions ──
   const saveDraft = useCallback(async () => {
-    if (writingMutationLock.current) return false;
-    if (!content.trim()) return false;
-    if (!profile) {
-      setError('Your session is not ready right now. Refresh the page and try again.');
-      return false;
-    }
-    writingMutationLock.current = true;
+    if (!profile?.id) return;
+    if (!content.trim()) return;
+    if (status !== 'idle') return;
+
     setStatus('saving');
-    setError('');
     try {
-      const session = await ensureActiveSessionGracefully();
-      if (!session) {
-        console.warn('saveDraft continuing without a confirmed session.');
-      }
-    } catch (sessionError) {
-      logSafeError('saveDraft session error:', sessionError);
-      console.warn('saveDraft session check failed, continuing anyway:', sessionError);
-    }
+      const payload = {
+        user_id: profile.id,
+        title: title.trim() || 'Untitled',
+        content,
+        prompt: prompt || null,
+        category,
+        status: 'draft',
+        word_count: wordCount,
+      };
 
-    if (writingReleaseTimer.current) {
-      clearTimeout(writingReleaseTimer.current);
-    }
-    writingReleaseTimer.current = setTimeout(() => {
-      writingMutationLock.current = false;
-      setStatus(current => current === 'saving' ? 'idle' : current);
-    }, WRITING_SAVE_TIMEOUT_MS + 3000);
-    const data = {
-      user_id: profile.id,
-      title: title || 'Untitled Draft',
-      content,
-      prompt: prompt || null,
-      category,
-      status: 'in_progress' as const,
-      word_count: wordCount,
-    };
-
-    try {
-      let persistedWriting: Writing | null = null;
       if (writingId) {
-        const { data: updated, error: updateError } = await supabase
+        const { data, error } = await supabase
           .from('writings')
-          .update(data)
+          .update(payload)
           .eq('id', writingId)
           .select()
           .single();
-        if (updateError || !updated) throw updateError ?? new Error('Draft was not updated.');
-        persistedWriting = updated as Writing;
+        if (error) throw error;
+        if (data) {
+          syncStoredWriting(data as Writing);
+          setWritings((prev) => upsertWriting(prev, data as Writing));
+        }
       } else {
-        const { data: created, error: createError } = await supabase
-          .from('writings').insert(data).select().single();
-        if (createError || !created) throw createError ?? new Error('Draft was not created.');
-
-        setWritingId(created.id);
-        persistedWriting = created as Writing;
-        void incrementWritingsCreated();
-      }
-
-      if (persistedWriting) {
-        lastSavedDraftSignatureRef.current = buildDraftSignature({
-          title: title || 'Untitled Draft',
-          content,
-          prompt: prompt || '',
-          category,
-        });
-        syncStoredWriting(persistedWriting);
-        setWritings(prev => upsertWriting(prev, persistedWriting as Writing));
-        debouncedLoadJournal();
-      }
-      return true;
-    } catch (error) {
-      logSafeError('saveDraft error:', error);
-      if (error instanceof PromiseTimeoutError) {
-        const recoveredWriting = await recoverTimedOutWritingWithRetry(title || 'Untitled Draft');
-        if (recoveredWriting) {
-          setWritingId(recoveredWriting.id);
-          lastSavedDraftSignatureRef.current = buildDraftSignature({
-            title: title || 'Untitled Draft',
-            content,
-            prompt: prompt || '',
-            category,
-          });
-          syncStoredWriting(recoveredWriting);
-          setWritings(prev => upsertWriting(prev, recoveredWriting as Writing));
-          debouncedLoadJournal();
-          setError('');
-          return true;
+        const { data, error } = await supabase
+          .from('writings')
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        if (data) {
+          setWritingId((data as Writing).id);
+          syncStoredWriting(data as Writing);
+          setWritings((prev) => upsertWriting(prev, data as Writing));
         }
       }
-      setError(
-        error instanceof PromiseTimeoutError
-          ? 'Saving took too long, so the editor was released. Please try again in a moment.'
-          : 'Could not save your draft right now. Please try again.',
-      );
-      return false;
+      debouncedLoadJournal();
+    } catch (draftError) {
+      const message = draftError instanceof Error ? draftError.message : 'Could not save draft.';
+      setError(message);
     } finally {
-      if (writingReleaseTimer.current) {
-        clearTimeout(writingReleaseTimer.current);
-        writingReleaseTimer.current = null;
-      }
-      writingMutationLock.current = false;
       setStatus('idle');
     }
-  }, [profile, content, title, prompt, category, wordCount, writingId, incrementWritingsCreated, syncStoredWriting, loadJournal, recoverTimedOutWriting]);
-
-  const clearInProgressDraft = useCallback(async (clearEditor = false) => {
-    if (!profile) return;
-
-    try {
-      window.localStorage.removeItem(getEditorBackupKey(profile.id));
-    } catch {
-      // Ignore local cleanup failures.
-    }
-
-    const currentWritingId = writingId;
-    if (currentWritingId) {
-      try {
-        const { error: deleteError } = await supabase
-          .from('writings')
-          .delete()
-          .eq('id', currentWritingId)
-          .eq('user_id', profile.id)
-          .eq('status', 'in_progress');
-
-        if (!deleteError) {
-          setWritings(prev => prev.filter(item => item.id !== currentWritingId));
-          removeStoredWritingHistory(profile.id, currentWritingId);
-        }
-      } catch {
-        // Keep editor responsive even if cleanup fails.
-      }
-    }
-
-    setWritingId(null);
-    lastSavedDraftSignatureRef.current = '';
-
-    if (clearEditor) {
-      setTitle('');
-      setContent('');
-      setPrompt(resolvePromptForCategory(category, profile.age_group ?? undefined));
-      setError('');
-    }
-  }, [profile, writingId, category]);
+  }, [category, content, debouncedLoadJournal, profile?.id, prompt, status, syncStoredWriting, title, wordCount, writingId]);
 
   useEffect(() => {
-    if (activeTab !== 'write') return;
-    if (!profile) return;
-    if (!content.trim()) return;
-    if (status !== 'idle') return;
-    if (feedback) return;
-
-    const signature = buildDraftSignature({
-      title: title || 'Untitled Draft',
-      content,
-      prompt: prompt || '',
-      category,
-    });
-
-    if (signature === lastSavedDraftSignatureRef.current) return;
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-
-    autosaveTimerRef.current = setTimeout(() => {
-      void saveDraft();
-    }, AUTOSAVE_DELAY_MS);
-
+    void loadJournal();
     return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
+      if (journalReloadTimerRef.current) {
+        clearTimeout(journalReloadTimerRef.current);
+        journalReloadTimerRef.current = null;
       }
     };
-  }, [activeTab, profile, content, title, prompt, category, status, feedback, saveDraft]);
-
-  useEffect(() => {
-    if (activeTab !== 'write') return;
-    if (!profile) return;
-    if (status !== 'idle') return;
-    if (feedback) return;
-    if (content.trim()) return;
-    if (!writingId) return;
-    void clearInProgressDraft(false);
-  }, [activeTab, clearInProgressDraft, content, feedback, profile, status, writingId]);
-
-  useEffect(() => {
-    const previousTab = previousActiveTabRef.current;
-    if (previousTab === 'write' && activeTab !== 'write') {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-
-      if (profile && content.trim() && status === 'idle' && !feedback) {
-        const signature = buildDraftSignature({
-          title: title || 'Untitled Draft',
-          content,
-          prompt: prompt || '',
-          category,
-        });
-        if (signature !== lastSavedDraftSignatureRef.current) {
-          void saveDraft();
-        }
-      }
-    }
-
-    previousActiveTabRef.current = activeTab;
-  }, [activeTab, profile, content, title, prompt, category, status, feedback, saveDraft]);
-
-  useEffect(() => {
-    if (!profile) return;
-
-    const key = getEditorBackupKey(profile.id);
-    if (feedback || !content.trim()) {
-      try {
-        window.localStorage.removeItem(key);
-      } catch {
-        // Ignore local cleanup errors.
-      }
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(key, JSON.stringify({
-        writingId: writingId ?? null,
-        title,
-        content,
-        prompt,
-        category,
-        updatedAt: new Date().toISOString(),
-      }));
-    } catch {
-      // Local backup is best-effort only.
-    }
-  }, [profile, title, content, prompt, category, writingId, feedback, status]);
-
-  useEffect(() => {
-    if (!profile) return;
-    if (!categoryPreferenceHydratedRef.current) return;
-    if (skipNextPreferencePersistRef.current) {
-      skipNextPreferencePersistRef.current = false;
-      return;
-    }
-    persistEditorPreference(profile.id, { category, prompt });
-  }, [profile, category, prompt]);
-
-  useEffect(() => {
-    const flushPendingDraft = () => {
-      if (activeTab !== 'write') return;
-      if (!profile) return;
-      if (!content.trim()) {
-        if (writingId && status === 'idle' && !feedback) {
-          void clearInProgressDraft(false);
-        }
-        return;
-      }
-      if (status !== 'idle') return;
-
-      const signature = buildDraftSignature({
-        title: title || 'Untitled Draft',
-        content,
-        prompt: prompt || '',
-        category,
-      });
-      if (signature === lastSavedDraftSignatureRef.current) return;
-
-      try {
-        window.localStorage.setItem(getEditorBackupKey(profile.id), JSON.stringify({
-          writingId: writingId ?? null,
-          title,
-          content,
-          prompt,
-          category,
-          updatedAt: new Date().toISOString(),
-        }));
-      } catch {
-        // Local backup is best-effort only.
-      }
-
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-      void saveDraft();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushPendingDraft();
-    };
-
-    const handlePageHide = () => {
-      flushPendingDraft();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', handlePageHide);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', handlePageHide);
-    };
-  }, [activeTab, category, content, profile, prompt, saveDraft, status, title, writingId, feedback, clearInProgressDraft]);
-
-  useEffect(() => {
-    if (!profile) return;
-    const timer = setTimeout(() => {
-      if (status !== 'idle' || feedback) return;
-      if (!content.trim() && !writingId) return;
-      void clearInProgressDraft(true);
-    }, msUntilNextLocalMidnight() + 1000);
-
-    return () => clearTimeout(timer);
-  }, [profile, status, feedback, content, writingId, clearInProgressDraft]);
-
+  }, [loadJournal]);
   // (Legacy submitForFeedback removed — submitForFeedbackSafe is the active path)
 
   const submitForFeedbackSafe = async (options?: { allowBelowMinimum?: boolean; source?: 'manual' | 'timer' }) => {
@@ -2848,6 +2325,11 @@ function WritingsContent() {
     clearPromptContextFromUrl();
   }, [category, prompt, profile, profile?.age_group, clearPromptContextFromUrl]);
 
+  useEffect(() => {
+    if (prompt.trim()) return;
+    setPrompt(resolvePromptForCategory(category, profile?.age_group ?? undefined));
+  }, [category, profile?.age_group, prompt]);
+
   const handleEditorSelection = useCallback(() => {
     const target = editorTextareaRef.current;
     if (!target) return;
@@ -2934,6 +2416,42 @@ function WritingsContent() {
     return map;
   }, [reviewedWritings]);
   const grammarAnalysis = useMemo(() => analyzeGrammarAndStyle(content), [content]);
+  const grammarItems = useMemo(
+    () => [...grammarAnalysis.corrections, ...grammarAnalysis.refinements],
+    [grammarAnalysis.corrections, grammarAnalysis.refinements],
+  );
+  const selectedGrammarItem = useMemo(() => {
+    if (grammarItems.length === 0) return null;
+    if (selectedGrammarLabel) {
+      const match = grammarItems.find((item) => item.label === selectedGrammarLabel);
+      if (match) return match;
+    }
+    return grammarItems.find((item) => item.label === grammarAnalysis.focusArea) ?? grammarItems[0];
+  }, [grammarAnalysis.focusArea, grammarItems, selectedGrammarLabel]);
+
+  useEffect(() => {
+    if (!selectedGrammarItem) {
+      if (selectedGrammarLabel !== null) setSelectedGrammarLabel(null);
+      return;
+    }
+    if (selectedGrammarLabel === selectedGrammarItem.label) return;
+    setSelectedGrammarLabel(selectedGrammarItem.label);
+  }, [selectedGrammarItem, selectedGrammarLabel]);
+
+  const selectedGrammarIssues = useMemo(() => {
+    if (!selectedGrammarItem) return [];
+    const source = selectedGrammarItem.issues.length > 0
+      ? selectedGrammarItem.issues
+      : selectedGrammarItem.count > 0
+        ? [selectedGrammarItem.detail]
+        : [];
+
+    return source.map((issue) => ({
+      problem: issue,
+      fix: getGrammarIssueFix(selectedGrammarItem.label, issue),
+    }));
+  }, [selectedGrammarItem]);
+
   const focusSentenceResult = useMemo(() => getFocusSentenceResult(content), [content]);
   const activeToolSuggestions = useMemo(
     () => buildWritingToolSuggestions(activeWritingTool, content, editorSelection.text),
@@ -3036,8 +2554,8 @@ function WritingsContent() {
   );
 
   return (
-    <div style={{ padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 4rem', background: 'var(--t-bg)', minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div style={{ padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 4rem', background: 'var(--t-bg)', minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative', zIndex: 1 }}>
 
         {/* ── PAGE HEADER ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -3160,9 +2678,10 @@ function WritingsContent() {
 
             {(status !== 'done' ? (
               /* ── EDITOR ── */
-              <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 28, overflow: 'hidden' }}>
-
-                {/* Prompt banner — always visible at top of editor when set */}
+              <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 28, overflow: 'hidden', position: 'relative' }}>
+                <EditorThemeOverlay />
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  {/* Prompt banner — always visible at top of editor when set */}
                 {prompt && (
                   <div style={{
                     background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc-a))',
@@ -3170,7 +2689,7 @@ function WritingsContent() {
                     padding: '14px 20px',
                     display: 'flex', alignItems: 'flex-start', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 220 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0 }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: 8,
                         background: 'var(--t-acc-c)',
@@ -3660,11 +3179,32 @@ function WritingsContent() {
                               </div>
                             </div>
 
+                            <p style={{ marginTop: -2, fontSize: 10.5, fontWeight: 700, color: 'var(--t-tx3)' }}>
+                              Click a card to inspect the exact flagged issues for that category.
+                            </p>
+
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
                               <div style={{ display: 'grid', gap: 7 }}>
                                 <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Corrections</p>
                                 {grammarAnalysis.corrections.map((item) => (
-                                  <div key={item.label} style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 13, padding: '9px 10px' }}>
+                                  <button
+                                    key={item.label}
+                                    type="button"
+                                    onClick={() => setSelectedGrammarLabel(item.label)}
+                                    aria-pressed={selectedGrammarItem?.label === item.label}
+                                    style={{
+                                      border: `1px solid ${selectedGrammarItem?.label === item.label ? 'color-mix(in srgb, var(--t-acc) 46%, var(--t-brd))' : 'var(--t-brd)'}`,
+                                      background: selectedGrammarItem?.label === item.label
+                                        ? 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 86%, var(--t-acc-a) 14%), color-mix(in srgb, var(--t-bg) 92%, var(--t-acc-a) 8%))'
+                                        : 'var(--t-bg)',
+                                      borderRadius: 13,
+                                      padding: '9px 10px',
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
+                                      boxShadow: selectedGrammarItem?.label === item.label ? '0 10px 22px rgba(0, 20, 62, 0.14)' : 'none',
+                                      transition: 'border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease',
+                                    }}
+                                  >
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                                       <p style={{ fontSize: 12, fontWeight: 900, color: 'var(--t-tx)' }}>{item.label}</p>
                                       <span style={{ minWidth: 28, height: 24, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: item.count ? tone('var(--t-warning)', 14) : tone('var(--t-success)', 12), color: item.count ? 'var(--t-warning)' : 'var(--t-success)', fontSize: 11, fontWeight: 950 }}>
@@ -3672,14 +3212,31 @@ function WritingsContent() {
                                       </span>
                                     </div>
                                     <p style={{ marginTop: 4, fontSize: 11, lineHeight: 1.42, color: 'var(--t-tx3)' }}>{item.detail}</p>
-                                  </div>
+                                  </button>
                                 ))}
                               </div>
 
                               <div style={{ display: 'grid', gap: 7 }}>
                                 <p style={{ fontSize: 10, fontWeight: 950, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-tx3)' }}>Refinements</p>
                                 {grammarAnalysis.refinements.map((item) => (
-                                  <div key={item.label} style={{ border: '1px solid var(--t-brd)', background: 'var(--t-bg)', borderRadius: 13, padding: '9px 10px' }}>
+                                  <button
+                                    key={item.label}
+                                    type="button"
+                                    onClick={() => setSelectedGrammarLabel(item.label)}
+                                    aria-pressed={selectedGrammarItem?.label === item.label}
+                                    style={{
+                                      border: `1px solid ${selectedGrammarItem?.label === item.label ? 'color-mix(in srgb, var(--t-acc) 46%, var(--t-brd))' : 'var(--t-brd)'}`,
+                                      background: selectedGrammarItem?.label === item.label
+                                        ? 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 86%, var(--t-acc-a) 14%), color-mix(in srgb, var(--t-bg) 92%, var(--t-acc-a) 8%))'
+                                        : 'var(--t-bg)',
+                                      borderRadius: 13,
+                                      padding: '9px 10px',
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
+                                      boxShadow: selectedGrammarItem?.label === item.label ? '0 10px 22px rgba(0, 20, 62, 0.14)' : 'none',
+                                      transition: 'border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease',
+                                    }}
+                                  >
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                                       <p style={{ fontSize: 12, fontWeight: 900, color: 'var(--t-tx)' }}>{item.label}</p>
                                       <span style={{ minWidth: 28, height: 24, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: item.count ? tone('var(--t-acc)', 12) : tone('var(--t-success)', 12), color: item.count ? 'var(--t-acc)' : 'var(--t-success)', fontSize: 11, fontWeight: 950 }}>
@@ -3687,10 +3244,66 @@ function WritingsContent() {
                                       </span>
                                     </div>
                                     <p style={{ marginTop: 4, fontSize: 11, lineHeight: 1.42, color: 'var(--t-tx3)' }}>{item.detail}</p>
-                                  </div>
+                                  </button>
                                 ))}
                               </div>
                             </div>
+
+                            {selectedGrammarItem && (
+                              <div style={{ border: '1px solid color-mix(in srgb, var(--t-acc) 36%, var(--t-brd))', background: 'linear-gradient(160deg, color-mix(in srgb, var(--t-card) 84%, var(--t-acc-a) 16%), color-mix(in srgb, var(--t-bg) 94%, var(--t-acc-a) 6%))', borderRadius: 14, padding: '11px 12px', display: 'grid', gap: 9 }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                                  <div style={{ display: 'grid', gap: 5 }}>
+                                    <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t-acc)' }}>
+                                      Issue Inspector
+                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', minHeight: 22, borderRadius: 999, padding: '0 9px', border: '1px solid color-mix(in srgb, var(--t-acc) 32%, transparent)', background: 'color-mix(in srgb, var(--t-acc-a) 60%, transparent)', fontSize: 11, fontWeight: 900, color: 'var(--t-acc)' }}>
+                                        {selectedGrammarItem.label}
+                                      </span>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', minHeight: 22, borderRadius: 999, padding: '0 9px', border: `1px solid ${selectedGrammarItem.count ? 'color-mix(in srgb, var(--t-warning) 42%, transparent)' : 'color-mix(in srgb, var(--t-success) 42%, transparent)'}`, background: selectedGrammarItem.count ? tone('var(--t-warning)', 12) : tone('var(--t-success)', 12), fontSize: 11, fontWeight: 900, color: selectedGrammarItem.count ? 'var(--t-warning)' : 'var(--t-success)' }}>
+                                        {selectedGrammarItem.count ? `${selectedGrammarItem.count} issue${selectedGrammarItem.count === 1 ? '' : 's'}` : 'No issues'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {selectedGrammarItem.count > 0 ? (
+                                    <AlertCircle style={{ width: 17, height: 17, color: 'var(--t-warning)', flexShrink: 0 }} />
+                                  ) : (
+                                    <CheckCircle style={{ width: 17, height: 17, color: 'var(--t-success)', flexShrink: 0 }} />
+                                  )}
+                                </div>
+
+                                <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: 'var(--t-tx2)' }}>
+                                  {getGrammarAreaSummary(selectedGrammarItem.label)}
+                                </p>
+
+                                {selectedGrammarItem.count > 0 ? (
+                                  <div style={{ display: 'grid', gap: 7 }}>
+                                    {selectedGrammarIssues.map((entry, index) => (
+                                      <div key={`${selectedGrammarItem.label}-${entry.problem}-${index}`} style={{ border: '1px solid color-mix(in srgb, var(--t-brd) 86%, transparent)', borderRadius: 12, background: 'var(--t-bg)', padding: '8px 9px', display: 'grid', gap: 5 }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                          <span style={{ width: 18, height: 18, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: tone('var(--t-warning)', 14), color: 'var(--t-warning)', fontSize: 10, fontWeight: 900, flexShrink: 0, marginTop: 1 }}>
+                                            {index + 1}
+                                          </span>
+                                          <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.44, color: 'var(--t-tx)' }}>
+                                            {entry.problem}
+                                          </p>
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: 11, lineHeight: 1.42, color: 'var(--t-tx3)', paddingLeft: 24 }}>
+                                          <span style={{ fontWeight: 800, color: 'var(--t-acc)' }}>Fix:</span> {entry.fix}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{ border: '1px solid color-mix(in srgb, var(--t-success) 32%, transparent)', borderRadius: 12, background: tone('var(--t-success)', 8), padding: '8px 9px' }}>
+                                    <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: 'var(--t-success)' }}>
+                                      Nice work. This area is clean right now. Keep this standard while revising other categories.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ) : activeWritingTool === 'ai' ? (
                           <div style={{ display: 'grid', gap: 12 }}>
@@ -3824,6 +3437,7 @@ function WritingsContent() {
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             ) : (

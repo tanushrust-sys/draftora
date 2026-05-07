@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { PRACTICE_DISPLAY_USERNAME, PRACTICE_EMAIL_DOMAIN } from '@/app/lib/practice-mode';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,6 +17,15 @@ export async function POST(req: NextRequest) {
 
   const trimmed = username.trim();
   const trimmedEmail = String(email).trim().toLowerCase();
+  const normalizedUsername = trimmed.toLowerCase();
+
+  if (normalizedUsername === PRACTICE_DISPLAY_USERNAME.toLowerCase()) {
+    return NextResponse.json({ error: 'That username is reserved.' }, { status: 400 });
+  }
+
+  if (trimmedEmail.endsWith(`@${PRACTICE_EMAIL_DOMAIN}`)) {
+    return NextResponse.json({ error: 'Please use a valid personal email address.' }, { status: 400 });
+  }
 
   const [usernameMatches, emailMatches] = await Promise.all([
     adminSupabase.from('profiles').select('id, deleted_at').ilike('username', trimmed),

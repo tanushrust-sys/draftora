@@ -47,7 +47,94 @@ export function msUntilNextLocalMidnight() {
   return next.getTime() - now.getTime();
 }
 
+export type RewardEventType =
+  | 'writing_submit'
+  | 'ai_feedback_received'
+  | 'vocab_sentence_success'
+  | 'vocab_mastered'
+  | 'vocab_drill_completed'
+  | 'vocab_test_completed'
+  | 'daily_goal_met'
+  | 'streak_checkin';
+
+export type RewardAwardResponse = {
+  ok: true;
+  idempotentReplay: boolean;
+  eventId: string;
+  eventType: RewardEventType;
+  deltas: { xp: number };
+  balances: {
+    xp: number;
+    level: number;
+    title: string;
+    streak: number;
+    longestStreak: number;
+  };
+  celebrations: {
+    levelUp: { fromLevel: number; toLevel: number; title: string } | null;
+    streakMilestone: { streak: number; xp: number } | null;
+  };
+  cap: { applied: boolean; reason: string | null };
+  practiceMode: boolean;
+};
+
+export const REWARD_AWARDED_EVENT = 'draftora:reward-awarded';
+
+type AwardRewardEventInput = {
+  token: string;
+  eventType: RewardEventType;
+  idempotencyKey: string;
+  sourceRef?: string | null;
+  metadata?: Record<string, unknown>;
+  eventSource?: string;
+};
+
+function normalizeKeyPart(part: string | number | boolean) {
+  return String(part).replace(/[^a-zA-Z0-9:_\\.-]/g, '-');
+}
+
+export function createIdempotencyKey(parts: Array<string | number | boolean | null | undefined>) {
+  const compact = parts
+    .filter((part): part is string | number | boolean => part !== null && part !== undefined && `${part}`.trim().length > 0)
+    .map(normalizeKeyPart);
+
+  const raw = compact.join(':').slice(0, 120);
+  return raw.length >= 8 ? raw : `reward:${raw.padEnd(8, '0')}`;
+}
+
+export async function awardRewardEvent(input: AwardRewardEventInput): Promise<RewardAwardResponse> {
+  if (!input.token) throw new Error('Missing session token.');
+
+  const response = await fetch('/api/rewards/award', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${input.token}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': input.idempotencyKey,
+    },
+    body: JSON.stringify({
+      eventType: input.eventType,
+      sourceRef: input.sourceRef ?? null,
+      metadata: input.metadata ?? {},
+      eventSource: input.eventSource ?? 'client',
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({} as { error?: string }));
+  if (!response.ok) {
+    throw new Error(payload?.error || `Reward API failed (${response.status})`);
+  }
+
+  const reward = payload as RewardAwardResponse;
+  if (typeof window !== 'undefined' && !reward.idempotentReplay) {
+    window.dispatchEvent(new CustomEvent<RewardAwardResponse>(REWARD_AWARDED_EVENT, { detail: reward }));
+  }
+
+  return reward;
+}
+
 // Give the user XP and update their level
+// Deprecated path retained as a fallback while Rewards 2.0 rolls out.
 export async function awardXP(userId: string, amount: number, reason: string) {
   try {
     const { data: profileSnapshot } = await supabase
@@ -113,6 +200,7 @@ export async function updateDailyStats(
 }
 
 // Update the user's writing streak
+// Deprecated path retained as a fallback while Rewards 2.0 rolls out.
 export async function updateStreak(userId: string) {
   const { data: profile } = await supabase
     .from('profiles')

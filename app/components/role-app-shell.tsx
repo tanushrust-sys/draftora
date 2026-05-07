@@ -50,6 +50,7 @@ export function RoleAppShell({
   const { profile, loading } = useAuth();
   const router = useRouter();
   const [compactTabs, setCompactTabs] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
   const isLight = mode === 'light';
 
   const shellBg = isLight
@@ -85,11 +86,16 @@ export function RoleAppShell({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const onResize = () => setCompactTabs(window.innerWidth < 980);
+    const onResize = () => {
+      setViewportWidth(window.innerWidth);
+      setCompactTabs(window.innerWidth < 980);
+    };
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  const isTinyViewport = (viewportWidth ?? 9999) < 420;
 
   if (loading || !profile) {
     return (
@@ -121,7 +127,7 @@ export function RoleAppShell({
         minHeight: '100vh',
         background: shellBg,
         color: shellText,
-        paddingBottom: tabs.length ? (compactTabs ? 108 : 116) : 0,
+        paddingBottom: tabs.length ? `calc(${compactTabs ? 108 : 116}px + env(safe-area-inset-bottom, 0px))` : 0,
         ['--workspace-text' as string]: shellText,
         ['--workspace-text2' as string]: shellText2,
         ['--workspace-text3' as string]: shellText3,
@@ -139,12 +145,12 @@ export function RoleAppShell({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: 16,
-            padding: '13px 18px',
+            padding: compactTabs ? '12px 14px' : '13px 18px',
             borderRadius: 24,
             background: isLight ? shellCard : 'linear-gradient(180deg, rgba(10, 18, 34, 0.95) 0%, rgba(6, 12, 26, 0.9) 100%)',
             border: `1px solid ${shellBorder}`,
             boxShadow: isLight ? '0 18px 54px rgba(2,6,23,0.18)' : '0 30px 84px rgba(0,0,0,0.4)',
-            backdropFilter: 'blur(16px)',
+            backdropFilter: compactTabs ? 'none' : 'blur(16px)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: '1 1 240px' }}>
@@ -269,23 +275,27 @@ export function RoleAppShell({
 
       {!!tabs.length && (
         <nav
+          className="role-shell-tabs"
           style={{
             position: 'fixed',
             left: '50%',
-            bottom: 16,
+            bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
             transform: 'translateX(-50%)',
             width: 'min(1180px, calc(100vw - 1.5rem))',
             zIndex: 30,
-            borderRadius: 26,
+            borderRadius: compactTabs ? 22 : 26,
             background: isLight ? 'rgba(255,255,255,0.94)' : 'linear-gradient(180deg, rgba(8, 15, 28, 0.9) 0%, rgba(6, 10, 22, 0.86) 100%)',
             border: `1px solid ${shellBorder}`,
             boxShadow: isLight ? '0 20px 60px rgba(0,0,0,0.24)' : '0 30px 86px rgba(0,0,0,0.42)',
-            backdropFilter: 'blur(20px)',
-            padding: 10,
+            backdropFilter: compactTabs ? 'none' : 'blur(20px)',
+            padding: compactTabs ? 8 : 10,
             display: compactTabs ? 'flex' : 'grid',
             gridTemplateColumns: compactTabs ? undefined : `repeat(${tabs.length}, minmax(0, 1fr))`,
             gap: 8,
             overflowX: compactTabs ? 'auto' : 'visible',
+            overscrollBehaviorX: compactTabs ? 'contain' : undefined,
+            WebkitOverflowScrolling: compactTabs ? 'touch' : undefined,
+            scrollbarWidth: compactTabs ? 'none' : undefined,
           }}
         >
           {tabs.map((tab) => {
@@ -301,7 +311,7 @@ export function RoleAppShell({
                 style={{
                   border: 'none',
                   borderRadius: 18,
-                  padding: '12px 12px',
+                  padding: compactTabs ? '10px 10px' : '12px 12px',
                   cursor: 'pointer',
                   textAlign: 'left',
                   background: active
@@ -313,7 +323,11 @@ export function RoleAppShell({
                   alignItems: 'center',
                   gap: 12,
                   minHeight: hasDescription ? 66 : 58,
-                  minWidth: compactTabs ? (hasDescription ? 210 : 170) : undefined,
+                  minWidth: compactTabs
+                    ? isTinyViewport
+                      ? (hasDescription ? 176 : 156)
+                      : (hasDescription ? 210 : 170)
+                    : undefined,
                   flexShrink: compactTabs ? 0 : 1,
                   borderLeft: active ? `1px solid color-mix(in srgb, ${accent} 26%, transparent)` : '1px solid transparent',
                   borderTop: active ? `1px solid color-mix(in srgb, ${accent} 22%, transparent)` : '1px solid transparent',

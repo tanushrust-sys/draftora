@@ -11,7 +11,7 @@ import {
   hydrateVocabWordWithStoredProgress,
   writeStoredVocabProgress,
 } from '@/app/lib/vocab-progress-storage';
-import { awardXP, updateDailyStats, XP_REWARDS } from '@/app/lib/xp';
+import { awardRewardEvent, awardXP, createIdempotencyKey, updateDailyStats, XP_REWARDS } from '@/app/lib/xp';
 import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
 import { getDailyWords, getWeekWords, getVocabPool, simplifyMeaning } from '@/app/lib/vocab-utils';
@@ -31,6 +31,13 @@ function isTestDay() {
 }
 
 const tone = (color: string, amount: number) => `color-mix(in srgb, ${color} ${amount}%, transparent)`;
+
+function createRunId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 const CARD_THEMES = [
   { topBorder: 'var(--t-mod-write)', glow: tone('var(--t-mod-write)', 8) },
@@ -607,6 +614,7 @@ export default function VocabPage() {
   const [testXP, setTestXP] = useState(0);
   const [testScore, setTestScore] = useState(0);
   const testXPAwarded = useRef(false); // prevent double XP on redo
+  const testAttemptId = useRef(createRunId());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const vocabMutationLock = useRef(false);
   const vocabReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -684,6 +692,7 @@ export default function VocabPage() {
     encouragement: string;
   } | null>(null);
   const [drillReviewLoading, setDrillReviewLoading] = useState(false);
+  const drillRunId = useRef(createRunId());
 
   const persistSentenceFeedback = useCallback(async (
     wordId: string,
@@ -944,7 +953,20 @@ export default function VocabPage() {
       wordId = inserted?.id ?? null;
       setSaved(prev => new Set(prev).add(i));
       setWords(prev => prev.map(w => w.word.toLowerCase() === dw.word.toLowerCase() ? { ...w, mastered: true, user_sentence: sentence } : w));
-      await awardXP(profile.id, XP_REWARDS.VOCAB_SENTENCE, `Vocab sentence: ${dw.word}`);
+      try {
+        if (!session?.access_token) throw new Error('Missing session token.');
+        await awardRewardEvent({
+          token: session.access_token,
+          eventType: 'vocab_sentence_success',
+          idempotencyKey: createIdempotencyKey(['vocab-sentence', profile.id, wordId ?? dw.word.toLowerCase()]),
+          sourceRef: wordId ?? dw.word.toLowerCase(),
+          metadata: { word: dw.word },
+          eventSource: 'vocab-page',
+        });
+      } catch (rewardError) {
+        console.error('vocab_sentence_success reward failed, using fallback XP path:', rewardError);
+        await awardXP(profile.id, XP_REWARDS.VOCAB_SENTENCE, `Vocab sentence: ${dw.word}`);
+      }
     } else {
       // Already saved — find existing row and update sentence
       const existing = wordsByNormalized.get(dw.word.toLowerCase());
@@ -1118,9 +1140,24 @@ export default function VocabPage() {
               await refreshProfile();
             } catch { /* keep save successful even if counter update fails */ }
           })();
-          void awardXP(profile.id, XP_REWARDS.VOCAB_SENTENCE, `Vocab sentence: ${dw.word}`).catch(() => {
-            // Keep the save successful even if XP update fails.
-          });
+          void (async () => {
+            try {
+              if (!session?.access_token) throw new Error('Missing session token.');
+              await awardRewardEvent({
+                token: session.access_token,
+                eventType: 'vocab_sentence_success',
+                idempotencyKey: createIdempotencyKey(['vocab-sentence', profile.id, wordId ?? dw.word.toLowerCase()]),
+                sourceRef: wordId ?? dw.word.toLowerCase(),
+                metadata: { word: dw.word },
+                eventSource: 'vocab-page',
+              });
+            } catch (rewardError) {
+              console.error('vocab_sentence_success reward failed, using fallback XP path:', rewardError);
+              void awardXP(profile.id, XP_REWARDS.VOCAB_SENTENCE, `Vocab sentence: ${dw.word}`).catch(() => {
+                // Keep the save successful even if XP update fails.
+              });
+            }
+          })();
         } else {
           const existing = wordsByNormalized.get(dw.word.toLowerCase());
           wordId = existing?.id ?? null;
@@ -1240,6 +1277,7 @@ export default function VocabPage() {
   // ─── WORD BANK DRILL ───
   const startDrill = useCallback(() => {
     if (words.length === 0) return;
+    drillRunId.current = createRunId();
     // Prefer unmastered words; fall back to all if fewer than 3 unmastered
     const pool = words.filter(w => !w.mastered).length >= 1
       ? words.filter(w => !w.mastered)
@@ -1391,8 +1429,27 @@ export default function VocabPage() {
 
         // Award XP for the whole session
         if (profile && xp > 0) {
-          void awardXP(profile.id, xp, `Word bank drill: ${correctCount}/${nextResults.length} correct`);
-          void refreshProfile();
+          void (async () => {
+            try {
+              if (!session?.access_token) throw new Error('Missing session token.');
+              await awardRewardEvent({
+                token: session.access_token,
+                eventType: 'vocab_drill_completed',
+                idempotencyKey: createIdempotencyKey(['vocab-drill', profile.id, drillRunId.current]),
+                sourceRef: drillRunId.current,
+                metadata: {
+                  correctCount,
+                  totalCount: nextResults.length,
+                },
+                eventSource: 'vocab-page',
+              });
+            } catch (rewardError) {
+              console.error('vocab_drill_completed reward failed, using fallback XP path:', rewardError);
+              await awardXP(profile.id, xp, `Word bank drill: ${correctCount}/${nextResults.length} correct`);
+            } finally {
+              void refreshProfile();
+            }
+          })();
         }
 
         // Master only words answered correctly in this drill
@@ -1428,9 +1485,10 @@ export default function VocabPage() {
         setDrillFeedback(null);
       }
     }, delay);
-  }, [drillChallenges, drillIndex, drillAnswer, drillChecking, drillResults, drillReview, profile, words, markWordMastered, refreshProfile]);
+  }, [drillChallenges, drillIndex, drillAnswer, drillChecking, drillResults, drillReview, profile, session?.access_token, words, markWordMastered, refreshProfile]);
 
   const generateTest = () => {
+    testAttemptId.current = createRunId();
     const weekWords = getWeekWords(ageGroup);
     if (weekWords.length < 4) return;
     const shuffled = [...weekWords].sort(() => Math.random() - 0.5);
@@ -1466,6 +1524,7 @@ export default function VocabPage() {
   };
 
   const redoTest = () => {
+    testAttemptId.current = createRunId();
     // Keep testXPAwarded.current = true so submitTest won't award XP again
     const weekWords2 = getWeekWords(ageGroup);
     if (weekWords2.length < 4) return;
@@ -1528,7 +1587,23 @@ export default function VocabPage() {
     setTestScore(score);
     if (!testXPAwarded.current && profile) {
       const xp = XP_REWARDS.VOCAB_TEST_BASE + Math.round((score / testQuestions.length) * 40);
-      await awardXP(profile.id, xp, `Weekly vocab test: ${score}/${testQuestions.length}`);
+      try {
+        if (!session?.access_token) throw new Error('Missing session token.');
+        await awardRewardEvent({
+          token: session.access_token,
+          eventType: 'vocab_test_completed',
+          idempotencyKey: createIdempotencyKey(['vocab-test', profile.id, testAttemptId.current]),
+          sourceRef: testAttemptId.current,
+          metadata: {
+            score,
+            totalQuestions: testQuestions.length,
+          },
+          eventSource: 'vocab-page',
+        });
+      } catch (rewardError) {
+        console.error('vocab_test_completed reward failed, using fallback XP path:', rewardError);
+        await awardXP(profile.id, xp, `Weekly vocab test: ${score}/${testQuestions.length}`);
+      }
       await supabase.from('vocab_tests').insert({ user_id: profile.id, score, total_questions: testQuestions.length, xp_earned: xp });
       await refreshProfile();
       setTestXP(xp);
@@ -2356,7 +2431,7 @@ export default function VocabPage() {
         ══════════════════════════════════════ */}
         <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 24, overflow: 'hidden' }}>
           {/* Word bank header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--t-brd)' }}>
+          <div className="vocab-bank-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--t-brd)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--t-acc-a)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <BookOpen style={{ width: 16, height: 16, color: 'var(--t-acc)' }} />
@@ -2369,7 +2444,7 @@ export default function VocabPage() {
                 </p>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 12, padding: '8px 14px' }}>
+            <div className="vocab-bank-search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--t-bg)', border: '1px solid var(--t-brd)', borderRadius: 12, padding: '8px 14px' }}>
               <Search style={{ width: 14, height: 14, color: 'var(--t-tx3)' }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search words..."
                 style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--t-tx)', fontSize: 13, width: 140 }} />
@@ -2400,6 +2475,7 @@ export default function VocabPage() {
                   <div key={w.id} style={{ borderBottom: rowIdx < visibleWords.length - 1 ? '1px solid color-mix(in srgb, var(--t-brd) 50%, transparent)' : 'none' }}>
                     {/* ── Summary row ── */}
                     <div
+                      className="vocab-bank-row"
                       onClick={() => {
                         if (!hasSentence) return;
                         setExpandedWord(isExpanded ? null : w.id);
@@ -2430,7 +2506,7 @@ export default function VocabPage() {
 
                     {/* ── Expanded sentence + feedback panel ── */}
                     {isExpanded && hasSentence && (
-                      <div style={{
+                      <div className="vocab-bank-expanded" style={{
                         margin: '0 16px 14px',
                         background: 'var(--t-bg)',
                         border: '1px solid var(--t-brd)',

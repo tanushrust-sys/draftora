@@ -1,6 +1,15 @@
 // TypeScript types for all our Supabase database tables
 
 export type AccountType = 'teacher' | 'student' | 'parent';
+export type CosmeticCategory =
+  | 'editor_themes'
+  | 'profile_frames'
+  | 'badges'
+  | 'streak_effects'
+  | 'xp_visuals'
+  | 'ui_custom'
+  | 'titles';
+export type CosmeticRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export type CoachMessage = { role: 'user' | 'assistant'; content: string; timestamp: string };
 
@@ -17,6 +26,7 @@ export type Database = {
           title: string;
           level: number;
           xp: number;
+          coins_balance: number;
           streak: number;
           longest_streak: number;
           last_writing_date: string | null;
@@ -54,6 +64,7 @@ export type Database = {
           title?: string;
           level?: number;
           xp?: number;
+          coins_balance?: number;
           streak?: number;
           longest_streak?: number;
           last_writing_date?: string | null;
@@ -88,6 +99,7 @@ export type Database = {
           title?: string;
           level?: number;
           xp?: number;
+          coins_balance?: number;
           streak?: number;
           longest_streak?: number;
           last_writing_date?: string | null;
@@ -410,6 +422,354 @@ export type Database = {
         };
         Relationships: [];
       };
+      reward_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          event_type: string;
+          event_source: string;
+          source_ref: string | null;
+          idempotency_key: string;
+          payload: Record<string, unknown>;
+          xp_awarded: number;
+          coins_awarded: number;
+          state: 'processing' | 'applied' | 'capped' | 'failed';
+          cap_reason: string | null;
+          practice_mode: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          event_type: string;
+          event_source?: string;
+          source_ref?: string | null;
+          idempotency_key: string;
+          payload?: Record<string, unknown>;
+          xp_awarded?: number;
+          coins_awarded?: number;
+          state?: 'processing' | 'applied' | 'capped' | 'failed';
+          cap_reason?: string | null;
+          practice_mode?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          event_type?: string;
+          event_source?: string;
+          source_ref?: string | null;
+          idempotency_key?: string;
+          payload?: Record<string, unknown>;
+          xp_awarded?: number;
+          coins_awarded?: number;
+          state?: 'processing' | 'applied' | 'capped' | 'failed';
+          cap_reason?: string | null;
+          practice_mode?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_xp_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          reward_event_id: string;
+          delta: number;
+          balance_after: number;
+          reason: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          reward_event_id: string;
+          delta: number;
+          balance_after: number;
+          reason: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          reward_event_id?: string;
+          delta?: number;
+          balance_after?: number;
+          reason?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_currency_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          reward_event_id: string | null;
+          currency_code: string;
+          delta: number;
+          balance_after: number;
+          reason: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          reward_event_id?: string | null;
+          currency_code?: string;
+          delta: number;
+          balance_after: number;
+          reason: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          reward_event_id?: string | null;
+          currency_code?: string;
+          delta?: number;
+          balance_after?: number;
+          reason?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      reward_claims: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          idempotency_key: string;
+          request_hash: string;
+          status: 'processing' | 'applied' | 'failed';
+          response_payload: Record<string, unknown> | null;
+          reward_event_id: string | null;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          idempotency_key: string;
+          request_hash: string;
+          status?: 'processing' | 'applied' | 'failed';
+          response_payload?: Record<string, unknown> | null;
+          reward_event_id?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          endpoint?: string;
+          idempotency_key?: string;
+          request_hash?: string;
+          status?: 'processing' | 'applied' | 'failed';
+          response_payload?: Record<string, unknown> | null;
+          reward_event_id?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cosmetic_items: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string;
+          category: CosmeticCategory;
+          rarity: CosmeticRarity;
+          price_coins: number;
+          asset_ref: string;
+          metadata: Record<string, unknown>;
+          is_active: boolean;
+          is_seasonal: boolean;
+          season_key: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string;
+          category: CosmeticCategory;
+          rarity: CosmeticRarity;
+          price_coins: number;
+          asset_ref: string;
+          metadata?: Record<string, unknown>;
+          is_active?: boolean;
+          is_seasonal?: boolean;
+          season_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          description?: string;
+          category?: CosmeticCategory;
+          rarity?: CosmeticRarity;
+          price_coins?: number;
+          asset_ref?: string;
+          metadata?: Record<string, unknown>;
+          is_active?: boolean;
+          is_seasonal?: boolean;
+          season_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      user_inventory: {
+        Row: {
+          id: string;
+          user_id: string;
+          item_id: string;
+          acquired_via: string;
+          source_rotation_id: string | null;
+          price_paid_coins: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          item_id: string;
+          acquired_via?: string;
+          source_rotation_id?: string | null;
+          price_paid_coins?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          item_id?: string;
+          acquired_via?: string;
+          source_rotation_id?: string | null;
+          price_paid_coins?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      equipped_cosmetics: {
+        Row: {
+          user_id: string;
+          profile_badge_item_id: string | null;
+          avatar_frame_item_id: string | null;
+          dashboard_theme_item_id: string | null;
+          celebration_effect_item_id: string | null;
+          streak_effect_item_id: string | null;
+          xp_visual_item_id: string | null;
+          ui_custom_item_id: string | null;
+          title_upgrade_item_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          profile_badge_item_id?: string | null;
+          avatar_frame_item_id?: string | null;
+          dashboard_theme_item_id?: string | null;
+          celebration_effect_item_id?: string | null;
+          streak_effect_item_id?: string | null;
+          xp_visual_item_id?: string | null;
+          ui_custom_item_id?: string | null;
+          title_upgrade_item_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          profile_badge_item_id?: string | null;
+          avatar_frame_item_id?: string | null;
+          dashboard_theme_item_id?: string | null;
+          celebration_effect_item_id?: string | null;
+          streak_effect_item_id?: string | null;
+          xp_visual_item_id?: string | null;
+          ui_custom_item_id?: string | null;
+          title_upgrade_item_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      weekly_shop_rotations: {
+        Row: {
+          id: string;
+          week_start: string;
+          week_end: string;
+          seed: string;
+          status: 'active' | 'archived';
+          generated_by: string;
+          generated_at: string;
+          fallback_generated: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          week_start: string;
+          week_end: string;
+          seed: string;
+          status?: 'active' | 'archived';
+          generated_by?: string;
+          generated_at?: string;
+          fallback_generated?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          week_start?: string;
+          week_end?: string;
+          seed?: string;
+          status?: 'active' | 'archived';
+          generated_by?: string;
+          generated_at?: string;
+          fallback_generated?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      weekly_shop_items: {
+        Row: {
+          id: string;
+          rotation_id: string;
+          item_id: string;
+          slot_type: 'affordable' | 'featured' | 'standard';
+          position: number;
+          is_featured: boolean;
+          price_override_coins: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          rotation_id: string;
+          item_id: string;
+          slot_type: 'affordable' | 'featured' | 'standard';
+          position: number;
+          is_featured?: boolean;
+          price_override_coins?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          rotation_id?: string;
+          item_id?: string;
+          slot_type?: 'affordable' | 'featured' | 'standard';
+          position?: number;
+          is_featured?: boolean;
+          price_override_coins?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       writing_prompts: {
         Row: {
           id: string;
@@ -474,6 +834,12 @@ export type VocabWord     = Database['public']['Tables']['vocab_words']['Row'];
 export type VocabTest     = Database['public']['Tables']['vocab_tests']['Row'];
 export type DailyStats    = Database['public']['Tables']['daily_stats']['Row'];
 export type WritingPrompt = Database['public']['Tables']['writing_prompts']['Row'];
+export type CosmeticItem = Database['public']['Tables']['cosmetic_items']['Row'];
+export type UserInventoryItem = Database['public']['Tables']['user_inventory']['Row'];
+export type EquippedCosmetics = Database['public']['Tables']['equipped_cosmetics']['Row'];
+export type UserCurrencyLedgerItem = Database['public']['Tables']['user_currency_ledger']['Row'];
+export type WeeklyShopRotation = Database['public']['Tables']['weekly_shop_rotations']['Row'];
+export type WeeklyShopItem = Database['public']['Tables']['weekly_shop_items']['Row'];
 
 // --- Level / XP helpers ---
 // Max level 30. Starts at 50 XP per level, increases by 25 XP each level.

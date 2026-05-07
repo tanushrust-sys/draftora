@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
+import { useEquippedCosmetics } from '@/app/context/EquippedCosmeticsContext';
+import PrismWearableCrown from '@/app/components/rewards/PrismWearableCrown';
+import { isPrismAccessory } from '@/app/lib/rewards/prism';
 import { FetchTimeoutError, fetchWithTimeout } from '@/app/lib/fetch-with-timeout';
 import {
   deleteStoredCoachConversation,
@@ -205,6 +208,9 @@ function GoalDashboard({
    ────────────────────────────────────────────────────────────────────────── */
 export default function CoachPage() {
   const { profile, session, refreshProfile } = useAuth();
+  const cosmetics = useEquippedCosmetics();
+  const equippedFrame = cosmetics?.equippedItemsByCategory?.profile_frames ?? null;
+  const hasPrismFrame = isPrismAccessory(equippedFrame);
 
   const [messages, setMessages]           = useState<Message[]>([]);
   const [input, setInput]                 = useState('');
@@ -980,10 +986,13 @@ export default function CoachPage() {
                     {msg.role === 'user' && (
                       <div style={{
                         width: 34, height: 34, borderRadius: 12, flexShrink: 0,
+                        position: 'relative',
+                        overflow: 'visible',
                         background: 'var(--t-btn)', border: '1px solid var(--t-brd-a)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 13, fontWeight: 900, color: 'var(--t-btn-color)',
                       } as React.CSSProperties}>
+                        {hasPrismFrame && equippedFrame ? <PrismWearableCrown rarity={equippedFrame.rarity} size={34} ageGroup={profile.age_group ?? null} /> : null}
                         {profile.username[0]?.toUpperCase()}
                       </div>
                     )}

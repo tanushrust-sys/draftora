@@ -282,6 +282,222 @@ create policy "Users can view own xp log" on public.xp_log for select using (aut
 create policy "Users can insert own xp log" on public.xp_log for insert with check (auth.uid() = user_id);
 
 -- ============================================
+-- REWARDS 2.0 CORE (PHASE 1)
+-- ============================================
+alter table public.profiles
+  add column if not exists coins_balance integer not null default 0;
+
+create table if not exists public.reward_events (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  event_type text not null,
+  event_source text not null default 'client',
+  source_ref text,
+  idempotency_key text not null,
+  payload jsonb not null default '{}'::jsonb,
+  xp_awarded integer not null default 0 check (xp_awarded >= 0),
+  coins_awarded integer not null default 0 check (coins_awarded >= 0),
+  state text not null default 'applied' check (state in ('processing', 'applied', 'capped', 'failed')),
+  cap_reason text,
+  practice_mode boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique(user_id, idempotency_key)
+);
+
+create index if not exists reward_events_user_created_idx on public.reward_events (user_id, created_at desc);
+create index if not exists reward_events_event_created_idx on public.reward_events (event_type, created_at desc);
+
+alter table public.reward_events enable row level security;
+drop policy if exists "Users can view own reward events" on public.reward_events;
+create policy "Users can view own reward events" on public.reward_events
+  for select using (auth.uid() = user_id);
+
+create table if not exists public.user_xp_ledger (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  reward_event_id uuid references public.reward_events(id) on delete cascade not null,
+  delta integer not null,
+  balance_after integer not null check (balance_after >= 0),
+  reason text not null,
+  created_at timestamptz not null default now(),
+  unique(reward_event_id)
+);
+
+create index if not exists user_xp_ledger_user_created_idx on public.user_xp_ledger (user_id, created_at desc);
+
+alter table public.user_xp_ledger enable row level security;
+drop policy if exists "Users can view own xp ledger" on public.user_xp_ledger;
+create policy "Users can view own xp ledger" on public.user_xp_ledger
+  for select using (auth.uid() = user_id);
+
+create table if not exists public.user_currency_ledger (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  reward_event_id uuid references public.reward_events(id) on delete set null,
+  currency_code text not null default 'coins',
+  delta integer not null,
+  balance_after integer not null check (balance_after >= 0),
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists user_currency_ledger_reward_event_unique
+  on public.user_currency_ledger (reward_event_id)
+  where reward_event_id is not null;
+create index if not exists user_currency_ledger_user_created_idx
+  on public.user_currency_ledger (user_id, created_at desc);
+create index if not exists user_currency_ledger_user_currency_created_idx
+  on public.user_currency_ledger (user_id, currency_code, created_at desc);
+
+alter table public.user_currency_ledger enable row level security;
+drop policy if exists "Users can view own currency ledger" on public.user_currency_ledger;
+create policy "Users can view own currency ledger" on public.user_currency_ledger
+  for select using (auth.uid() = user_id);
+
+create table if not exists public.reward_claims (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  endpoint text not null,
+  idempotency_key text not null,
+  request_hash text not null,
+  status text not null default 'processing' check (status in ('processing', 'applied', 'failed')),
+  response_payload jsonb,
+  reward_event_id uuid references public.reward_events(id) on delete set null,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, endpoint, idempotency_key)
+);
+
+create index if not exists reward_claims_status_updated_idx on public.reward_claims (status, updated_at);
+create index if not exists reward_claims_created_idx on public.reward_claims (created_at);
+
+alter table public.reward_claims enable row level security;
+drop policy if exists "Users can view own reward claims" on public.reward_claims;
+create policy "Users can view own reward claims" on public.reward_claims
+  for select using (auth.uid() = user_id);
+
+-- ============================================
+-- REWARDS 2.0 CATALOG + INVENTORY (PHASE 3)
+-- ============================================
+create table if not exists public.cosmetic_items (
+  id uuid primary key default uuid_generate_v4(),
+  slug text not null unique,
+  name text not null,
+  description text not null default '',
+  category text not null check (category in (
+    'editor_themes',
+    'profile_frames',
+    'badges',
+    'writing_effects',
+    'streak_effects',
+    'xp_visuals',
+    'ui_custom',
+    'titles'
+  )),
+  rarity text not null check (rarity in ('common', 'rare', 'epic', 'legendary')),
+  price_coins integer not null check (price_coins > 0),
+  asset_ref text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  is_active boolean not null default true,
+  is_seasonal boolean not null default false,
+  season_key text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists cosmetic_items_active_idx on public.cosmetic_items (is_active);
+create index if not exists cosmetic_items_category_idx on public.cosmetic_items (category);
+create index if not exists cosmetic_items_rarity_idx on public.cosmetic_items (rarity);
+create index if not exists cosmetic_items_price_idx on public.cosmetic_items (price_coins);
+
+alter table public.cosmetic_items enable row level security;
+drop policy if exists "Authenticated users can view cosmetic items" on public.cosmetic_items;
+create policy "Authenticated users can view cosmetic items" on public.cosmetic_items
+  for select using (auth.uid() is not null);
+
+create table if not exists public.user_inventory (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  item_id uuid references public.cosmetic_items(id) on delete cascade not null,
+  acquired_via text not null default 'shop',
+  source_rotation_id uuid,
+  price_paid_coins integer not null default 0 check (price_paid_coins >= 0),
+  created_at timestamptz not null default now(),
+  unique(user_id, item_id)
+);
+
+create index if not exists user_inventory_user_created_idx on public.user_inventory (user_id, created_at desc);
+create index if not exists user_inventory_item_idx on public.user_inventory (item_id);
+
+alter table public.user_inventory enable row level security;
+drop policy if exists "Users can view own inventory" on public.user_inventory;
+create policy "Users can view own inventory" on public.user_inventory
+  for select using (auth.uid() = user_id);
+
+create table if not exists public.equipped_cosmetics (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  profile_badge_item_id uuid references public.cosmetic_items(id) on delete set null,
+  avatar_frame_item_id uuid references public.cosmetic_items(id) on delete set null,
+  dashboard_theme_item_id uuid references public.cosmetic_items(id) on delete set null,
+  celebration_effect_item_id uuid references public.cosmetic_items(id) on delete set null,
+  streak_effect_item_id uuid references public.cosmetic_items(id) on delete set null,
+  xp_visual_item_id uuid references public.cosmetic_items(id) on delete set null,
+  ui_custom_item_id uuid references public.cosmetic_items(id) on delete set null,
+  title_upgrade_item_id uuid references public.cosmetic_items(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.equipped_cosmetics enable row level security;
+drop policy if exists "Users can view own equipped cosmetics" on public.equipped_cosmetics;
+create policy "Users can view own equipped cosmetics" on public.equipped_cosmetics
+  for select using (auth.uid() = user_id);
+
+create table if not exists public.weekly_shop_rotations (
+  id uuid primary key default uuid_generate_v4(),
+  week_start date not null unique,
+  week_end date not null,
+  seed text not null unique,
+  status text not null default 'active' check (status in ('active', 'archived')),
+  generated_by text not null default 'lazy-fallback',
+  generated_at timestamptz not null default now(),
+  fallback_generated boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (week_end > week_start)
+);
+
+create index if not exists weekly_shop_rotations_status_week_idx
+  on public.weekly_shop_rotations (status, week_start desc);
+
+alter table public.weekly_shop_rotations enable row level security;
+drop policy if exists "Authenticated users can view weekly shop rotations" on public.weekly_shop_rotations;
+create policy "Authenticated users can view weekly shop rotations" on public.weekly_shop_rotations
+  for select using (auth.uid() is not null);
+
+create table if not exists public.weekly_shop_items (
+  id uuid primary key default uuid_generate_v4(),
+  rotation_id uuid references public.weekly_shop_rotations(id) on delete cascade not null,
+  item_id uuid references public.cosmetic_items(id) on delete cascade not null,
+  slot_type text not null check (slot_type in ('affordable', 'featured', 'standard')),
+  position integer not null check (position >= 1 and position <= 8),
+  is_featured boolean not null default false,
+  price_override_coins integer check (price_override_coins > 0),
+  created_at timestamptz not null default now(),
+  unique(rotation_id, item_id),
+  unique(rotation_id, position)
+);
+
+create index if not exists weekly_shop_items_rotation_position_idx
+  on public.weekly_shop_items (rotation_id, position);
+
+alter table public.weekly_shop_items enable row level security;
+drop policy if exists "Authenticated users can view weekly shop items" on public.weekly_shop_items;
+create policy "Authenticated users can view weekly shop items" on public.weekly_shop_items
+  for select using (auth.uid() is not null);
+
+-- ============================================
 -- WRITING PROMPTS (public, seeded by admin)
 -- ============================================
 create table if not exists public.writing_prompts (
@@ -372,6 +588,22 @@ create trigger writings_updated_at before update on public.writings
 
 drop trigger if exists coach_conversations_updated_at on public.coach_conversations;
 create trigger coach_conversations_updated_at before update on public.coach_conversations
+  for each row execute procedure public.update_updated_at();
+
+drop trigger if exists reward_claims_updated_at on public.reward_claims;
+create trigger reward_claims_updated_at before update on public.reward_claims
+  for each row execute procedure public.update_updated_at();
+
+drop trigger if exists cosmetic_items_updated_at on public.cosmetic_items;
+create trigger cosmetic_items_updated_at before update on public.cosmetic_items
+  for each row execute procedure public.update_updated_at();
+
+drop trigger if exists equipped_cosmetics_updated_at on public.equipped_cosmetics;
+create trigger equipped_cosmetics_updated_at before update on public.equipped_cosmetics
+  for each row execute procedure public.update_updated_at();
+
+drop trigger if exists weekly_shop_rotations_updated_at on public.weekly_shop_rotations;
+create trigger weekly_shop_rotations_updated_at before update on public.weekly_shop_rotations
   for each row execute procedure public.update_updated_at();
 
 -- ============================================

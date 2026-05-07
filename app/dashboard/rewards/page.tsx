@@ -1,13 +1,26 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { supabase } from '@/app/lib/supabase';
-import { getXPProgress, getTitleForLevel, LEVEL_XP, TITLES, MAX_LEVEL } from '@/app/types/database';
+import { getXPProgress, MAX_LEVEL } from '@/app/types/database';
+import InventoryGrid from '@/app/components/inventory/InventoryGrid';
+import WeeklyShopGrid from '@/app/components/shop/WeeklyShopGrid';
+import XpProgressBar from '@/app/components/rewards/XpProgressBar';
+import EquippedFireIcon from '@/app/components/rewards/EquippedFireIcon';
 import {
-  Trophy, Zap, PenLine, BookOpen, Bot, Flame,
+  COSMETIC_CATEGORIES,
+  EQUIPPED_SLOT_BY_CATEGORY,
+  SHOP_INVENTORY_CATEGORIES,
+  type CosmeticCategory,
+  type CosmeticRarity,
+} from '@/app/lib/rewards/catalog';
+import { createIdempotencyKey } from '@/app/lib/xp';
+import { trackEvent } from '@/app/lib/analytics';
+import {
+  Trophy, Zap, PenLine, BookOpen, Bot,
   Star, CheckCircle2, Lock, TrendingUp, Sparkles,
-  Target, Award, Crown, Feather, GraduationCap,
+  Target, Feather, GraduationCap, Palette, WandSparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -35,34 +48,474 @@ const STREAK_MILESTONES = [
   { days: 100, xp: 800, label: 'Legendary', emoji: '👑' },
 ];
 
-/* ─── Title colours (one per level milestone, low→high) ──────────── */
-const TITLE_COLORS = [
-  '#fb923c','#4ade80','#60a5fa','#f472b6','#a78bfa',
-  '#22d3ee','#fbbf24','#f87171','#818cf8','#34d399',
-  '#f472b6','#fb923c','#c084fc','#38bdf8','#facc15',
-];
-
-const LEVEL_MILESTONES = [...TITLES]
-  .reverse()
-  .map(([minLevel, title], i) => ({
-    level: minLevel,
-    title,
-    xpNeeded: LEVEL_XP[minLevel - 1] ?? 0,
-    color: TITLE_COLORS[i] ?? '#a78bfa',
-  }));
-
 type XPLogEntry = { id: string; amount: number; reason: string; created_at: string };
+type RewardsTab = 'progress' | 'inventory' | 'shop';
+
+type InventoryOwnedItem = {
+  id: string;
+  itemId: string;
+  acquiredVia: string;
+  pricePaidXp: number;
+  createdAt: string;
+  item: {
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    category: CosmeticCategory;
+    rarity: CosmeticRarity;
+    price_xp: number;
+    asset_ref: string;
+    metadata: Record<string, unknown>;
+    is_active: boolean;
+    is_seasonal: boolean;
+    season_key: string | null;
+  };
+};
+
+type InventoryResponse = {
+  ownedItems: InventoryOwnedItem[];
+  equippedByCategory: Record<CosmeticCategory, string | null>;
+  categories: Array<{
+    category: CosmeticCategory;
+    label: string;
+    ownedCount: number;
+  }>;
+};
+
+type ShopResponse = {
+  rotation: {
+    id: string;
+    weekStart: string;
+    weekEnd: string;
+    expiresAt: string;
+    generatedFallback: boolean;
+    seed: string;
+  };
+  items: Array<{
+    id: string;
+    slotType: 'affordable' | 'featured' | 'standard';
+    position: number;
+    featured: boolean;
+    affordable: boolean;
+    price: number;
+    owned: boolean;
+    equipped: boolean;
+    item: {
+      id: string;
+      name: string;
+      description: string;
+      category: CosmeticCategory;
+      rarity: CosmeticRarity;
+      asset_ref?: string;
+      metadata?: {
+        display_category?: string;
+        collection?: string;
+        collection_index?: number;
+        rarity_rank?: number;
+      };
+    };
+  }>;
+  equippedByCategory: Record<CosmeticCategory, string | null>;
+  xpBalance: number;
+};
+
+const COSMETICS_UPDATED_EVENT = 'draftora:cosmetics-updated';
+const MUTATION_TIMEOUT_MS = 30000;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function createEmptyEquippedByCategory() {
+  return COSMETIC_CATEGORIES.reduce((acc, category) => {
+    acc[category] = null;
+    return acc;
+  }, {} as Record<CosmeticCategory, string | null>);
+}
+
+function readEquippedByCategory(payload: unknown): Record<CosmeticCategory, string | null> | null {
+  if (!isObject(payload)) return null;
+
+  const direct = payload.equippedByCategory;
+  if (isObject(direct)) {
+    const normalized = createEmptyEquippedByCategory();
+    for (const category of COSMETIC_CATEGORIES) {
+      const value = direct[category];
+      normalized[category] = typeof value === 'string' && value.length > 0 ? value : null;
+    }
+    return normalized;
+  }
+
+  const slotShape = payload.equipped;
+  if (isObject(slotShape)) {
+    const normalized = createEmptyEquippedByCategory();
+    for (const category of COSMETIC_CATEGORIES) {
+      const slot = EQUIPPED_SLOT_BY_CATEGORY[category];
+      const value = slotShape[slot];
+      normalized[category] = typeof value === 'string' && value.length > 0 ? value : null;
+    }
+    return normalized;
+  }
+
+  return null;
+}
+
+function formatCountdown(ms: number) {
+  if (!Number.isFinite(ms) || ms <= 0) return 'Refresh soon';
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${days}d ${hours}h ${minutes}m`;
+}
+
+async function fetchJsonWithTimeout(url: string, init: RequestInit, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({} as { error?: string }));
+    return { response, payload };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function notifyCosmeticsUpdated() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(COSMETICS_UPDATED_EVENT, { detail: { at: Date.now() } }));
+}
 
 /* ─── Component ─────────────────────────────────────────────────── */
 export default function RewardsPage() {
-  const { profile } = useAuth();
+  const { profile, session, isPracticeMode, refreshProfile } = useAuth();
+  const [tab, setTab] = useState<RewardsTab>('progress');
   const [xpLog, setXpLog]       = useState<XPLogEntry[]>([]);
   const [xpLogLoading, setXpLogLoading] = useState(true);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState('');
+  const [inventoryActionKey, setInventoryActionKey] = useState<string | null>(null);
+  const [inventoryData, setInventoryData] = useState<InventoryResponse | null>(null);
+  const [shopLoading, setShopLoading] = useState(false);
+  const [shopError, setShopError] = useState('');
+  const [shopActionKey, setShopActionKey] = useState<string | null>(null);
+  const [shopData, setShopData] = useState<ShopResponse | null>(null);
+  const [shopNow, setShopNow] = useState(() => Date.now());
   const fetchedForUser = useRef<string | null>(null);
+  const inventoryFetchedForUser = useRef<string | null>(null);
+  const shopFetchedForUser = useRef<string | null>(null);
+  const cosmeticMutationInFlight = useRef(false);
+  const cosmeticMutationQueue = useRef(Promise.resolve());
   // Hold the last non-null profile so the page doesn't flash to spinner on re-renders
   const stableProfile = useRef(profile);
   if (profile) stableProfile.current = profile;
   const p = stableProfile.current;
+
+  const fetchInventory = useCallback(async () => {
+    if (!session?.access_token || !p?.id) return;
+    setInventoryLoading(true);
+    setInventoryError('');
+
+    try {
+      const { response, payload } = await fetchJsonWithTimeout('/api/inventory', {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(payload.error || `Inventory request failed (${response.status})`);
+      }
+      setInventoryData(payload as InventoryResponse);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load inventory.';
+      setInventoryError(message);
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, [p?.id, session?.access_token]);
+
+  const fetchShop = useCallback(async () => {
+    if (!session?.access_token || !p?.id) return;
+    setShopLoading(true);
+    setShopError('');
+
+    try {
+      const { response, payload } = await fetchJsonWithTimeout('/api/shop/current', {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(payload.error || `Shop request failed (${response.status})`);
+      }
+      const nextShop = payload as ShopResponse;
+      setShopData(nextShop);
+
+      trackEvent('shop_viewed', {
+        rotation_id: nextShop.rotation.id,
+        week_start: nextShop.rotation.weekStart,
+        week_end: nextShop.rotation.weekEnd,
+        item_count: nextShop.items.length,
+        featured_item_id: nextShop.items.find((entry) => entry.featured)?.item.id ?? null,
+        is_practice: isPracticeMode,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load weekly shop.';
+      setShopError(message);
+    } finally {
+      setShopLoading(false);
+    }
+  }, [isPracticeMode, p?.id, session?.access_token]);
+
+  const syncCosmeticState = useCallback(async () => {
+    notifyCosmeticsUpdated();
+    await Promise.allSettled([
+      refreshProfile(),
+      fetchInventory(),
+      fetchShop(),
+    ]);
+  }, [fetchInventory, fetchShop, refreshProfile]);
+
+  const runQueuedCosmeticMutation = useCallback(async (task: () => Promise<unknown>): Promise<unknown> => {
+    const previous = cosmeticMutationQueue.current;
+    let release: (() => void) | null = null;
+    cosmeticMutationQueue.current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release?.();
+    }
+  }, []);
+
+  const equipItem = useCallback(async (category: CosmeticCategory, itemId: string) => {
+    if (!session?.access_token) return;
+    await runQueuedCosmeticMutation(async () => {
+      cosmeticMutationInFlight.current = true;
+      setInventoryActionKey(`equip:${itemId}`);
+      setInventoryError('');
+      setShopError('');
+
+      try {
+        const { response, payload } = await fetchJsonWithTimeout('/api/inventory/equip', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ category, itemId }),
+        }, MUTATION_TIMEOUT_MS);
+        if (!response.ok) {
+          throw new Error(payload.error || `Equip failed (${response.status})`);
+        }
+
+        const nextEquipped = readEquippedByCategory(payload);
+        if (nextEquipped) {
+          setInventoryData((prev) => {
+            if (!prev) return prev;
+            return { ...prev, equippedByCategory: nextEquipped };
+          });
+          setShopData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              equippedByCategory: nextEquipped,
+              items: prev.items.map((entry) => ({
+                ...entry,
+                equipped: nextEquipped[entry.item.category] === entry.item.id,
+              })),
+            };
+          });
+          trackEvent('cosmetic_equipped', {
+            item_id: itemId,
+            category,
+            is_practice: isPracticeMode,
+          });
+        }
+        await syncCosmeticState();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not equip item.';
+        setInventoryError(message);
+        await syncCosmeticState();
+      } finally {
+        setInventoryActionKey(null);
+        cosmeticMutationInFlight.current = false;
+      }
+    });
+  }, [isPracticeMode, runQueuedCosmeticMutation, session?.access_token, syncCosmeticState]);
+
+  const unequipItem = useCallback(async (category: CosmeticCategory) => {
+    if (!session?.access_token) return;
+    await runQueuedCosmeticMutation(async () => {
+      cosmeticMutationInFlight.current = true;
+      setInventoryActionKey(`unequip:${category}`);
+      setInventoryError('');
+      setShopError('');
+
+      try {
+        const { response, payload } = await fetchJsonWithTimeout('/api/inventory/unequip', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ category }),
+        }, MUTATION_TIMEOUT_MS);
+        if (!response.ok) {
+          throw new Error(payload.error || `Unequip failed (${response.status})`);
+        }
+
+        const nextEquipped = readEquippedByCategory(payload);
+        if (nextEquipped) {
+          setInventoryData((prev) => {
+            if (!prev) return prev;
+            return { ...prev, equippedByCategory: nextEquipped };
+          });
+          setShopData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              equippedByCategory: nextEquipped,
+              items: prev.items.map((entry) => ({
+                ...entry,
+                equipped: nextEquipped[entry.item.category] === entry.item.id,
+              })),
+            };
+          });
+        }
+        await syncCosmeticState();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not unequip item.';
+        setInventoryError(message);
+        await syncCosmeticState();
+      } finally {
+        setInventoryActionKey(null);
+        cosmeticMutationInFlight.current = false;
+      }
+    });
+  }, [runQueuedCosmeticMutation, session?.access_token, syncCosmeticState]);
+
+  const buyShopItem = useCallback(async (itemId: string): Promise<boolean> => {
+    if (!session?.access_token || !shopData) return false;
+    return runQueuedCosmeticMutation(async () => {
+      cosmeticMutationInFlight.current = true;
+      setShopActionKey(`buy:${itemId}`);
+      setShopError('');
+
+      const selectedEntry = shopData.items.find((entry) => entry.item.id === itemId);
+      if (selectedEntry) {
+        trackEvent('shop_item_clicked', {
+          item_id: itemId,
+          category: selectedEntry.item.category,
+          rarity: selectedEntry.item.rarity,
+          price: selectedEntry.price,
+          owned: selectedEntry.owned,
+          equipped: selectedEntry.equipped,
+          is_practice: isPracticeMode,
+        });
+        trackEvent('shop_purchase_attempted', {
+          item_id: itemId,
+          price: selectedEntry.price,
+          xp_balance_before: shopData.xpBalance ?? profile?.xp ?? 0,
+          rotation_id: shopData.rotation.id,
+          is_practice: isPracticeMode,
+        });
+      }
+
+      try {
+        const { response, payload } = await fetchJsonWithTimeout('/api/shop/purchase', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': createIdempotencyKey(['shop-purchase', profile?.id ?? 'user', itemId, shopData.rotation.id, Date.now()]),
+          },
+          body: JSON.stringify({
+            itemId,
+            rotationId: shopData.rotation.id,
+          }),
+        }, MUTATION_TIMEOUT_MS);
+        if (!response.ok) {
+          const payloadCode = typeof payload === 'object' && payload && 'code' in payload
+            ? String((payload as { code?: unknown }).code ?? '')
+            : '';
+          if (payloadCode === 'already_owned') {
+            await syncCosmeticState();
+            return true;
+          }
+          if (payloadCode === 'idempotency_in_progress' || payloadCode === 'balance_conflict') {
+            await syncCosmeticState();
+            throw new Error('Processing previous request. Inventory and shop were refreshed.');
+          }
+          throw new Error(payload.error || `Purchase failed (${response.status})`);
+        }
+
+        const purchasePayload = payload as { newXpBalance: number; purchase: { pricePaid: number } };
+        await syncCosmeticState();
+
+        trackEvent('shop_purchase_success', {
+          item_id: itemId,
+          price_paid: purchasePayload.purchase.pricePaid,
+          xp_balance_after: purchasePayload.newXpBalance,
+          rarity: selectedEntry?.item.rarity ?? null,
+          category: selectedEntry?.item.category ?? null,
+          is_practice: isPracticeMode,
+        });
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not complete purchase.';
+        setShopError(message);
+        await syncCosmeticState();
+        return false;
+      } finally {
+        setShopActionKey(null);
+        cosmeticMutationInFlight.current = false;
+      }
+    }) as Promise<boolean>;
+  }, [isPracticeMode, profile?.id, profile?.xp, runQueuedCosmeticMutation, session?.access_token, shopData, syncCosmeticState]);
+
+  const unlockAndEquipShopItem = useCallback(async (category: CosmeticCategory, itemId: string) => {
+    if (!session?.access_token || !shopData) return;
+    setShopActionKey(`buy:${itemId}`);
+    setShopError('');
+
+    try {
+      const purchased = await buyShopItem(itemId);
+      if (!purchased) return;
+      await equipItem(category, itemId);
+      await fetchShop();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not complete buy & equip.';
+      setShopError(message);
+    } finally {
+      setShopActionKey(null);
+    }
+  }, [buyShopItem, equipItem, fetchShop, session?.access_token, shopData]);
+
+  const equipFromShop = useCallback(async (category: CosmeticCategory, itemId: string) => {
+    setShopActionKey(`equip:${itemId}`);
+    try {
+      await equipItem(category, itemId);
+      await fetchShop();
+    } finally {
+      setShopActionKey(null);
+    }
+  }, [equipItem, fetchShop]);
 
   useEffect(() => {
     if (!p) return;
@@ -82,6 +535,36 @@ export default function RewardsPage() {
       });
   }, [p]);
 
+  useEffect(() => {
+    if (!p?.id || !session?.access_token) return;
+    if (inventoryFetchedForUser.current === p.id) return;
+    inventoryFetchedForUser.current = p.id;
+    void fetchInventory();
+  }, [fetchInventory, p?.id, session?.access_token]);
+
+  useEffect(() => {
+    if (!p?.id || !session?.access_token) return;
+    if (shopFetchedForUser.current === p.id) return;
+    shopFetchedForUser.current = p.id;
+    void fetchShop();
+  }, [fetchShop, p?.id, session?.access_token]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setShopNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'inventory' || !inventoryData) return;
+    trackEvent('inventory_viewed', {
+      owned_count: inventoryData.ownedItems.length,
+      equipped_count: SHOP_INVENTORY_CATEGORIES.reduce((count, category) => {
+        return inventoryData.equippedByCategory[category] ? count + 1 : count;
+      }, 0),
+      is_practice: isPracticeMode,
+    });
+  }, [inventoryData, isPracticeMode, tab]);
+
   if (!p) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--t-bg)' }}>
       <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--t-acc)', animation: 'pulse 1.5s infinite' }} />
@@ -89,15 +572,22 @@ export default function RewardsPage() {
   );
 
   const xp          = getXPProgress(p.xp);
-  const title       = getTitleForLevel(p.level);
   const isMaxLevel  = p.level >= MAX_LEVEL;
   const nextStreak  = STREAK_MILESTONES.find(m => p.streak < m.days);
   const daysToNext  = nextStreak ? nextStreak.days - p.streak : 0;
-  const nextTitle   = LEVEL_MILESTONES.find(m => p.level < m.level);
+  const inventoryOwnedCount = inventoryData?.ownedItems.length ?? 0;
+  const inventoryEquippedCount = SHOP_INVENTORY_CATEGORIES.reduce((count, category) => {
+    const value = inventoryData?.equippedByCategory?.[category];
+    return value ? count + 1 : count;
+  }, 0);
+  const effectiveXpBalance = shopData?.xpBalance ?? profile?.xp ?? 0;
+  const shopExpiresAtMs = shopData?.rotation?.expiresAt ? new Date(shopData.rotation.expiresAt).getTime() : 0;
+  const shopCountdownLabel = formatCountdown(shopExpiresAtMs - shopNow);
+  const featuredShopItem = shopData?.items.find((entry) => entry.featured) ?? null;
 
   return (
     <div style={{ background: 'var(--t-bg)', minHeight: '100vh', padding: 'clamp(1rem, 2.4vw, 2rem) clamp(0.85rem, 2.8vw, 2rem) 5rem' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
         {/* ── PAGE HEADER ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
@@ -113,12 +603,417 @@ export default function RewardsPage() {
               Rewards &amp; XP
             </h1>
             <p style={{ color: 'var(--t-tx3)', fontSize: 14, margin: '3px 0 0' }}>
-              Level up, unlock titles, and track your writing journey
+              Level up, earn XP, and track your writing journey
             </p>
           </div>
         </div>
 
-        {/* ══ LEVEL HERO CARD ══ */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.8rem',
+          flexWrap: 'wrap',
+          borderRadius: 20,
+          border: '1px solid var(--t-brd)',
+          background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, var(--t-card) 100%)',
+          padding: '0.7rem',
+          boxShadow: '0 12px 28px color-mix(in srgb, var(--t-shadow) 10%, transparent)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setTab('progress')}
+              style={{
+                borderRadius: 999,
+                border: `1px solid ${tab === 'progress' ? 'var(--t-acc-c)' : 'var(--t-brd)'}`,
+                background: tab === 'progress'
+                  ? 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 18%, white 82%) 0%, color-mix(in srgb, var(--t-acc) 10%, white 90%) 100%)'
+                  : 'var(--t-card2)',
+                color: tab === 'progress' ? 'var(--t-acc)' : 'var(--t-tx3)',
+                padding: '0.42rem 0.86rem',
+                fontSize: 12.2,
+                fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: tab === 'progress' ? '0 8px 16px color-mix(in srgb, var(--t-acc) 18%, transparent)' : 'none',
+              }}
+            >
+              Progress
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('inventory')}
+              style={{
+                borderRadius: 999,
+                border: `1px solid ${tab === 'inventory' ? 'var(--t-acc-c)' : 'var(--t-brd)'}`,
+                background: tab === 'inventory'
+                  ? 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 18%, white 82%) 0%, color-mix(in srgb, var(--t-acc) 10%, white 90%) 100%)'
+                  : 'var(--t-card2)',
+                color: tab === 'inventory' ? 'var(--t-acc)' : 'var(--t-tx3)',
+                padding: '0.42rem 0.86rem',
+                fontSize: 12.2,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: tab === 'inventory' ? '0 8px 16px color-mix(in srgb, var(--t-acc) 18%, transparent)' : 'none',
+              }}
+            >
+              <Palette style={{ width: 13, height: 13 }} />
+              Inventory
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('shop')}
+              style={{
+                borderRadius: 999,
+                border: `1px solid ${tab === 'shop' ? 'var(--t-acc-c)' : 'var(--t-brd)'}`,
+                background: tab === 'shop'
+                  ? 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 18%, white 82%) 0%, color-mix(in srgb, var(--t-acc) 10%, white 90%) 100%)'
+                  : 'var(--t-card2)',
+                color: tab === 'shop' ? 'var(--t-acc)' : 'var(--t-tx3)',
+                padding: '0.42rem 0.86rem',
+                fontSize: 12.2,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: tab === 'shop' ? '0 8px 16px color-mix(in srgb, var(--t-acc) 18%, transparent)' : 'none',
+              }}
+            >
+              <Star style={{ width: 13, height: 13 }} />
+              Shop
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+            <span style={{
+              borderRadius: 999,
+              border: '1px solid color-mix(in srgb, var(--t-acc) 26%, transparent)',
+              background: 'color-mix(in srgb, var(--t-acc) 12%, transparent)',
+              color: 'var(--t-acc)',
+              padding: '0.3rem 0.66rem',
+              fontSize: 11,
+              fontWeight: 800,
+            }}>
+              {inventoryOwnedCount} owned
+            </span>
+            <span style={{
+              borderRadius: 999,
+              border: '1px solid rgba(74, 222, 128, 0.32)',
+              background: 'rgba(74, 222, 128, 0.14)',
+              color: '#166534',
+              padding: '0.3rem 0.66rem',
+              fontSize: 11,
+              fontWeight: 800,
+            }}>
+              {inventoryEquippedCount} equipped
+            </span>
+          </div>
+        </div>
+
+        {tab === 'inventory' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{
+              borderRadius: 22,
+              border: '1px solid var(--t-acc-c)',
+              background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-acc) 18%, var(--t-card)) 0%, color-mix(in srgb, var(--t-card) 94%, white 6%) 100%)',
+              padding: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.7rem',
+              flexWrap: 'wrap',
+              boxShadow: '0 14px 30px color-mix(in srgb, var(--t-acc) 14%, transparent)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  border: '1px solid color-mix(in srgb, var(--t-acc) 28%, transparent)',
+                  background: 'color-mix(in srgb, var(--t-acc) 15%, transparent)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <Palette style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, color: 'var(--t-tx)', fontSize: 17, fontWeight: 900 }}>
+                    Cosmetic Inventory
+                  </p>
+                  <p style={{ margin: '0.2rem 0 0', color: 'var(--t-tx3)', fontSize: 12.5 }}>
+                    Build your loadout, preview each piece live, and equip instantly.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void fetchInventory()}
+                disabled={inventoryLoading}
+                style={{
+                  borderRadius: 11,
+                  border: '1px solid color-mix(in srgb, var(--t-acc) 26%, transparent)',
+                  background: 'color-mix(in srgb, var(--t-acc) 12%, transparent)',
+                  color: 'var(--t-acc)',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: '0.44rem 0.76rem',
+                  cursor: inventoryLoading ? 'default' : 'pointer',
+                  opacity: inventoryLoading ? 0.75 : 1,
+                }}
+              >
+                {inventoryLoading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+
+            {inventoryError ? (
+              <div style={{
+                borderRadius: 14,
+                border: '1px solid rgba(248, 113, 113, 0.35)',
+                background: 'rgba(248, 113, 113, 0.1)',
+                color: '#b91c1c',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '0.62rem 0.8rem',
+              }}>
+                {inventoryError}
+              </div>
+            ) : null}
+
+            {inventoryLoading && !inventoryData ? (
+              <div style={{
+                borderRadius: 18,
+                border: '1px solid var(--t-brd)',
+                background: 'var(--t-card)',
+                padding: '1rem',
+                color: 'var(--t-tx3)',
+                fontSize: 13,
+              }}>
+                Loading inventory...
+              </div>
+            ) : (
+              <InventoryGrid
+                ownedItems={inventoryData?.ownedItems ?? []}
+                equippedByCategory={
+                  inventoryData?.equippedByCategory ?? COSMETIC_CATEGORIES.reduce((acc, category) => {
+                    acc[category] = null;
+                    return acc;
+                  }, {} as Record<CosmeticCategory, string | null>)
+                }
+                ageGroup={p?.age_group ?? null}
+                actionKey={inventoryActionKey}
+                isPracticeMode={isPracticeMode}
+                onEquip={equipItem}
+                onUnequip={unequipItem}
+              />
+            )}
+
+            {isPracticeMode ? (
+              <div style={{
+                borderRadius: 14,
+                border: '1px solid rgba(217, 119, 6, 0.32)',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#b45309',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '0.62rem 0.8rem',
+              }}>
+                Practice Mode: cosmetic unlocks are temporary until you create a full account.
+              </div>
+            ) : null}
+          </div>
+        ) : tab === 'shop' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{
+              borderRadius: 24,
+              border: '1px solid var(--t-acc-c)',
+              background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-acc) 20%, var(--t-card)) 0%, color-mix(in srgb, var(--t-card) 92%, white 8%) 84%)',
+              padding: '1.05rem',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.8rem',
+              boxShadow: '0 16px 34px color-mix(in srgb, var(--t-acc) 15%, transparent)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 13,
+                  border: '1px solid color-mix(in srgb, var(--t-acc) 28%, transparent)',
+                  background: 'color-mix(in srgb, var(--t-acc) 16%, transparent)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <Star style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, color: 'var(--t-tx)', fontSize: 19, fontWeight: 900 }}>
+                    Weekly Cosmetic Shop
+                  </p>
+                  <p style={{ margin: '0.2rem 0 0', color: 'var(--t-tx3)', fontSize: 12.5 }}>
+                    Fresh drops every Monday with live previews and instant equip.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                <span style={{
+                  borderRadius: 999,
+                  border: '1px solid color-mix(in srgb, var(--t-acc) 24%, transparent)',
+                  background: 'color-mix(in srgb, var(--t-acc) 12%, transparent)',
+                  color: 'var(--t-acc)',
+                  padding: '0.3rem 0.62rem',
+                  fontSize: 11,
+                  fontWeight: 900,
+                }}>
+                  XP Balance: {effectiveXpBalance.toLocaleString()}
+                </span>
+                <span style={{
+                  borderRadius: 999,
+                  border: '1px solid var(--t-brd-a)',
+                  background: 'var(--t-acc-a)',
+                  color: 'var(--t-acc)',
+                  padding: '0.3rem 0.62rem',
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}>
+                  {shopCountdownLabel}
+                </span>
+                <span style={{
+                  borderRadius: 999,
+                  border: '1px solid rgba(59, 130, 246, 0.28)',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: '#1d4ed8',
+                  padding: '0.3rem 0.62rem',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}>
+                  <WandSparkles style={{ width: 11, height: 11 }} />
+                  New items live now
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void fetchShop()}
+                  disabled={shopLoading}
+                  style={{
+                    borderRadius: 11,
+                    border: '1px solid color-mix(in srgb, var(--t-acc) 26%, transparent)',
+                    background: 'color-mix(in srgb, var(--t-acc) 12%, transparent)',
+                    color: 'var(--t-acc)',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    padding: '0.44rem 0.76rem',
+                    cursor: shopLoading ? 'default' : 'pointer',
+                    opacity: shopLoading ? 0.75 : 1,
+                  }}
+                >
+                  {shopLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {featuredShopItem ? (
+              <div style={{
+                borderRadius: 20,
+                border: '1px solid color-mix(in srgb, var(--t-acc) 22%, var(--t-brd))',
+                background: 'linear-gradient(150deg, color-mix(in srgb, var(--t-acc) 14%, var(--t-card)) 0%, color-mix(in srgb, var(--t-card) 96%, white 4%) 84%)',
+                padding: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.8rem',
+                flexWrap: 'wrap',
+                boxShadow: '0 12px 30px color-mix(in srgb, var(--t-acc) 12%, transparent)',
+              }}>
+                <div>
+                  <p style={{ margin: 0, color: 'var(--t-acc)', fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                    Featured
+                  </p>
+                  <p style={{ margin: '0.2rem 0 0', color: 'var(--t-tx)', fontSize: 16, fontWeight: 850 }}>
+                    {featuredShopItem.item.name}
+                  </p>
+                  <p style={{ margin: '0.2rem 0 0', color: 'var(--t-tx3)', fontSize: 12 }}>
+                    {featuredShopItem.item.description || 'Premium cosmetic style for this week.'} New drops are marked directly on each card.
+                  </p>
+                </div>
+                <div style={{
+                  borderRadius: 999,
+                  border: '1px solid color-mix(in srgb, var(--t-acc) 24%, transparent)',
+                  background: 'color-mix(in srgb, var(--t-acc) 12%, transparent)',
+                  color: 'var(--t-acc)',
+                  padding: '0.3rem 0.66rem',
+                  fontSize: 13,
+                  fontWeight: 900,
+                }}>
+                  {featuredShopItem.price} XP
+                </div>
+              </div>
+            ) : null}
+
+            {shopError ? (
+              <div style={{
+                borderRadius: 14,
+                border: '1px solid rgba(248, 113, 113, 0.35)',
+                background: 'rgba(248, 113, 113, 0.1)',
+                color: '#b91c1c',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '0.62rem 0.8rem',
+              }}>
+                {shopError}
+              </div>
+            ) : null}
+
+            {shopLoading && !shopData ? (
+              <div style={{
+                borderRadius: 18,
+                border: '1px solid var(--t-brd)',
+                background: 'var(--t-card)',
+                padding: '1rem',
+                color: 'var(--t-tx3)',
+                fontSize: 13,
+              }}>
+                Loading weekly shop...
+              </div>
+            ) : (
+              <WeeklyShopGrid
+                items={shopData?.items ?? []}
+                xpBalance={effectiveXpBalance}
+                actionKey={shopActionKey}
+                ageGroup={p?.age_group ?? null}
+                onBuy={buyShopItem}
+                onBuyAndEquip={unlockAndEquipShopItem}
+                onEquip={equipFromShop}
+              />
+            )}
+
+            {isPracticeMode ? (
+              <div style={{
+                borderRadius: 14,
+                border: '1px solid rgba(217, 119, 6, 0.32)',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#b45309',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '0.62rem 0.8rem',
+              }}>
+                Practice Mode: purchases and cosmetics reset when the practice session ends.
+              </div>
+            ) : null}
+          </div>
+        ) : (
+        <>
         <div style={{
           position: 'relative', overflow: 'hidden',
           background: 'var(--t-card)', border: '1px solid var(--t-brd-a)',
@@ -135,15 +1030,14 @@ export default function RewardsPage() {
                 background: 'var(--t-acc-b)', border: '2px solid var(--t-acc-c)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 8px 32px var(--t-acc-a)',
-              }}>
-                <span style={{ fontSize: 44, fontWeight: 900, color: 'var(--t-acc)', lineHeight: 1 }}>{p.level}</span>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--t-acc)', opacity: 0.7 }}>LEVEL</span>
-              </div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--t-tx)', marginTop: 10 }}>{title}</p>
-              <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 2 }}>
-                {isMaxLevel ? 'Max rank!' : 'Current rank'}
-              </p>
-            </div>
+	              }}>
+	                <span style={{ fontSize: 44, fontWeight: 900, color: 'var(--t-acc)', lineHeight: 1 }}>{p.level}</span>
+	                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--t-acc)', opacity: 0.7 }}>LEVEL</span>
+	              </div>
+	              <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 2 }}>
+	                {isMaxLevel ? 'Max level!' : 'Current level'}
+	              </p>
+	            </div>
 
             {/* XP bar + stats */}
             <div>
@@ -159,8 +1053,8 @@ export default function RewardsPage() {
               <p style={{ fontSize: 13, color: 'var(--t-tx3)', marginBottom: 12 }}>
                 {isMaxLevel ? 'Maximum level — incredible!' : `${xp.current} / ${xp.needed} XP to Level ${p.level + 1}`}
               </p>
-              <div style={{ height: 12, background: 'var(--t-xp-track)', borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', width: `${xp.percent}%`, background: 'var(--t-xp)', borderRadius: 99, transition: 'width 0.7s' }} />
+              <div style={{ marginBottom: 8 }}>
+                <XpProgressBar percent={xp.percent} height={12} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t-tx3)' }}>
                 <span>Level {p.level}</span>
@@ -176,7 +1070,7 @@ export default function RewardsPage() {
             borderTop: '1px solid var(--t-brd)',
           }}>
             {[
-              { icon: Flame, label: 'Hot Streak', value: p.streak,              color: 'var(--t-acc)' },
+              { icon: null,  label: 'Hot Streak', value: p.streak,              color: 'var(--t-acc)' },
               { icon: Star,  label: 'XP Stash',   value: p.xp.toLocaleString(), color: 'var(--t-acc)' },
               { icon: TrendingUp, label: 'Best Run', value: p.longest_streak,   color: '#4ade80' },
             ].map((s, i) => (
@@ -185,7 +1079,7 @@ export default function RewardsPage() {
                 borderLeft: i > 0 ? '1px solid var(--t-brd)' : 'none',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
-                  <s.icon style={{ width: 18, height: 18, color: s.color }} />
+                  {s.label === 'Hot Streak' ? <EquippedFireIcon size={18} /> : s.icon ? <s.icon style={{ width: 18, height: 18, color: s.color }} /> : null}
                   <span style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{s.value}</span>
                 </div>
                 <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--t-tx3)' }}>
@@ -239,7 +1133,7 @@ export default function RewardsPage() {
                   : r.includes('test') || r.includes('quiz')
                   ? { Icon: Star,          label: 'Vocab Test Completed',      color: '#818cf8' }
                   : r.includes('streak') || r.includes('milestone')
-                  ? { Icon: Flame,         label: 'Streak Milestone',          color: '#f97316' }
+                  ? { Icon: null,          label: 'Streak Milestone',          color: '#f97316' }
                   : r.includes('goal') || r.includes('daily')
                   ? { Icon: Target,        label: 'Daily Goal Reached',        color: '#4ade80' }
                   : r.includes('level')
@@ -257,7 +1151,7 @@ export default function RewardsPage() {
                     background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <meta.Icon style={{ width: 17, height: 17, color: meta.color }} />
+                    {meta.label === 'Streak Milestone' ? <EquippedFireIcon size={17} /> : meta.Icon ? <meta.Icon style={{ width: 17, height: 17, color: meta.color }} /> : null}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-tx)', margin: 0 }}>{meta.label}</p>
@@ -353,7 +1247,7 @@ export default function RewardsPage() {
         {/* ══ STREAK BONUSES ══ */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <Flame style={{ width: 18, height: 18, color: '#fb923c' }} />
+            <EquippedFireIcon size={18} />
             <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', margin: 0 }}>Streak Boosts</h2>
           </div>
           <p style={{ color: 'var(--t-tx3)', fontSize: 13, marginBottom: '1.25rem' }}>
@@ -433,119 +1327,8 @@ export default function RewardsPage() {
           </div>
         </div>
 
-        {/* ══ TITLE PROGRESSION ══ */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <Crown style={{ width: 18, height: 18, color: 'var(--t-acc)' }} />
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--t-tx)', margin: 0 }}>Title Progression</h2>
-          </div>
-          <p style={{ color: 'var(--t-tx3)', fontSize: 13, marginBottom: '1rem' }}>
-            {nextTitle
-              ? `Next: "${nextTitle.title}" at Level ${nextTitle.level}`
-              : "You've unlocked every title — you are a legend!"}
-          </p>
-
-          {/* Current title banner */}
-          <div style={{
-            background: 'var(--t-acc-b)', border: '1px solid var(--t-brd-a)',
-            borderRadius: 18, padding: '16px 20px',
-            display: 'flex', alignItems: 'center', gap: 14, marginBottom: '1rem',
-          }}>
-            <Award style={{ width: 26, height: 26, color: 'var(--t-acc)', flexShrink: 0 }} />
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: 'var(--t-acc)', margin: 0 }}>Your Current Title</p>
-              <p style={{ fontSize: 18, fontWeight: 900, color: 'var(--t-tx)', margin: '2px 0 0' }}>{title}</p>
-            </div>
-          </div>
-
-          {/* All titles */}
-          <div style={{ background: 'var(--t-card)', border: '1px solid var(--t-brd)', borderRadius: 24, overflow: 'hidden' }}>
-            {/* Level 1 default */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '14px 20px', borderBottom: '1px solid var(--t-brd)',
-              borderLeft: '3px solid #a1a1aa',
-            }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-                background: 'rgba(161,161,170,0.12)',
-                border: '1px solid rgba(161,161,170,0.2)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--t-tx3)', lineHeight: 1 }}>1</span>
-                <span style={{ fontSize: 7, fontWeight: 700, color: 'var(--t-tx3)', letterSpacing: '0.15em', opacity: 0.6 }}>LVL</span>
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--t-tx)', margin: 0 }}>Novice Writer</p>
-                <p style={{ fontSize: 12, color: 'var(--t-tx3)', margin: '2px 0 0' }}>Starting title — your journey begins</p>
-              </div>
-              <CheckCircle2 style={{ width: 18, height: 18, color: '#4ade80', flexShrink: 0 }} />
-            </div>
-
-            {LEVEL_MILESTONES.map((m, i) => {
-              const reached   = p.level >= m.level;
-              const isCurrent = title === m.title;
-              const isNext    = nextTitle?.level === m.level;
-              const isLast    = i === LEVEL_MILESTONES.length - 1;
-
-              return (
-                <div key={m.level} style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '14px 20px',
-                  borderBottom: isLast ? 'none' : '1px solid var(--t-brd)',
-                  borderLeft: isCurrent ? `3px solid var(--t-acc)` : reached ? `3px solid ${m.color}` : '3px solid transparent',
-                  background: isCurrent ? 'var(--t-acc-a)' : 'transparent',
-                  opacity: !reached && !isNext ? 0.45 : 1,
-                }}>
-                  {/* Level badge */}
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-                    background: reached ? `${m.color}18` : 'var(--t-card2)',
-                    border: `1px solid ${reached ? m.color + '35' : 'var(--t-brd)'}`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: 16, fontWeight: 900, color: reached ? m.color : 'var(--t-tx3)', lineHeight: 1 }}>{m.level}</span>
-                    <span style={{ fontSize: 7, fontWeight: 700, color: reached ? m.color : 'var(--t-tx3)', letterSpacing: '0.15em', opacity: 0.6 }}>LVL</span>
-                  </div>
-
-                  {/* Title info */}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: reached ? 'var(--t-tx)' : 'var(--t-tx3)', margin: 0 }}>
-                        {m.title}
-                      </p>
-                      {isCurrent && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
-                          background: 'var(--t-acc-a)', color: 'var(--t-acc)',
-                          border: '1px solid var(--t-brd-a)', borderRadius: 99, padding: '2px 8px',
-                        }}>Current</span>
-                      )}
-                      {isNext && !isCurrent && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
-                          background: `${m.color}15`, color: m.color,
-                          border: `1px solid ${m.color}30`, borderRadius: 99, padding: '2px 8px',
-                        }}>Next</span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--t-tx3)', margin: 0 }}>
-                      {reached ? 'Unlocked ✓' : `Requires ${m.xpNeeded.toLocaleString()} total XP`}
-                    </p>
-                  </div>
-
-                  {/* Status */}
-                  <div style={{ flexShrink: 0 }}>
-                    {reached
-                      ? <CheckCircle2 style={{ width: 18, height: 18, color: '#4ade80' }} />
-                      : <Lock style={{ width: 15, height: 15, color: 'var(--t-tx3)', opacity: 0.4 }} />
-                    }
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        </>
+        )}
 
       </div>
     </div>

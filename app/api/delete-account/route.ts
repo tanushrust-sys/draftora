@@ -46,6 +46,12 @@ export async function POST(req: NextRequest) {
   await adminSupabase.from('vocab_tests').delete().eq('user_id', userId);
   await adminSupabase.from('daily_stats').delete().eq('user_id', userId);
   await adminSupabase.from('xp_log').delete().eq('user_id', userId);
+  await adminSupabase.from('reward_claims').delete().eq('user_id', userId);
+  await adminSupabase.from('reward_events').delete().eq('user_id', userId);
+  await adminSupabase.from('user_xp_ledger').delete().eq('user_id', userId);
+  await adminSupabase.from('user_currency_ledger').delete().eq('user_id', userId);
+  await adminSupabase.from('user_inventory').delete().eq('user_id', userId);
+  await adminSupabase.from('equipped_cosmetics').delete().eq('user_id', userId);
   await adminSupabase.from('coach_conversations').delete().eq('user_id', userId);
   await adminSupabase.from('profiles').delete().eq('id', userId);
 

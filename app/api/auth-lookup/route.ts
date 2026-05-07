@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { PRACTICE_DISPLAY_USERNAME, PRACTICE_EMAIL_DOMAIN } from '@/app/lib/practice-mode';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +12,12 @@ export async function POST(req: NextRequest) {
   if (!username) return NextResponse.json({ error: 'Missing username' }, { status: 400 });
 
   const normalized = username.trim();
+  const normalizedLower = normalized.toLowerCase();
+  const reservedPracticeUsername = PRACTICE_DISPLAY_USERNAME.toLowerCase();
+
+  if (normalizedLower === reservedPracticeUsername) {
+    return NextResponse.json({ error: 'Please use your real account username.' }, { status: 404 });
+  }
 
   const { data: deletedMatches, error: deletedError } = await adminSupabase
     .from('deleted_accounts')
@@ -32,6 +39,8 @@ export async function POST(req: NextRequest) {
     .from('profiles')
     .select('email')
     .ilike('username', normalized)
+    .neq('username', PRACTICE_DISPLAY_USERNAME)
+    .not('email', 'ilike', `%@${PRACTICE_EMAIL_DOMAIN}`)
     .limit(1);
 
   if (error) {

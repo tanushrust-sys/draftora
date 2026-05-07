@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -9,7 +9,6 @@ import {
   Clock3,
   ChevronRight,
   FlaskConical,
-  Flame,
   GraduationCap,
   Home,
   LogOut,
@@ -26,12 +25,290 @@ import { hardSignOut } from '@/app/lib/supabase';
 import { getXPProgress } from '@/app/types/database';
 import OnboardingModal from '@/app/components/OnboardingModal';
 import LevelUpPopup from '@/app/components/LevelUpPopup';
+import RewardToast from '@/app/components/rewards/RewardToast';
+import XpProgressBar from '@/app/components/rewards/XpProgressBar';
+import EquippedFireIcon from '@/app/components/rewards/EquippedFireIcon';
 import { clearAccountTypeOverride } from '@/app/lib/account-type';
 import { getAccountHomePath } from '@/app/lib/account-type';
 import BrandLogo from '@/app/components/BrandLogo';
-import { getLocalDateKey, updateStreak } from '@/app/lib/xp';
+import { awardRewardEvent, createIdempotencyKey, getLocalDateKey, REWARD_AWARDED_EVENT, type RewardAwardResponse, updateStreak } from '@/app/lib/xp';
 import { STREAK_UP_GIF } from '@/app/lib/reaction-gifs';
 import { endPracticeSessionKeepalive } from '@/app/lib/practice-session-client';
+import { trackEvent } from '@/app/lib/analytics';
+import { CATEGORY_LABELS, COSMETIC_CATEGORIES, type CosmeticCategory } from '@/app/lib/rewards/catalog';
+import { EquippedCosmeticsProvider, type EquippedCosmeticItem } from '@/app/context/EquippedCosmeticsContext';
+import { isPrismAccessory } from '@/app/lib/rewards/prism';
+import PrismWearableCrown from '@/app/components/rewards/PrismWearableCrown';
+
+function PrismNameAccessory({ rarity }: { rarity: NonNullable<EquippedCosmeticItem['rarity']> }) {
+  const spec = {
+    common: {
+      label: 'PRISM',
+      ring: 'rgba(59, 130, 246, 0.5)',
+      glow: 'rgba(59, 130, 246, 0.22)',
+      gem: 'linear-gradient(145deg, #e0f2fe 0%, #93c5fd 40%, #60a5fa 100%)',
+      aura: 'radial-gradient(circle at 50% 35%, rgba(147, 197, 253, 0.55) 0%, rgba(147, 197, 253, 0) 72%)',
+    },
+    rare: {
+      label: 'PRISM+',
+      ring: 'rgba(6, 182, 212, 0.55)',
+      glow: 'rgba(14, 165, 233, 0.26)',
+      gem: 'linear-gradient(145deg, #cffafe 0%, #67e8f9 44%, #06b6d4 100%)',
+      aura: 'radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.6) 0%, rgba(34, 211, 238, 0) 74%)',
+    },
+    epic: {
+      label: 'PRISM★',
+      ring: 'rgba(192, 132, 252, 0.62)',
+      glow: 'rgba(168, 85, 247, 0.32)',
+      gem: 'linear-gradient(145deg, #fae8ff 0%, #d8b4fe 46%, #a855f7 100%)',
+      aura: 'radial-gradient(circle at 50% 35%, rgba(216, 180, 254, 0.68) 0%, rgba(216, 180, 254, 0) 76%)',
+    },
+    legendary: {
+      label: 'PRISM∞',
+      ring: 'rgba(251, 146, 60, 0.72)',
+      glow: 'rgba(245, 158, 11, 0.36)',
+      gem: 'conic-gradient(from 220deg, #22d3ee, #60a5fa, #a855f7, #f472b6, #f59e0b, #22d3ee)',
+      aura: 'radial-gradient(circle at 50% 35%, rgba(251, 146, 60, 0.78) 0%, rgba(251, 146, 60, 0) 78%)',
+    },
+  }[rarity];
+
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: -14,
+        height: 18,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '0 9px 0 7px',
+        borderRadius: 999,
+        border: `1px solid ${spec.ring}`,
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.62) 100%)',
+        boxShadow: `0 12px 26px ${spec.glow}, inset 0 1px 0 rgba(255,255,255,0.75)`,
+        backdropFilter: 'blur(8px) saturate(1.1)',
+        WebkitBackdropFilter: 'blur(8px) saturate(1.1)',
+        pointerEvents: 'none',
+        overflow: 'hidden',
+      }}
+    >
+      {(rarity === 'epic' || rarity === 'legendary') ? <span className={`prism-rim prism-rim--${rarity}`} /> : null}
+      <span
+        className={`prism-gem prism-gem--${rarity}`}
+        style={{
+          position: 'relative',
+          width: 12,
+          height: 12,
+          borderRadius: 4,
+          transform: 'rotate(14deg)',
+          background: spec.gem,
+          boxShadow: `0 0 0 1px ${spec.ring}, 0 12px 22px ${spec.glow}`,
+          overflow: 'hidden',
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ position: 'absolute', inset: -10, background: spec.aura, opacity: 0.9 }} />
+        <span className="prism-facet prism-facet--a" />
+        <span className="prism-facet prism-facet--b" />
+        <span className="prism-facet prism-facet--c" />
+        <span className="prism-cut" />
+        {(rarity === 'epic' || rarity === 'legendary') ? <span className="prism-shine" /> : null}
+        {rarity === 'legendary' ? <span className="prism-aurora" /> : null}
+      </span>
+      <span style={{ fontSize: 9.2, fontWeight: 950, letterSpacing: '0.12em', color: 'rgba(15, 23, 42, 0.78)' }}>
+        {spec.label}
+      </span>
+      {rarity === 'legendary' ? (
+        <>
+          <span className="prism-orbit prism-orbit--a" />
+          <span className="prism-orbit prism-orbit--b" />
+          <span className="prism-spark prism-spark--1" />
+          <span className="prism-spark prism-spark--2" />
+          <span className="prism-spark prism-spark--3" />
+        </>
+      ) : null}
+      <style jsx>{`
+        .prism-rim {
+          position: absolute;
+          inset: -2px;
+          border-radius: 999px;
+          pointer-events: none;
+          opacity: 0.65;
+          background:
+            conic-gradient(
+              from 220deg,
+              rgba(34,211,238,0.0),
+              rgba(34,211,238,0.45),
+              rgba(96,165,250,0.35),
+              rgba(168,85,247,0.42),
+              rgba(244,114,182,0.28),
+              rgba(245,158,11,0.38),
+              rgba(34,211,238,0.0)
+            );
+          filter: blur(6px);
+          mix-blend-mode: screen;
+          animation: prism-rim 6.5s linear infinite;
+        }
+
+        .prism-rim--epic {
+          opacity: 0.5;
+          filter: blur(7px);
+          animation-duration: 9s;
+        }
+
+        @keyframes prism-rim {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        .prism-gem {
+          clip-path: polygon(50% 0%, 92% 18%, 100% 52%, 84% 92%, 50% 100%, 16% 92%, 0% 52%, 8% 18%);
+        }
+
+        .prism-gem::before {
+          content: '';
+          position: absolute;
+          inset: -6px;
+          background: conic-gradient(from 200deg, rgba(255,255,255,0.0), rgba(255,255,255,0.7), rgba(255,255,255,0.0));
+          opacity: 0.22;
+          filter: blur(6px);
+          animation: prism-spin 4.6s linear infinite;
+          pointer-events: none;
+        }
+
+        .prism-facet {
+          position: absolute;
+          inset: -2px;
+          opacity: 0.95;
+          pointer-events: none;
+        }
+
+        .prism-facet--a {
+          background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 48%);
+          clip-path: polygon(0 0, 68% 0, 35% 55%, 0 38%);
+        }
+
+        .prism-facet--b {
+          background: linear-gradient(225deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 56%);
+          clip-path: polygon(100% 0, 100% 70%, 58% 48%, 72% 12%);
+          mix-blend-mode: screen;
+        }
+
+        .prism-facet--c {
+          background: radial-gradient(circle at 40% 70%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 62%);
+          clip-path: polygon(18% 72%, 52% 100%, 0 100%);
+          opacity: 0.75;
+        }
+
+        .prism-cut {
+          position: absolute;
+          inset: 1px;
+          border-radius: 4px;
+          border: 1px solid rgba(255,255,255,0.42);
+          clip-path: inherit;
+          opacity: 0.55;
+        }
+
+        .prism-shine {
+          position: absolute;
+          inset: -4px;
+          background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.88) 44%, transparent 74%);
+          opacity: 0.6;
+          transform: translateX(-140%);
+          animation: prism-shine 2.4s ease-in-out infinite;
+        }
+
+        .prism-aurora {
+          position: absolute;
+          inset: -10px;
+          background: conic-gradient(from 210deg, rgba(34,211,238,0.0), rgba(34,211,238,0.28), rgba(168,85,247,0.26), rgba(244,114,182,0.22), rgba(245,158,11,0.26), rgba(34,211,238,0.0));
+          filter: blur(7px);
+          opacity: 0.75;
+          animation: prism-spin 4.2s linear infinite;
+          mix-blend-mode: screen;
+        }
+
+        @keyframes prism-spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        @keyframes prism-shine {
+          0% { transform: translateX(-140%); opacity: 0; }
+          28% { opacity: 0.6; }
+          55% { opacity: 0.35; }
+          100% { transform: translateX(140%); opacity: 0; }
+        }
+
+        .prism-orbit {
+          position: absolute;
+          width: 5px;
+          height: 5px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 0 10px rgba(251, 146, 60, 0.55);
+          opacity: 0.8;
+          animation: prism-orbit 2.4s linear infinite;
+        }
+        .prism-orbit--a {
+          right: 6px;
+          top: -3px;
+          animation-duration: 2.4s;
+        }
+        .prism-orbit--b {
+          right: 18px;
+          top: 14px;
+          width: 3px;
+          height: 3px;
+          opacity: 0.7;
+          animation-duration: 3.2s;
+          animation-direction: reverse;
+        }
+        @keyframes prism-orbit {
+          0% { transform: translate3d(0,0,0) scale(0.85); opacity: 0.35; }
+          30% { opacity: 0.85; }
+          60% { opacity: 0.55; }
+          100% { transform: translate3d(-10px,2px,0) scale(1.05); opacity: 0.25; }
+        }
+
+        .prism-spark {
+          position: absolute;
+          width: 2px;
+          height: 2px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.95);
+          box-shadow: 0 0 12px rgba(34,211,238,0.45), 0 0 18px rgba(168,85,247,0.38);
+          opacity: 0;
+          animation: prism-spark 2.8s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .prism-spark--1 { left: 34px; top: -2px; animation-delay: -0.2s; }
+        .prism-spark--2 { left: 58px; top: 15px; animation-delay: -1.1s; }
+        .prism-spark--3 { left: 14px; top: 12px; animation-delay: -1.8s; }
+
+        @keyframes prism-spark {
+          0% { transform: scale(0.8); opacity: 0; }
+          25% { opacity: 0.9; }
+          55% { opacity: 0.35; }
+          100% { transform: scale(1.4); opacity: 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .prism-shine,
+          .prism-aurora,
+          .prism-orbit,
+          .prism-rim,
+          .prism-spark {
+            animation: none !important;
+          }
+        }
+      `}</style>
+    </span>
+  );
+}
 
 function createNavLinks() {
   return [
@@ -60,6 +337,54 @@ function isNavActive(pathname: string, href: string, homeHref: string) {
 const SIDEBAR_W  = 264;
 const COLLAPSED_W = 72;
 
+type RewardToastEntry = {
+  id: string;
+  title: string;
+  subtitle: string;
+  xp: number;
+  levelUpTitle?: string | null;
+  streakMilestone?: number | null;
+};
+
+type EquippedCosmeticsResponse = {
+  equippedByCategory: Record<CosmeticCategory, string | null>;
+  equippedItemsByCategory: Record<CosmeticCategory, EquippedCosmeticItem | null>;
+};
+
+const COSMETICS_UPDATED_EVENT = 'draftora:cosmetics-updated';
+
+function createEmptyEquippedItemsByCategory() {
+  return COSMETIC_CATEGORIES.reduce((acc, category) => {
+    acc[category] = null;
+    return acc;
+  }, {} as Record<CosmeticCategory, EquippedCosmeticItem | null>);
+}
+
+function getRewardToastTitle(eventType: RewardAwardResponse['eventType']) {
+  if (eventType === 'writing_submit') return 'Writing Reward';
+  if (eventType === 'ai_feedback_received') return 'Feedback Reward';
+  if (eventType === 'vocab_sentence_success') return 'Vocab Sentence Reward';
+  if (eventType === 'vocab_drill_completed') return 'Drill Complete Reward';
+  if (eventType === 'vocab_test_completed') return 'Weekly Test Reward';
+  if (eventType === 'vocab_mastered') return 'Word Mastered Reward';
+  if (eventType === 'daily_goal_met') return 'Daily Goal Reward';
+  if (eventType === 'streak_checkin') return 'Streak Progress';
+  return 'Reward Earned';
+}
+
+function formatRewardSubtitle(payload: RewardAwardResponse) {
+  if (payload.celebrations.levelUp) {
+    return `Level ${payload.celebrations.levelUp.toLevel} reached`;
+  }
+  if (payload.celebrations.streakMilestone) {
+    return `${payload.celebrations.streakMilestone.streak}-day streak milestone`;
+  }
+  if (payload.cap.applied && payload.cap.reason) {
+    return payload.cap.reason.replace(/_/g, ' ');
+  }
+  return 'Progress saved instantly';
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, session, profile, isPracticeMode, loading, refreshProfile } = useAuth();
   const router   = useRouter();
@@ -70,6 +395,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isLargeViewport, setIsLargeViewport] = useState(false);
   const [streakGifPopup, setStreakGifPopup] = useState<{ streak: number } | null>(null);
   const streakGifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rewardToasts, setRewardToasts] = useState<RewardToastEntry[]>([]);
+  const [equippedItemsByCategory, setEquippedItemsByCategory] = useState<Record<CosmeticCategory, EquippedCosmeticItem | null>>(
+    () => createEmptyEquippedItemsByCategory(),
+  );
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('draftora-sidebar-collapsed') === '1';
@@ -84,6 +413,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return next;
     });
   };
+
+  const fetchEquippedCosmetics = useCallback(async () => {
+    if (!profile?.id || !session?.access_token) {
+      setEquippedItemsByCategory(createEmptyEquippedItemsByCategory());
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/inventory/equipped', {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const payload = await response.json().catch(() => ({} as { error?: string }));
+      if (!response.ok) {
+        throw new Error(payload.error || `Equipped cosmetic fetch failed (${response.status})`);
+      }
+      const next = payload as EquippedCosmeticsResponse;
+      setEquippedItemsByCategory({
+        ...createEmptyEquippedItemsByCategory(),
+        ...(next.equippedItemsByCategory ?? {}),
+      });
+    } catch (error) {
+      console.error('Failed to fetch equipped cosmetics:', error);
+    }
+  }, [profile?.id, session?.access_token]);
 
   useEffect(() => {
     if (!loading && !hasAuthContext && !isPublicDashboardRoute) router.replace('/login');
@@ -111,9 +467,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     window.localStorage.setItem(checkInKey, today);
     const previousStreak = profile.streak ?? 0;
+    const yesterday = getLocalDateKey(new Date(Date.now() - 86400000));
 
     void (async () => {
-      const nextStreak = await updateStreak(profile.id);
+      let nextStreak: number | undefined;
+      try {
+        if (!session?.access_token) throw new Error('Missing session token.');
+        const reward = await awardRewardEvent({
+          token: session.access_token,
+          eventType: 'streak_checkin',
+          idempotencyKey: createIdempotencyKey(['streak-checkin', profile.id, today]),
+          sourceRef: today,
+          metadata: {
+            localDate: today,
+            yesterdayDate: yesterday,
+          },
+          eventSource: 'dashboard-layout',
+        });
+        nextStreak = reward.balances.streak;
+      } catch (rewardError) {
+        console.error('streak_checkin reward call failed, using legacy fallback:', rewardError);
+        nextStreak = await updateStreak(profile.id);
+      }
+
       if (typeof nextStreak === 'number' && nextStreak > previousStreak) {
         setStreakGifPopup({ streak: nextStreak });
         if (streakGifTimerRef.current) clearTimeout(streakGifTimerRef.current);
@@ -124,13 +500,99 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
       await refreshProfile();
     })();
-  }, [loading, profile?.account_type, profile?.id, profile?.streak, refreshProfile]);
+  }, [loading, profile?.account_type, profile?.id, profile?.streak, refreshProfile, session?.access_token]);
 
   useEffect(() => {
     return () => {
       if (streakGifTimerRef.current) clearTimeout(streakGifTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!profile?.id || !session?.access_token) {
+      setEquippedItemsByCategory(createEmptyEquippedItemsByCategory());
+      return;
+    }
+    void fetchEquippedCosmetics();
+  }, [fetchEquippedCosmetics, profile?.id, session?.access_token]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onCosmeticsUpdated = () => {
+      void fetchEquippedCosmetics();
+    };
+
+    window.addEventListener(COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
+    return () => {
+      window.removeEventListener(COSMETICS_UPDATED_EVENT, onCosmeticsUpdated);
+    };
+  }, [fetchEquippedCosmetics]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onRewardAwarded = (event: Event) => {
+      const custom = event as CustomEvent<RewardAwardResponse>;
+      const payload = custom.detail;
+      if (!payload || typeof payload !== 'object') return;
+
+      const xp = Math.max(0, payload.deltas?.xp ?? 0);
+      if (xp <= 0 && !payload.celebrations?.levelUp && !payload.celebrations?.streakMilestone) {
+        return;
+      }
+
+      const toast: RewardToastEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        title: getRewardToastTitle(payload.eventType),
+        subtitle: formatRewardSubtitle(payload),
+        xp,
+        levelUpTitle: payload.celebrations?.levelUp?.title ?? null,
+        streakMilestone: payload.celebrations?.streakMilestone?.streak ?? null,
+      };
+
+      setRewardToasts((prev) => [toast, ...prev].slice(0, 4));
+      trackEvent('reward_toast_seen', {
+        event_type: payload.eventType,
+        xp_delta: xp,
+        position_in_queue: 0,
+        is_practice: isPracticeMode,
+      });
+
+      trackEvent('reward_awarded', {
+        event_type: payload.eventType,
+        xp_delta: xp,
+        idempotent_replay: payload.idempotentReplay,
+        cap_applied: payload.cap.applied,
+        is_practice: payload.practiceMode,
+        level_after: payload.balances.level,
+      });
+
+      if (payload.celebrations.levelUp) {
+        trackEvent('level_up', {
+          from_level: payload.celebrations.levelUp.fromLevel,
+          to_level: payload.celebrations.levelUp.toLevel,
+          title: payload.celebrations.levelUp.title,
+          trigger_event_type: payload.eventType,
+          is_practice: payload.practiceMode,
+        });
+      }
+
+      if (payload.eventType === 'streak_checkin') {
+        trackEvent('streak_extended', {
+          streak: payload.balances.streak,
+          longest_streak: payload.balances.longestStreak,
+          milestone_hit: payload.celebrations.streakMilestone?.streak ?? null,
+          is_practice: payload.practiceMode,
+        });
+      }
+
+    };
+
+    window.addEventListener(REWARD_AWARDED_EVENT, onRewardAwarded as EventListener);
+    return () => {
+      window.removeEventListener(REWARD_AWARDED_EVENT, onRewardAwarded as EventListener);
+    };
+  }, [isPracticeMode]);
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
@@ -173,12 +635,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const effectiveCollapsed = isLargeViewport ? collapsed : false;
   const themeAccent = 'var(--t-acc)';
   const isSunsetTheme = profile?.active_theme === 'sunset-glow';
+	  const equippedBadge = equippedItemsByCategory.badges;
+	  const equippedFrame = equippedItemsByCategory.profile_frames;
+	  const equippedStreakEffect = equippedItemsByCategory.streak_effects;
+	  const equippedXpVisual = equippedItemsByCategory.xp_visuals;
+	  const hasPrismFrame = isPrismAccessory(equippedFrame);
+  const rarityAccentByName: Record<NonNullable<EquippedCosmeticItem['rarity']>, string> = {
+    common: 'var(--t-acc)',
+    rare: '#0ea5a6',
+    epic: '#7c3aed',
+    legendary: '#d97706',
+  };
+  const frameAccent = equippedFrame ? rarityAccentByName[equippedFrame.rarity] : 'var(--t-acc)';
+  const badgeAccent = equippedBadge ? rarityAccentByName[equippedBadge.rarity] : 'var(--t-acc)';
+  const badgeIconByRarity: Record<NonNullable<EquippedCosmeticItem['rarity']>, string> = {
+    common: '★',
+    rare: '✦',
+    epic: '✶',
+    legendary: '✹',
+  };
+  const streakBadgeStyle = equippedStreakEffect
+    ? {
+        background: 'linear-gradient(180deg, rgba(251, 146, 60, 0.18) 0%, rgba(249, 115, 22, 0.08) 100%)',
+        border: '1px solid rgba(249, 115, 22, 0.28)',
+        boxShadow: '0 0 16px rgba(251, 146, 60, 0.25)',
+      }
+    : {
+        background: 'color-mix(in srgb, var(--t-tx3) 12%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--t-tx3) 20%, transparent)',
+      };
+  const streakBadgeTextColor = equippedStreakEffect
+    ? '#92400e'
+    : 'var(--t-tx3)';
   const inactiveNavLabelColor = isSunsetTheme
     ? 'rgba(255,255,255,0.94)'
     : 'color-mix(in srgb, var(--t-sb-mu) 95%, white 5%)';
   const inactiveNavDescriptionColor = isSunsetTheme
     ? 'rgba(255,255,255,0.74)'
     : 'color-mix(in srgb, var(--t-sb-mu) 72%, transparent)';
+  const dismissRewardToast = useCallback((id: string) => {
+    setRewardToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
 
   if (loading) {
     return (
@@ -246,7 +743,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="app-frame">
+    <EquippedCosmeticsProvider value={{ equippedItemsByCategory }}>
+      <div className="app-frame">
       {!isPracticeMode && <OnboardingModal />}
 
       {/* Mobile overlay */}
@@ -262,7 +760,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ─── SIDEBAR ─── */}
         <aside
           className={`fixed inset-y-0 left-0 z-50 transform transition-all duration-300 xl:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-          style={{ width: effectiveCollapsed ? COLLAPSED_W : SIDEBAR_W }}
+          style={{ width: effectiveCollapsed ? COLLAPSED_W : `min(${SIDEBAR_W}px, 86vw)` }}
         >
           <div style={{
             margin: 8,
@@ -338,69 +836,152 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {profile && !effectiveCollapsed && (
               <div style={{
                 margin: '10px 12px 0',
-                borderRadius: 18,
-                padding: '12px 12px 10px',
+                borderRadius: 22,
+                padding: '11px 11px 10px',
                 background: isSunsetTheme
                   ? 'linear-gradient(135deg, #ffd7a6 0%, #ffb980 45%, #ff9963 100%)'
-                  : `linear-gradient(135deg, color-mix(in srgb, ${themeAccent} 8%, var(--t-card2)) 0%, color-mix(in srgb, ${themeAccent} 4%, var(--t-card2)) 100%)`,
+                  : `linear-gradient(140deg, color-mix(in srgb, ${themeAccent} 20%, var(--t-card2)) 0%, color-mix(in srgb, ${themeAccent} 10%, var(--t-card2)) 100%)`,
                 border: isSunsetTheme
                   ? '1px solid rgba(199, 68, 47, 0.36)'
-                  : `1px solid color-mix(in srgb, ${themeAccent} 12%, var(--t-brd))`,
+                  : `1px solid color-mix(in srgb, ${themeAccent} 26%, var(--t-brd))`,
+                boxShadow: isSunsetTheme
+                  ? '0 14px 32px rgba(199, 68, 47, 0.2)'
+                  : `0 12px 24px color-mix(in srgb, ${themeAccent} 16%, transparent)`,
+                position: 'relative',
+                overflow: 'hidden',
                 flexShrink: 0,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {/* Avatar */}
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 14, flexShrink: 0,
-                    background: isSunsetTheme
-                      ? 'linear-gradient(135deg, #ff9a4d, #f15b42)'
-                      : `linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 17, fontWeight: 900, color: '#fff',
-                    boxShadow: isSunsetTheme
-                      ? '0 8px 20px rgba(199, 68, 47, 0.30)'
-                      : '0 8px 20px color-mix(in srgb, var(--t-acc) 24%, transparent)',
-                  }}>{initial}</div>
+                <div style={{ position: 'absolute', top: -34, right: -12, width: 104, height: 104, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 36%)', pointerEvents: 'none' }} />
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                      <p style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--t-tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
-                      {/* Level badge */}
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 3,
-                        background: 'color-mix(in srgb, var(--t-acc) 14%, transparent)',
-                        border: '1px solid color-mix(in srgb, var(--t-acc) 25%, transparent)',
-                        borderRadius: 99, padding: '2px 7px', flexShrink: 0,
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative', zIndex: 1 }}>
+                  {/* Avatar */}
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 15,
+                      padding: 3,
+                      flexShrink: 0,
+                      position: 'relative',
+                      overflow: 'visible',
+                      background: equippedFrame
+                        ? `linear-gradient(145deg, color-mix(in srgb, ${frameAccent} 72%, white 28%) 0%, color-mix(in srgb, ${frameAccent} 46%, var(--t-card2)) 100%)`
+                        : 'transparent',
+                      boxShadow: equippedFrame
+                        ? `0 10px 24px color-mix(in srgb, ${frameAccent} 26%, transparent)`
+                        : 'none',
+                    }}
+                    title={equippedFrame ? `${CATEGORY_LABELS.profile_frames}: ${equippedFrame.name}` : undefined}
+                  >
+                    {hasPrismFrame && equippedFrame ? <PrismWearableCrown rarity={equippedFrame.rarity} size={44} ageGroup={profile.age_group ?? null} /> : null}
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 12,
+                      background: isSunsetTheme
+                        ? 'linear-gradient(135deg, #ff9a4d, #f15b42)'
+                        : `linear-gradient(135deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 60%, white))`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 16,
+                      fontWeight: 900,
+                      color: '#fff',
+                      boxShadow: isSunsetTheme
+                        ? '0 8px 20px rgba(199, 68, 47, 0.30)'
+                        : '0 8px 20px color-mix(in srgb, var(--t-acc) 24%, transparent)',
+                    }}>
+                      {initial}
+                    </div>
+                  </div>
+
+	                  <div style={{ flex: 1, minWidth: 0 }}>
+	                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+	                      <div style={{ position: 'relative', minWidth: 0, flex: 1 }}>
+	                        <p style={{ fontSize: 13.8, fontWeight: 860, color: 'var(--t-tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</p>
+	                      </div>
+	                      {/* Level badge */}
+	                      <div style={{
+	                        display: 'flex', alignItems: 'center', gap: 3,
+                        background: 'color-mix(in srgb, var(--t-acc) 18%, white 82%)',
+                        border: '1px solid color-mix(in srgb, var(--t-acc) 32%, transparent)',
+                        borderRadius: 99, padding: '2px 8px', flexShrink: 0,
+                        boxShadow: '0 4px 10px color-mix(in srgb, var(--t-acc) 14%, transparent)',
                       }}>
                         <Star style={{ width: 9, height: 9, color: 'var(--t-acc)' }} />
-                        <span style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--t-acc)' }}>Lv {profile.level}</span>
+                        <span style={{ fontSize: 10.5, fontWeight: 820, color: 'var(--t-acc)' }}>Lv {profile.level}</span>
                       </div>
                     </div>
-                    <p style={{ fontSize: 10.5, color: 'var(--t-tx3)', fontWeight: 500, marginTop: 1 }}>{profile.title}</p>
                   </div>
                 </div>
 
-                {/* Streak + XP inline */}
-                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--t-tx3) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-tx3) 20%, transparent)', borderRadius: 99, padding: '4px 9px' }}>
-                    <Flame style={{ width: 10, height: 10, color: 'var(--t-tx3)' }} />
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--t-tx3)' }}>{profile.streak} day streak</span>
+                {/* Title + streak + XP inline */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap', position: 'relative', zIndex: 1 }}>
+	                  <div style={{
+	                    display: 'flex',
+	                    alignItems: 'center',
+	                    gap: 4,
+	                    background: 'color-mix(in srgb, var(--t-acc) 16%, white 84%)',
+	                    border: '1px solid color-mix(in srgb, var(--t-acc) 30%, transparent)',
+	                    borderRadius: 99,
+	                    padding: '3px 9px',
+	                    minWidth: 0,
+	                  }}>
+	                    <Star style={{ width: 10, height: 10, color: 'var(--t-acc)' }} />
+	                    <span
+	                      style={{
+	                        fontSize: 10.3,
+	                        fontWeight: 700,
+	                        color: 'var(--t-acc)',
+	                        maxWidth: 132,
+	                        overflow: 'hidden',
+	                        textOverflow: 'ellipsis',
+	                        whiteSpace: 'nowrap',
+	                      }}
+	                      title={profile.title}
+	                    >
+	                      {profile.title}
+	                    </span>
+	                  </div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    borderRadius: 99,
+                    padding: '3px 9px',
+                    ...streakBadgeStyle,
+                  }}>
+                    <EquippedFireIcon size={11} />
+                    <span style={{ fontSize: 10.3, fontWeight: 700, color: streakBadgeTextColor }}>{profile.streak} day streak</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--t-tx3) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--t-tx3) 20%, transparent)', borderRadius: 99, padding: '4px 9px' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    background: equippedXpVisual
+                      ? 'linear-gradient(180deg, rgba(59, 130, 246, 0.18) 0%, rgba(37, 99, 235, 0.08) 100%)'
+                      : 'color-mix(in srgb, var(--t-tx3) 12%, transparent)',
+                    border: equippedXpVisual
+                      ? '1px solid rgba(37, 99, 235, 0.34)'
+                      : '1px solid color-mix(in srgb, var(--t-tx3) 20%, transparent)',
+                    borderRadius: 99,
+                    padding: '3px 9px',
+                  }}>
                     <Zap style={{ width: 10, height: 10, color: 'var(--t-tx3)' }} />
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--t-tx3)' }}>{profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp} XP</span>
+                    <span style={{ fontSize: 10.3, fontWeight: 700, color: 'var(--t-tx3)' }}>{profile.xp >= 1000 ? `${(profile.xp / 1000).toFixed(1)}k` : profile.xp} XP</span>
                   </div>
                 </div>
 
                 {/* XP bar */}
                 {xp && (
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: 10, position: 'relative', zIndex: 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                       <span style={{ fontSize: 10, color: 'var(--t-tx3)', fontWeight: 500 }}>Level {profile.level} → {profile.level + 1}</span>
                       <span style={{ fontSize: 10, color: 'var(--t-acc)', fontWeight: 700 }}>{Math.round(xp.percent)}%</span>
                     </div>
-                    <div style={{ height: 5, background: 'color-mix(in srgb, var(--t-tx3) 14%, transparent)', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, var(--t-acc), color-mix(in srgb, var(--t-acc) 70%, white))', borderRadius: 99, transition: 'width 0.5s cubic-bezier(0.4,0,0.2,1)' }} />
+                    <div style={equippedXpVisual ? { filter: 'drop-shadow(0 0 10px color-mix(in srgb, var(--t-acc) 30%, transparent))' } : undefined}>
+                      <XpProgressBar percent={xp.percent} height={equippedXpVisual ? 7 : 5} />
                     </div>
                   </div>
                 )}
@@ -410,11 +991,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* ── NAV ── */}
             <nav style={{
               flex: '1 1 auto',
+              minHeight: 0,
               overflow: 'hidden',
               padding: effectiveCollapsed ? '10px 0 0' : '10px 10px 0',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'center',
+              justifyContent: 'flex-start',
               alignItems: effectiveCollapsed ? 'center' : 'stretch',
             }}>
               {!effectiveCollapsed && (
@@ -424,6 +1006,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 6,
+                minHeight: 0,
+                overflowY: 'auto',
+                overflowX: 'hidden',
                 width: '100%',
                 alignItems: effectiveCollapsed ? 'center' : 'stretch',
               }}>
@@ -561,10 +1146,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ─── MAIN CONTENT ─── */}
         <div className={`min-w-0 flex-1 ${effectiveCollapsed ? 'sidebar-offset-collapsed' : 'sidebar-offset'}`}>
           <div className="dashboard-main">
+            <nav className="dashboard-bottomnav xl:hidden" aria-label="Primary navigation">
+              {navLinks.map((link) => {
+                const active = isNavActive(pathname, link.href, homeHref);
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`dashboard-bottomnav__link${active ? ' dashboard-bottomnav__link--active' : ''}`}
+                    style={active ? { color: link.color } : undefined}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <Icon className="dashboard-bottomnav__icon" />
+                    <span className="dashboard-bottomnav__label">{link.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
             <div className="dashboard-content app-surface">
               <div className="dashboard-topbar">
                 <div className="dashboard-topbar__meta">
-                  <button type="button" className="dashboard-topbar__menu xl:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
+                  <button
+                    type="button"
+                    className="dashboard-topbar__menu xl:hidden"
+                    onClick={() => setSidebarOpen(true)}
+                    aria-label="Open navigation"
+                  >
                     <Menu className="h-4 w-4" />
                   </button>
                   <div>
@@ -573,9 +1181,41 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
                 </div>
                 {profile && (
-                  <div className="dashboard-topbar__badge">
-                    <Star className="h-4 w-4" />
-                    Level {profile.level}
+                  <div className="dashboard-topbar__actions">
+                    <div className="dashboard-topbar__badge">
+                      <Star className="h-4 w-4" />
+                      Level {profile.level}
+                    </div>
+                    {equippedBadge ? (
+                      <div
+                        className="dashboard-topbar__badge"
+                        style={{
+                          borderColor: `color-mix(in srgb, ${badgeAccent} 30%, transparent)`,
+                          background: `color-mix(in srgb, ${badgeAccent} 10%, transparent)`,
+                          color: badgeAccent,
+                          gap: 6,
+                        }}
+                        title={`${CATEGORY_LABELS.badges}: ${equippedBadge.name}`}
+                      >
+                        <span style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 999,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          border: `1px solid color-mix(in srgb, ${badgeAccent} 42%, transparent)`,
+                          background: `color-mix(in srgb, ${badgeAccent} 16%, transparent)`,
+                        }}>
+                          {badgeIconByRarity[equippedBadge.rarity]}
+                        </span>
+                        <span style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {equippedBadge.name}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -614,12 +1254,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </Link>
                 </section>
               )}
-              <main className="theme-main">{children}</main>
+              <main
+                className="theme-main"
+              >
+                {children}
+              </main>
               <LevelUpPopup />
             </div>
           </div>
         </div>
       </div>
+      {rewardToasts.length > 0 && (
+        <div className="reward-toast-stack">
+          {rewardToasts.map((toast) => (
+            <RewardToast
+              key={toast.id}
+              id={toast.id}
+              title={toast.title}
+              subtitle={toast.subtitle}
+              xp={toast.xp}
+              levelUpTitle={toast.levelUpTitle}
+              streakMilestone={toast.streakMilestone}
+              onClose={dismissRewardToast}
+            />
+          ))}
+        </div>
+      )}
       {streakGifPopup && (
         <div
           role="dialog"
@@ -670,12 +1330,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               objectFit: 'cover',
               borderRadius: 18,
               border: '1px solid rgba(255,255,255,0.18)',
-              boxShadow: '0 30px 80px rgba(0,0,0,0.55)',
+              boxShadow: '0 30px 80px rgba(0, 0, 0, 0.55)',
               display: 'block',
             }}
           />
         </div>
       )}
-    </div>
+      </div>
+    </EquippedCosmeticsProvider>
   );
 }

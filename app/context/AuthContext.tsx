@@ -170,6 +170,7 @@ function normalizeProfile(profile: Partial<Profile> & Pick<Profile, 'id'>): Prof
     title: profile.title ?? 'Novice Writer',
     level: profile.level ?? 1,
     xp: profile.xp ?? 0,
+    coins_balance: profile.coins_balance ?? 0,
     streak: profile.streak ?? 0,
     longest_streak: profile.longest_streak ?? 0,
     last_writing_date: profile.last_writing_date ?? null,

@@ -495,7 +495,7 @@ export default function ParentPage() {
   const renderWorkspaceTop = () => (
     <SurfaceCard
       style={{
-        padding: '32px 34px',
+        padding: 'clamp(18px, 3vw, 32px) clamp(16px, 3.2vw, 34px)',
         background:
           palette.mode === 'light'
             ? 'linear-gradient(132deg, #f0fdf9 0%, #d1fae5 32%, #a7f3d0 56%, #67e8f9 100%)'
@@ -610,7 +610,7 @@ export default function ParentPage() {
               <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: palette.text3 }}>
                 Student code
               </span>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div className="parent-link-row" style={{ display: 'flex', gap: 10 }}>
                 <input
                   value={studentCode}
                   onChange={(event) => setStudentCode(event.target.value.toUpperCase())}
@@ -631,11 +631,12 @@ export default function ParentPage() {
                   type="button"
                   onClick={handleLinkStudent}
                   disabled={linking}
+                  className="parent-link-button"
                   style={{
                     border: 'none',
                     borderRadius: 18,
                     padding: '0 18px',
-                    minWidth: 130,
+                    minWidth: 0,
                     cursor: linking ? 'default' : 'pointer',
                     color: '#fff',
                     background: `linear-gradient(135deg, #4dd4a8 0%, color-mix(in srgb, #4dd4a8 70%, white) 100%)`,

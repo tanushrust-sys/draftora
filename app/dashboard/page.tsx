@@ -9,7 +9,6 @@ import {
   BookOpen,
   CheckCircle2,
   FileText,
-  Flame,
   PenLine,
   Sparkles,
   Star,
@@ -26,6 +25,8 @@ import type { DailyStats } from '@/app/types/database';
 import { getWeekWords } from '@/app/lib/vocab-utils';
 import { getLocalDateKey, msUntilNextLocalMidnight } from '@/app/lib/xp';
 import { pageCache } from '@/app/lib/page-cache';
+import XpProgressBar from '@/app/components/rewards/XpProgressBar';
+import EquippedFireIcon from '@/app/components/rewards/EquippedFireIcon';
 
 type DashCache = {
   stats: DailyStats | null;
@@ -38,7 +39,7 @@ type DashCache = {
 type DashboardRole = 'student' | 'teacher' | 'parent';
 
 export default function DashboardPage() {
-  const { profile, session, loading } = useAuth();
+  const { profile, session, user, loading, isPracticeMode } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
@@ -101,6 +102,8 @@ export default function DashboardPage() {
   }, [practiceStarting, router]);
 
   useEffect(() => {
+    if (loading) return;
+    if (user || session) return;
     if (!shouldForcePractice) {
       practiceAutoStartAttemptedRef.current = false;
       return;
@@ -108,7 +111,7 @@ export default function DashboardPage() {
     if (practiceAutoStartAttemptedRef.current) return;
     practiceAutoStartAttemptedRef.current = true;
     void startPracticeMode();
-  }, [shouldForcePractice, startPracticeMode]);
+  }, [loading, session, shouldForcePractice, startPracticeMode, user]);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -249,7 +252,7 @@ export default function DashboardPage() {
     );
   }
 
-  const title       = getTitleForLevel(profile.level);
+  const title       = profile.title?.trim() ? profile.title : getTitleForLevel(profile.level);
   const xp          = getXPProgress(profile.xp);
   const words       = todayStats?.words_written ?? 0;
   const wordGoal    = profile.daily_word_goal ?? 300;
@@ -322,7 +325,7 @@ export default function DashboardPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: '0.7rem' }}>
                 {profile.streak > 0 && (
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: `linear-gradient(180deg, color-mix(in srgb, ${streakTone} 22%, white) 0%, color-mix(in srgb, ${streakTone} 14%, var(--t-card2)) 100%)`, border: `1px solid color-mix(in srgb, ${streakTone} 30%, transparent)`, borderRadius: 99, padding: '6px 14px' }}>
-                    <Flame style={{ width: 12, height: 12, color: streakTone }} />
+                    <EquippedFireIcon size={48} />
                     <span style={{ fontSize: 12, fontWeight: 700, color: streakTone }}>{profile.streak}-day streak</span>
                   </div>
                 )}
@@ -344,9 +347,7 @@ export default function DashboardPage() {
                   <span style={{ color: 'var(--t-tx3)', fontSize: 12, fontWeight: 600 }}>Level {profile.level} → {profile.level + 1}</span>
                   <span style={{ color: 'var(--t-acc)', fontSize: 12, fontWeight: 700 }}>{xp.current} / {xp.needed} XP</span>
                 </div>
-                <div style={{ height: 10, background: 'color-mix(in srgb, var(--t-xp-track) 84%, white 16%)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${xp.percent}%`, background: 'linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 80%, #ffffff) 0%, color-mix(in srgb, var(--t-acc-light) 70%, #ffffff) 100%)', borderRadius: 99, transition: 'width 0.6s ease' }} />
-                </div>
+                <XpProgressBar percent={xp.percent} height={10} />
               </div>
             )}
           </div>
@@ -355,7 +356,7 @@ export default function DashboardPage() {
         {/* ── 4 STAT CARDS ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.55rem' }}>
           {([
-            { tone: streakTone, Icon: Flame,    label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
+            { tone: streakTone, Icon: null,     label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
             { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${profile.level}` },
             { tone: wordsTone,  Icon: FileText, label: 'Today',     value: words,                sub: `of ${wordGoal} words` },
             { tone: vocabTone,  Icon: BookOpen, label: 'Word Bank', value: vocabTotal,           sub: `${vocabMastered} mastered` },
@@ -394,7 +395,11 @@ export default function DashboardPage() {
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <Icon style={{ color: isDarkTheme ? `color-mix(in srgb, ${tone} 88%, white)` : tone, width: 19, height: 19 }} />
+                {label === 'Streak'
+                  ? <EquippedFireIcon size={78} />
+                  : Icon
+                    ? <Icon style={{ color: isDarkTheme ? `color-mix(in srgb, ${tone} 88%, white)` : tone, width: 19, height: 19 }} />
+                    : null}
               </div>
               <div>
                 <p style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--t-tx)', lineHeight: 1, marginBottom: 4 }}>{value.toLocaleString()}</p>
@@ -444,7 +449,7 @@ export default function DashboardPage() {
                 }}
               >
                 <div style={{ width: 42, height: 42, borderRadius: 14, background: `color-mix(in srgb, ${tone} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${tone} 34%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon style={{ width: 19, height: 19, color: tone }} />
+                  {label === 'Streak' ? <EquippedFireIcon size={78} /> : Icon ? <Icon style={{ width: 19, height: 19, color: tone }} /> : null}
                 </div>
                 <div>
                   <h3 style={{ color: 'var(--t-tx)', fontSize: 17, fontWeight: 900, letterSpacing: '-0.02em', marginBottom: 6 }}>{label}</h3>
@@ -481,7 +486,7 @@ export default function DashboardPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     position: 'relative',
                   }}>
-                    {active && <Flame style={{ width: 14, height: 14, color: streakTone }} />}
+                    {active && <EquippedFireIcon size={63} />}
                     {!active && isToday && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--t-acc)', opacity: 0.6 }} />}
                     {w > 0 && (
                       <div style={{ position: 'absolute', bottom: -3, right: -3, width: 13, height: 13, borderRadius: '50%', background: wordsTone, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

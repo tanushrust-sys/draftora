@@ -336,7 +336,7 @@ export default function TeacherPage() {
         onClick={() => setDeleteConfirm(null)}
       >
         <div
-          style={{ borderRadius: 24, padding: '28px 30px', background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: '0 32px 80px rgba(0,0,0,0.45)', maxWidth: 400, width: 'calc(100vw - 2rem)', display: 'grid', gap: 18 }}
+          style={{ borderRadius: 24, padding: 'clamp(18px, 3vw, 28px) clamp(16px, 3.2vw, 30px)', background: palette.surface, border: `1px solid ${palette.border}`, boxShadow: '0 32px 80px rgba(0,0,0,0.45)', maxWidth: 400, width: 'calc(100vw - 2rem)', display: 'grid', gap: 18 }}
           onClick={(e) => e.stopPropagation()}
         >
           <div>
@@ -571,7 +571,7 @@ export default function TeacherPage() {
       <div
         style={{
           borderRadius: 28,
-          padding: '28px 30px',
+          padding: 'clamp(18px, 3vw, 28px) clamp(16px, 3.2vw, 30px)',
           background: mode === 'dark'
             ? 'linear-gradient(130deg, rgba(6, 10, 22, 0.98) 0%, rgba(9, 17, 34, 0.96) 42%, rgba(11, 28, 49, 0.98) 100%)'
             : 'linear-gradient(130deg, #f0fdf9 0%, #d1fae5 35%, #a7f3d0 70%, #6ee7b7 100%)',
@@ -667,7 +667,7 @@ export default function TeacherPage() {
               {classes.map((klass) => <option key={klass.id} value={klass.id}>{klass.name}</option>)}
             </select>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10 }}>
+            <div className="teacher-bulk-create-row" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10 }}>
               <input
                 value={bulkClassName}
                 onChange={(event) => setBulkClassName(event.target.value)}
@@ -685,6 +685,7 @@ export default function TeacherPage() {
               <button
                 type="button"
                 onClick={() => void handleCreateClass()}
+                className="teacher-bulk-create-button"
                 style={{
                   border: 'none',
                   borderRadius: 18,

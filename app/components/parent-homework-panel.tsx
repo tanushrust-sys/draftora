@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ClipboardCheck,
   FileText,
-  Flame,
   Loader2,
   Plus,
   Save,
@@ -19,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { authFetchJson } from '@/app/lib/auth-fetch';
+import EquippedFireIcon from '@/app/components/rewards/EquippedFireIcon';
 import {
   HOMEWORK_DAY_KEYS,
   WRITING_TYPE_OPTIONS,
@@ -789,47 +789,52 @@ export function ParentHomeworkPanel({
                         </button>
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 }}>
-                        {calendarWeekdays.map((wd) => (
-                          <div key={wd} style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: 'var(--workspace-text3)', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 0' }}>
-                            {wd}
-                          </div>
-                        ))}
-                        {calendarDays.map((day) => {
-                          const value = toYmd(day);
-                          const inCurrentMonth = day.getMonth() === calendarMonth.getMonth();
-                          const isAssigned = selectedDates.includes(value);
-                          const isDisabled = value < todayKey;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => selectCalendarDay(day)}
-                              disabled={isDisabled}
-                              style={{
-                                borderRadius: 10,
-                                border: isAssigned ? '1px solid rgba(77,212,168,0.54)' : '1px solid var(--workspace-border)',
-                                background: isAssigned
-                                  ? 'linear-gradient(135deg, rgba(77,212,168,0.24), rgba(103,232,249,0.16))'
-                                  : isDisabled
-                                    ? 'rgba(226,232,240,0.8)'
-                                    : 'var(--workspace-surface2)',
-                                color: isDisabled
-                                    ? 'var(--workspace-text3)'
-                                    : inCurrentMonth
-                                      ? 'var(--workspace-text)'
-                                      : 'var(--workspace-text3)',
-                                fontSize: 13,
-                                fontWeight: isAssigned ? 900 : 700,
-                                height: 36,
-                                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              }}
-                              title={formatHomeworkDate(value)}
-                            >
-                              {day.getDate()}
-                            </button>
-                          );
-                        })}
+                      <div className="homework-calendar-scroll">
+                        <div
+                          className="homework-calendar-grid"
+                          style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 }}
+                        >
+                          {calendarWeekdays.map((wd) => (
+                            <div key={wd} style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: 'var(--workspace-text3)', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 0' }}>
+                              {wd}
+                            </div>
+                          ))}
+                          {calendarDays.map((day) => {
+                            const value = toYmd(day);
+                            const inCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                            const isAssigned = selectedDates.includes(value);
+                            const isDisabled = value < todayKey;
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => selectCalendarDay(day)}
+                                disabled={isDisabled}
+                                style={{
+                                  borderRadius: 10,
+                                  border: isAssigned ? '1px solid rgba(77,212,168,0.54)' : '1px solid var(--workspace-border)',
+                                  background: isAssigned
+                                    ? 'linear-gradient(135deg, rgba(77,212,168,0.24), rgba(103,232,249,0.16))'
+                                    : isDisabled
+                                      ? 'rgba(226,232,240,0.8)'
+                                      : 'var(--workspace-surface2)',
+                                  color: isDisabled
+                                      ? 'var(--workspace-text3)'
+                                      : inCurrentMonth
+                                        ? 'var(--workspace-text)'
+                                        : 'var(--workspace-text3)',
+                                  fontSize: 13,
+                                  fontWeight: isAssigned ? 900 : 700,
+                                  height: 36,
+                                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                }}
+                                title={formatHomeworkDate(value)}
+                              >
+                                {day.getDate()}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1518,7 +1523,7 @@ export function ParentHomeworkPanel({
                 <div style={{ borderRadius: 18, border: '1px solid rgba(249,115,22,0.32)', padding: 14, background: 'linear-gradient(145deg, color-mix(in srgb, var(--workspace-surface2) 84%, rgba(249,115,22,0.14)) 0%, var(--workspace-surface2) 100%)', boxShadow: '0 14px 24px rgba(249,115,22,0.1)' }}>
                   <div style={{ fontSize: 12, color: 'var(--workspace-text3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Consistency streak</div>
                   <div style={{ fontSize: 30, fontWeight: 950, display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                    <Flame style={{ width: 20, height: 20, color: '#fb923c' }} />
+                    <EquippedFireIcon size={20} />
                     {data?.performance.summary.consistencyStreak ?? 0}
                   </div>
                 </div>

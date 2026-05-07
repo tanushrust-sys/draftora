@@ -870,6 +870,16 @@ export default function MarketingHome() {
         </section>
       </main>
 
+      <footer className={styles.footer}>
+        <div className={styles.footerBrand}>Draftora</div>
+        <nav className={styles.footerLinks}>
+          <Link href="/login">Login</Link>
+          <Link href="/signup">Sign Up</Link>
+          <Link href="/about">About</Link>
+        </nav>
+        <p className={styles.footerCopy}>© {new Date().getFullYear()} Draftora. All rights reserved.</p>
+      </footer>
+
       {activeBlog && (
         <div className={styles.blogOverlay} onClick={() => setActiveBlog(null)} role="dialog" aria-modal="true">
           <article className={styles.blogModal} onClick={(event) => event.stopPropagation()}>
@@ -897,16 +907,6 @@ export default function MarketingHome() {
           </article>
         </div>
       )}
-
-      <footer className={styles.footer}>
-        <div className={styles.footerBrand}>Draftora</div>
-        <nav className={styles.footerLinks}>
-          <Link href="/login">Login</Link>
-          <Link href="/signup">Sign Up</Link>
-          <Link href="/about">About</Link>
-        </nav>
-        <p className={styles.footerCopy}>© {new Date().getFullYear()} Draftora. All rights reserved.</p>
-      </footer>
     </div>
   );
 }

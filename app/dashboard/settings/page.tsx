@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTheme, THEMES, ThemeName } from '@/app/context/ThemeContext';
+import { useEquippedCosmetics } from '@/app/context/EquippedCosmeticsContext';
 import { PromiseTimeoutError, withPromiseTimeout } from '@/app/lib/promise-with-timeout';
 import { hardSignOut, supabase } from '@/app/lib/supabase';
 import { clearAgeGroupOverride, isMissingAgeGroupColumnError, writeAgeGroupOverride } from '@/app/lib/age-group-storage';
@@ -15,9 +16,12 @@ import { isDevAccount } from '@/app/lib/dev-account';
 import { getLevelFromXP, getTitleForLevel } from '@/app/types/database';
 import {
   Settings, Palette, Target, LogOut, Trash2, CheckCircle, Copy,
-  Star, Shield, Flame, Trophy,
+  Star, Shield, Trophy,
   PenLine, BookOpen, Zap, Users,
 } from 'lucide-react';
+import EquippedFireIcon from '@/app/components/rewards/EquippedFireIcon';
+import PrismWearableCrown from '@/app/components/rewards/PrismWearableCrown';
+import { isPrismAccessory } from '@/app/lib/rewards/prism';
 
 const AGE_GROUPS = [
   { value: '5-7',   label: '5 – 7',   sub: 'Early Explorer',      emoji: '🌱' },
@@ -101,7 +105,7 @@ function ThemePreview({ s, label }: { s: ThemePreviewPalette; label: string }) {
               <div style={{ flex: 1, height: 4, borderRadius: 99, background: `${s.text}75` }} />
               <div style={{ width: 20, height: 4, borderRadius: 99, background: `${s.accent}80` }} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(0, 1fr))', gap: 4 }}>
               {[s.write, s.vocab, s.rewards].map((c, i) => (
                 <div key={i} style={{ borderRadius: 7, padding: '4px 5px', background: `${c}18`, border: `1px solid ${c}30` }}>
                   <div style={{ height: 3, borderRadius: 99, background: `${c}aa`, marginBottom: 3 }} />
@@ -112,7 +116,7 @@ function ThemePreview({ s, label }: { s: ThemePreviewPalette; label: string }) {
           </div>
 
           {/* Bottom row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 5 }}>
             <div style={{ borderRadius: 9, padding: 6, background: s.card, border: `1px solid ${s.accent}18` }}>
               <div style={{ height: 2, borderRadius: 99, background: `${s.coach}aa`, marginBottom: 3, width: '60%' }} />
               <div style={{ height: 2, borderRadius: 99, background: `${s.text}40`, marginBottom: 5, width: '80%' }} />
@@ -197,6 +201,9 @@ export default function SettingsPage() {
   const { user, profile, refreshProfile } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
   const router = useRouter();
+  const cosmetics = useEquippedCosmetics();
+  const equippedFrame = cosmetics?.equippedItemsByCategory?.profile_frames ?? null;
+  const hasPrismFrame = isPrismAccessory(equippedFrame);
 
   const [editingGoals, setEditingGoals] = useState(false);
   const [wordGoal,    setWordGoal]    = useState(profile?.daily_word_goal   ?? 300);
@@ -534,11 +541,14 @@ export default function SettingsPage() {
               {/* Avatar */}
               <div style={{
                 width: 68, height: 68, borderRadius: 20, flexShrink: 0,
+                position: 'relative',
+                overflow: 'visible',
                 background: 'linear-gradient(135deg, var(--t-acc-b), var(--t-acc))',
                 border: '2px solid var(--t-acc-c)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 28, fontWeight: 900, color: 'var(--t-btn-color)',
               }}>
+                {hasPrismFrame && equippedFrame ? <PrismWearableCrown rarity={equippedFrame.rarity} size={68} ageGroup={profile.age_group ?? null} /> : null}
                 {profile.username[0]?.toUpperCase()}
               </div>
               <div>
@@ -559,7 +569,7 @@ export default function SettingsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
             {[
               { icon: Star,      label: 'XP Stash',    value: profile.xp.toLocaleString(), color: 'var(--t-acc)' },
-              { icon: Flame,     label: 'Hot Streak',  value: profile.streak,               color: 'var(--t-warning)' },
+              { icon: null,      label: 'Hot Streak',  value: profile.streak,               color: 'var(--t-warning)' },
               { icon: Trophy,    label: 'Best Run',    value: profile.longest_streak,        color: 'var(--t-success)' },
             ].map((s, i) => (
               <div key={s.label} style={{
@@ -569,7 +579,11 @@ export default function SettingsPage() {
                 borderBottom: '1px solid var(--t-brd)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
-                  <s.icon style={{ width: 16, height: 16, color: s.color }} />
+                  {s.label === 'Hot Streak' ? (
+                    <EquippedFireIcon size={16} />
+                  ) : s.icon ? (
+                    <s.icon style={{ width: 16, height: 16, color: s.color }} />
+                  ) : null}
                   <span style={{ fontSize: 22, fontWeight: 900, color: s.color }}>{s.value}</span>
                 </div>
                 <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--t-tx3)', margin: 0 }}>
