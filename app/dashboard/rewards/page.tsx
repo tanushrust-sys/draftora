@@ -1120,7 +1120,7 @@ export default function RewardsPage() {
               </div>
             ) : xpLog.map((entry, i) => {
               const r = entry.reason?.toLowerCase() ?? '';
-              const meta: { Icon: LucideIcon; label: string; color: string } =
+              const meta: { Icon: LucideIcon | null; label: string; color: string } =
                 r.includes('submit') || r.includes('writing')
                   ? { Icon: PenLine,       label: 'Writing Submitted',         color: '#fb923c' }
                   : r.includes('feedback') || r.includes('ai feedback')
