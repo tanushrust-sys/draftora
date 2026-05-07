@@ -1608,11 +1608,11 @@ function WritingsContent() {
     setProgressScores(
       reviewed.map((row) => ({
         id: row.id,
-        score: buildProgressScores(row).overall,
+        score: buildProgressScores([row], profile?.age_group ?? null)[0]?.score ?? 10,
         note: row.feedback || 'Reviewed',
       })),
     );
-  }, [writings]);
+  }, [profile?.age_group, writings]);
 
   const saveDraft = useCallback(async () => {
     if (!profile?.id) return;
