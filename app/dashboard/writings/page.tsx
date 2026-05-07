@@ -1676,6 +1676,53 @@ function WritingsContent() {
   }, [loadJournal]);
   // (Legacy submitForFeedback removed — submitForFeedbackSafe is the active path)
 
+  const grantWritingSubmitRewards = useCallback(async () => {
+    if (writingRewardsGrantedRef.current) return;
+    if (!profile?.id || !session?.access_token) return;
+
+    writingRewardsGrantedRef.current = true;
+    const todayKey = getLocalDateKey();
+    const submissionRef = writingId ?? `draft-${todayKey}-${wordCount}`;
+
+    try {
+      await Promise.allSettled([
+        awardRewardEvent({
+          token: session.access_token,
+          eventType: 'writing_submit',
+          idempotencyKey: createIdempotencyKey([
+            'writing-submit',
+            profile.id,
+            submissionRef,
+            todayKey,
+          ]),
+          sourceRef: submissionRef,
+          metadata: { category, words: wordCount, has_prompt: Boolean(prompt) },
+          eventSource: 'writings-page',
+        }),
+        awardRewardEvent({
+          token: session.access_token,
+          eventType: 'ai_feedback_received',
+          idempotencyKey: createIdempotencyKey([
+            'ai-feedback',
+            profile.id,
+            submissionRef,
+            todayKey,
+          ]),
+          sourceRef: submissionRef,
+          metadata: { category, words: wordCount },
+          eventSource: 'writings-page',
+        }),
+        updateDailyStats(profile.id, {
+          words_written: wordCount,
+          writings_completed: 1,
+          xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK,
+        }),
+      ]);
+    } catch {
+      writingRewardsGrantedRef.current = false;
+    }
+  }, [category, profile?.id, prompt, session?.access_token, wordCount, writingId]);
+
   const submitForFeedbackSafe = async (options?: { allowBelowMinimum?: boolean; source?: 'manual' | 'timer' }) => {
     if (writingMutationLock.current) return;
     if (!profile) {
