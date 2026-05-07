@@ -1658,11 +1658,24 @@ function WritingsContent() {
           .update(payload)
           .eq('id', writingId)
           .select()
-          .single();
+          .maybeSingle();
         if (error) throw error;
         if (data) {
           syncStoredWriting(data as Writing);
           setWritings((prev) => upsertWriting(prev, data as Writing));
+        } else {
+          const { data: inserted, error: insertError } = await supabase
+            .from('writings')
+            .insert(payload)
+            .select()
+            .single();
+          if (insertError || !inserted) {
+            throw insertError ?? new Error('Writing was not created.');
+          }
+          setWritingId(inserted.id);
+          syncStoredWriting(inserted as Writing);
+          setWritings((prev) => upsertWriting(prev, inserted as Writing));
+          void incrementWritingsCreated();
         }
       } else {
         const { data, error } = await supabase
@@ -1890,13 +1903,32 @@ function WritingsContent() {
           })
           .eq('id', id)
           .select()
-          .single();
+          .maybeSingle();
 
-        if (updateError || !updated) {
-          throw updateError ?? new Error('Writing was not updated.');
+        if (updateError) throw updateError;
+        if (updated) {
+          savedWriting = updated as Writing;
+        } else {
+          const { data: recreated, error: recreateError } = await supabase.from('writings')
+            .insert({
+              user_id: profile.id,
+              title: title || 'Untitled',
+              content,
+              prompt: prompt || null,
+              category,
+              status: 'submitted',
+              word_count: wordCount,
+            })
+            .select()
+            .single();
+          if (recreateError || !recreated) {
+            throw recreateError ?? new Error('Writing was not created.');
+          }
+          id = recreated.id;
+          setWritingId(recreated.id);
+          savedWriting = recreated as Writing;
+          void incrementWritingsCreated();
         }
-
-        savedWriting = updated as Writing;
       }
 
       if (savedWriting) {
