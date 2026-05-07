@@ -20,7 +20,6 @@ const CATEGORY_PALETTE: Record<CosmeticCategory, { a: string; b: string; c: stri
   streak_effects: { a: '#f97316', b: '#fb923c', c: '#fde68a' },
   xp_visuals: { a: '#0f766e', b: '#34d399', c: '#86efac' },
   ui_custom: { a: '#4338ca', b: '#818cf8', c: '#c7d2fe' },
-  titles: { a: '#92400e', b: '#f59e0b', c: '#fcd34d' },
 };
 
 const RARITY_SPEED: Record<CosmeticRarity, string> = {
@@ -37,7 +36,6 @@ const CATEGORY_LABEL_SHORT: Record<CosmeticCategory, string> = {
   streak_effects: 'Fire Aura',
   xp_visuals: 'XP Visuals',
   ui_custom: 'UI Custom',
-  titles: 'Titles',
 };
 
 export default function CosmeticLivePreview({
@@ -198,15 +196,6 @@ export default function CosmeticLivePreview({
           <span className="ui-pill ui-pill--2" />
           <span className="ui-pill ui-pill--3" />
           <span className="ui-accent-dot" />
-        </div>
-      )}
-
-      {category === 'titles' && (
-        <div className="scene scene--title" aria-hidden="true">
-          <span className="title-crown">^</span>
-          <span className="title-name">{name}</span>
-          <span className="title-glow" />
-          <span className="title-shine" />
         </div>
       )}
 
