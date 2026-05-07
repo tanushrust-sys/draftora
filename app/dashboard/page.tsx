@@ -449,7 +449,7 @@ export default function DashboardPage() {
                 }}
               >
                 <div style={{ width: 42, height: 42, borderRadius: 14, background: `color-mix(in srgb, ${tone} 16%, transparent)`, border: `1px solid color-mix(in srgb, ${tone} 34%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {label === 'Streak' ? <EquippedFireIcon size={78} /> : Icon ? <Icon style={{ width: 19, height: 19, color: tone }} /> : null}
+                  {Icon ? <Icon style={{ width: 19, height: 19, color: tone }} /> : null}
                 </div>
                 <div>
                   <h3 style={{ color: 'var(--t-tx)', fontSize: 17, fontWeight: 900, letterSpacing: '-0.02em', marginBottom: 6 }}>{label}</h3>
