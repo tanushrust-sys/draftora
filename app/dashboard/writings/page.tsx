@@ -2650,7 +2650,7 @@ function WritingsContent() {
           ] as { id: ActiveTab; icon: typeof PenLine; label: string }[]).map(tab => (
             <button
               key={tab.id}
-              onClick={() => switchTab(tab.id)}
+              onClick={() => setActiveTab(tab.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 7,
                 padding: '9px 18px', borderRadius: 14, fontSize: 13, fontWeight: 600,
@@ -3931,7 +3931,7 @@ function WritingsContent() {
                 <p style={{ color: 'var(--t-tx3)', fontSize: 14, marginBottom: 20 }}>
                   {journalEmptyBody}
                 </p>
-                <button onClick={() => switchTab('write')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 14, padding: '10px 24px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                <button onClick={() => setActiveTab('write')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 14, padding: '10px 24px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                   <PenLine style={{ width: 15, height: 15 }} /> Start Writing
                 </button>
               </div>
@@ -4144,7 +4144,7 @@ function WritingsContent() {
                 </div>
                 <p style={{ color: 'var(--t-tx)', fontWeight: 700, fontSize: 18, marginBottom: 6 }}>No data yet</p>
                 <p style={{ color: 'var(--t-tx3)', fontSize: 14, marginBottom: 20 }}>Submit at least one reviewed writing to see your progress chart</p>
-                <button onClick={() => switchTab('write')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 14, padding: '10px 24px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                <button onClick={() => setActiveTab('write')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--t-btn)', color: 'var(--t-btn-color)', borderRadius: 14, padding: '10px 24px', fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                   <PenLine style={{ width: 15, height: 15 }} /> Start Writing
                 </button>
               </div>
