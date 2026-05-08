@@ -364,6 +364,10 @@ export function TeacherHomeworkPanel({
   const [assignWriting, setAssignWriting] = useState<HomeworkAssignment['writing']>(null);
   const [assignVocab, setAssignVocab] = useState<HomeworkAssignment['vocab']>(null);
   const [assignNote, setAssignNote] = useState('');
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [timetableSaving, setTimetableSaving] = useState(false);
+  const [timetableError, setTimetableError] = useState<string | null>(null);
   const todayKey = ymd(new Date());
 
   const [weeklyPlan, setWeeklyPlan] = useState<WeeklyHomeworkPlan>(createDefaultWeeklyPlan());
@@ -405,7 +409,14 @@ export function TeacherHomeworkPanel({
   }, [classOptions]);
 
   const selectedClass = classOptions.find((c) => c.id === selectedClassId) ?? null;
-  const selectedClassStudents = (selectedClass?.studentIds ?? []).map((id) => ({ id, name: studentNameMap.get(id) ?? 'Student' }));
+  const selectedClassStudents = useMemo(
+    () => (selectedClass?.studentIds ?? []).map((id) => ({ id, name: studentNameMap.get(id) ?? 'Student' })),
+    [selectedClass, studentNameMap],
+  );
+
+  useEffect(() => {
+    setSelectedStudentIds((current) => current.filter((id) => selectedClassStudents.some((student) => student.id === id)));
+  }, [selectedClassId, selectedClassStudents]);
 
   const currentFuture = useMemo(() => {
     const now = ymd(new Date());
@@ -535,6 +546,10 @@ export function TeacherHomeworkPanel({
           : `${selectedClass.name} · Select students`;
 
   const openWizard = () => {
+    if (!selectedClass && classOptions[0]) {
+      setSelectedClassId(classOptions[0].id);
+    }
+    setAssignmentError(null);
     setActiveTab('assign');
     setWizardStep(1);
     setAssignDates([]);
@@ -548,12 +563,14 @@ export function TeacherHomeworkPanel({
     setTimetableOpen(false);
     setTimetableStep(1);
     setTimetableCopiedStep(null);
+    setTimetableError(null);
   };
 
   const openTimetable = () => {
     setWeeklyPlan(createDefaultWeeklyPlan());
     setTimetableStep(1);
     setTimetableCopiedStep(null);
+    setTimetableError(null);
     setTimetableOpen(true);
   };
 
@@ -565,27 +582,83 @@ export function TeacherHomeworkPanel({
     });
   };
 
-  const assignFromWizard = () => {
-    if (!selectedClass || !assignDates.length) return;
+  const assignFromWizard = async () => {
+    const targetClass = selectedClass ?? classOptions[0] ?? null;
+    if (!targetClass) {
+      setAssignmentError('Select a class before assigning homework.');
+      return;
+    }
+    if (!assignDates.length) {
+      setAssignmentError('Pick at least one date before assigning homework.');
+      return;
+    }
+    if (targetMode === 'students' && !selectedStudentIds.length) {
+      setAssignmentError('Select at least one student or switch to Whole class.');
+      return;
+    }
+    if (!authToken) {
+      setAssignmentError('Sign in again to assign homework.');
+      return;
+    }
+
+    setAssignmentSaving(true);
+    setAssignmentError(null);
+
     const item: HomeworkAssignment = {
       id: uid('hw'),
       dueDates: assignDates,
-      classId: selectedClass.id,
-      className: selectedClass.name,
+      classId: targetClass.id,
+      className: targetClass.name,
       studentIds: targetMode === 'students' ? selectedStudentIds : [],
-      targetLabel: targetMode === 'class' ? selectedClass.name : `${selectedClass.name} · ${selectedStudentIds.length} students`,
+      targetLabel: targetMode === 'class' ? targetClass.name : `${targetClass.name} · ${selectedStudentIds.length} students`,
       writing: assignWriting,
       vocab: assignVocab,
       note: assignNote,
       createdAt: ymd(new Date()),
     };
-    setAssignments((current) => [item, ...current]);
-    setWizardOpen(false);
-    setActiveTab('currentFuture');
+    try {
+      await authFetchJson<{ ok: true }>(`/api/teacher/homework`, {
+        token: authToken,
+        method: 'POST',
+        body: {
+          classId: targetClass.id,
+          targetMode,
+          studentIds: targetMode === 'students' ? selectedStudentIds : [],
+          assignedDates: assignDates,
+          payload: {
+            writing: assignWriting,
+            vocab: assignVocab,
+            parentNotes: assignNote,
+          },
+        },
+      });
+      setAssignmentError(null);
+      setAssignments((current) => [item, ...current]);
+      setWizardOpen(false);
+      setActiveTab('currentFuture');
+    } catch (error) {
+      setAssignmentError((error as Error)?.message || 'Could not assign homework.');
+    } finally {
+      setAssignmentSaving(false);
+    }
   };
 
-  const saveWeeklyTimetable = () => {
-    if (!selectedClass) return;
+  const saveWeeklyTimetable = async () => {
+    const targetClass = selectedClass ?? classOptions[0] ?? null;
+    if (!targetClass) {
+      setTimetableError('Select a class before saving the timetable.');
+      return;
+    }
+    if (targetMode === 'students' && !selectedStudentIds.length) {
+      setTimetableError('Select at least one student or switch to Whole class.');
+      return;
+    }
+    if (!authToken) {
+      setTimetableError('Sign in again to save the timetable.');
+      return;
+    }
+    setTimetableSaving(true);
+    setTimetableError(null);
     const today = new Date();
     const rows: HomeworkAssignment[] = HOMEWORK_DAY_KEYS.map((dayKey, idx) => {
       const date = ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() + idx + 1));
@@ -593,10 +666,10 @@ export function TeacherHomeworkPanel({
       return {
         id: uid('week'),
         dueDates: [date],
-        classId: selectedClass.id,
-        className: selectedClass.name,
+        classId: targetClass.id,
+        className: targetClass.name,
         studentIds: targetMode === 'students' ? selectedStudentIds : [],
-        targetLabel: targetMode === 'class' ? selectedClass.name : `${selectedClass.name} · ${selectedStudentIds.length} students`,
+        targetLabel: targetMode === 'class' ? targetClass.name : `${targetClass.name} · ${selectedStudentIds.length} students`,
         writing: day.writing
           ? {
               piecesByType: { ...(day.writing.piecesByType ?? {}) },
@@ -620,8 +693,26 @@ export function TeacherHomeworkPanel({
         },
       };
     });
-    setAssignments((current) => [...rows, ...current]);
-    setActiveTab('currentFuture');
+    try {
+      await authFetchJson<{ ok: true }>(`/api/teacher/homework`, {
+        token: authToken,
+        method: 'PUT',
+        body: {
+          classId: targetClass.id,
+          targetMode,
+          studentIds: targetMode === 'students' ? selectedStudentIds : [],
+        weeklyPlan,
+      },
+      });
+      setTimetableError(null);
+      setAssignments((current) => [...rows, ...current]);
+      setActiveTab('currentFuture');
+      closeTimetable();
+    } catch (error) {
+      setTimetableError((error as Error)?.message || 'Could not save timetable.');
+    } finally {
+      setTimetableSaving(false);
+    }
   };
 
   const clearWeek = () => setWeeklyPlan(createDefaultWeeklyPlan());
@@ -1315,17 +1406,20 @@ export function TeacherHomeworkPanel({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
-                      saveWeeklyTimetable();
-                      closeTimetable();
-                    }}
-                    style={{ borderRadius: 12, border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`, color: ctaText, padding: '10px 12px', fontWeight: 900, cursor: 'pointer' }}
+                    onClick={() => { void saveWeeklyTimetable(); }}
+                    disabled={timetableSaving}
+                    style={{ borderRadius: 12, border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`, color: ctaText, padding: '10px 12px', fontWeight: 900, cursor: timetableSaving ? 'wait' : 'pointer', opacity: timetableSaving ? 0.8 : 1 }}
                   >
-                    Save weekly timetable
+                    {timetableSaving ? 'Saving…' : 'Save weekly timetable'}
                   </button>
                 )}
               </div>
             </div>
+            {timetableError ? (
+              <div style={{ marginTop: 10, borderRadius: 12, border: `1px solid color-mix(in srgb, ${palette.dangerBorder} 70%, ${palette.border})`, background: `color-mix(in srgb, ${palette.dangerBg} 55%, ${palette.surface2})`, color: '#fecaca', padding: 10, fontSize: 12.5, fontWeight: 850 }}>
+                {timetableError}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1539,6 +1633,11 @@ export function TeacherHomeworkPanel({
                   <div>Vocab summary: {assignVocab ? `${assignVocab.wordsToLearn} words${assignVocab.requireDrill ? ' + drill' : ''}` : 'None'}</div>
                 </div>
                 <textarea value={assignNote} onChange={(e) => setAssignNote(e.target.value)} placeholder="Optional note shown to your students" rows={4} style={{ width: '100%', borderRadius: 10, border: `1px solid ${palette.border}`, background: palette.surface2, color: palette.text, padding: 10 }} />
+                {assignmentError ? (
+                  <div style={{ borderRadius: 12, border: `1px solid color-mix(in srgb, ${palette.dangerBorder} 70%, ${palette.border})`, background: `color-mix(in srgb, ${palette.dangerBg} 55%, ${palette.surface2})`, color: '#fecaca', padding: 10, fontSize: 12.5, fontWeight: 850 }}>
+                    {assignmentError}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             </div>
@@ -1565,10 +1664,11 @@ export function TeacherHomeworkPanel({
               ) : (
                 <button
                   type="button"
-                  onClick={assignFromWizard}
-                  style={{ borderRadius: 14, border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`, color: ctaText, padding: '12px 18px', fontWeight: 900, cursor: 'pointer', minWidth: 168 }}
+                  onClick={() => { void assignFromWizard(); }}
+                  disabled={assignmentSaving}
+                  style={{ borderRadius: 14, border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`, color: ctaText, padding: '12px 18px', fontWeight: 900, cursor: assignmentSaving ? 'wait' : 'pointer', minWidth: 168, opacity: assignmentSaving ? 0.8 : 1 }}
                 >
-                  Assign Homework
+                  {assignmentSaving ? 'Assigning…' : 'Assign Homework'}
                 </button>
               )}
             </div>
