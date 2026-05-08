@@ -597,6 +597,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   useEffect(() => {
+    if (!streakGifPopup) return;
+    const timer = window.setTimeout(() => setStreakGifPopup(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [streakGifPopup]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const media = window.matchMedia('(min-width: 1280px)');
     const apply = () => setIsLargeViewport(media.matches);
@@ -1323,6 +1329,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             src={STREAK_UP_GIF}
             alt="Streak up GIF"
             loading="lazy"
+            onError={() => setStreakGifPopup(null)}
             onClick={(event) => event.stopPropagation()}
             style={{
               width: 'min(560px, 90vw)',

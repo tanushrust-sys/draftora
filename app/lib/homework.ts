@@ -135,7 +135,7 @@ export function createDefaultWritingConfig(): WritingHomeworkConfig {
 
 export function createDefaultVocabConfig(): VocabHomeworkConfig {
   return {
-    wordsToLearn: 10,
+    wordsToLearn: 0,
     requireDrill: false,
     notes: '',
   };

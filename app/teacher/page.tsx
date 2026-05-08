@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, BarChart3, ChevronRight, Copy, LayoutGrid, MoonStar, Plus, RefreshCcw, School, Settings, SunMedium, Trash2, Users, UserCircle2 } from 'lucide-react';
+import { ArrowRight, BarChart3, ChevronRight, ClipboardCheck, Copy, LayoutGrid, LockKeyhole, MoonStar, Plus, RefreshCcw, School, Settings, SunMedium, Trash2, Users, UserCircle2 } from 'lucide-react';
 import { RoleAppShell } from '@/app/components/role-app-shell';
 import { StudentReportPanel, type StudentReportData } from '@/app/components/student-report-panel';
 import { SectionTitle, PillButton, ToggleRow } from '@/app/components/workspace-controls';
@@ -11,8 +11,9 @@ import { hardSignOut } from '@/app/lib/supabase';
 import { authFetchJson } from '@/app/lib/auth-fetch';
 import { getWorkspacePalette } from '@/app/lib/workspace-palette';
 import { readWorkspaceMode, writeWorkspaceMode, type WorkspaceMode } from '@/app/lib/workspace-mode';
+import { TeacherHomeworkPanel } from '@/app/teacher/teacher-homework-panel';
 
-type TeacherTab = 'overview' | 'bulk' | 'classes' | 'settings';
+type TeacherTab = 'overview' | 'bulk' | 'classes' | 'homework' | 'settings';
 type TeacherStudent = { id: string; username: string; email: string | null; password: string | null; title: string; level: number; xp: number; streak: number; age_group: string; student_id: string | null; };
 type TeacherClass = { id: string; name: string; description: string; studentCount: number; students: Array<{ studentId: string; profile: Pick<TeacherStudent, 'id' | 'username' | 'title' | 'level' | 'xp' | 'streak' | 'age_group' | 'student_id'> | null; }>; };
 type TeacherWorkspace = { students: TeacherStudent[]; classes: TeacherClass[]; };
@@ -26,7 +27,7 @@ const NOTIFICATION_KEY = 'draftora-teacher-notifications-v1';
 function readStoredTab(): TeacherTab {
   if (typeof window === 'undefined') return 'overview';
   const value = localStorage.getItem(TAB_KEY);
-  return value === 'bulk' || value === 'classes' || value === 'settings' ? value : 'overview';
+  return value === 'bulk' || value === 'classes' || value === 'homework' || value === 'settings' ? value : 'overview';
 }
 
 function stored(key: string) {
@@ -56,6 +57,51 @@ function savePrefs(prefs: NotificationPrefs) {
 
 function csvCell(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+function CredentialField({
+  label,
+  value,
+  icon,
+  accent,
+  surface,
+  border,
+  text,
+  text3,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  accent: string;
+  surface: string;
+  border: string;
+  text: string;
+  text3: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        borderRadius: 16,
+        border: `1px solid color-mix(in srgb, ${accent} 18%, ${border})`,
+        background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 12%, ${surface}), ${surface})`,
+        padding: compact ? '10px 12px' : '12px 14px',
+        display: 'grid',
+        gap: 6,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: text3, fontWeight: 900 }}>
+        <span style={{ width: 20, height: 20, borderRadius: 7, display: 'grid', placeItems: 'center', background: `color-mix(in srgb, ${accent} 16%, transparent)`, color: accent }}>
+          {icon}
+        </span>
+        {label}
+      </div>
+      <div style={{ fontSize: compact ? 15 : 16, fontWeight: 900, color: text, wordBreak: 'break-word', lineHeight: 1.35, fontFamily: 'ui-monospace, SFMono-Regular, SF Mono, Menlo, Monaco, Consolas, Liberation Mono, monospace' }}>
+        {value}
+      </div>
+    </div>
+  );
 }
 
 export default function TeacherPage() {
@@ -178,6 +224,7 @@ export default function TeacherPage() {
     { key: 'overview', label: 'Student Overview', description: 'All students', icon: LayoutGrid },
     { key: 'bulk', label: 'Bulk Generation', description: 'Create batches', icon: School },
     { key: 'classes', label: 'Class Management', description: 'Groups and rosters', icon: Users },
+    { key: 'homework', label: 'Homework', description: 'Assign & review', icon: ClipboardCheck },
     { key: 'settings', label: 'Settings', description: 'Account and prefs', icon: Settings },
   ] as const;
 
@@ -451,21 +498,16 @@ export default function TeacherPage() {
                 )
               ) : isSelected && studentDetailMode === 'code' ? (
                 <div style={{ display: 'grid', gap: 12 }}>
-                  {[
-                    { label: 'Username', value: student.username },
-                    { label: 'Email', value: student.email || `${student.username}@draftora.school` },
-                    { label: 'Password', value: student.password || 'No password' },
-                  ].map(({ label, value }) => (
-                    <div key={label}>
-                      <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: palette.text3, fontWeight: 800 }}>{label}</div>
-                      <div style={{ marginTop: 3, fontSize: 16, fontWeight: 900, wordBreak: 'break-word' }}>{value}</div>
-                    </div>
-                  ))}
+                  <div style={{ borderRadius: 16, padding: 12, background: `linear-gradient(135deg, rgba(103,232,249,0.12), ${palette.surface2})`, border: `1px solid ${palette.border}`, display: 'grid', gap: 10 }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: palette.text3, fontWeight: 900 }}>Student login</div>
+                    <CredentialField label="Username" value={student.username} icon={<UserCircle2 style={{ width: 12, height: 12 }} />} accent="#67e8f9" surface={palette.surface2} border={palette.border} text={palette.text} text3={palette.text3} />
+                    <CredentialField label="Password" value={student.password || 'No password'} icon={<LockKeyhole style={{ width: 12, height: 12 }} />} accent="#67e8f9" surface={palette.surface2} border={palette.border} text={palette.text} text3={palette.text3} />
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleCopyDetails(
                       `student-${student.id}`,
-                      `Username: ${student.username}\nEmail: ${student.email || `${student.username}@draftora.school`}\nPassword: ${student.password || ''}`,
+                      `Username: ${student.username}\nPassword: ${student.password || ''}`,
                     )}
                     style={{ border: `1px solid ${palette.border}`, borderRadius: 12, padding: '8px 14px', background: palette.surface2, color: palette.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 850, width: 'fit-content' }}
                   >
@@ -861,7 +903,7 @@ export default function TeacherPage() {
                     type="button"
                     onClick={() => handleCopyDetails(
                       `bulk-${student.username}`,
-                      `Username: ${student.username}\nEmail: ${student.email}\nPassword: ${student.password}`,
+                      `Username: ${student.username}\nPassword: ${student.password}`,
                     )}
                     style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: '9px 12px', background: 'transparent', color: palette.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
                   >
@@ -872,13 +914,13 @@ export default function TeacherPage() {
                 <div style={{ display: 'grid', gap: 10 }}>
                   {[
                     { label: 'Username', value: student.username },
-                    { label: 'Email', value: student.email },
                     { label: 'Password', value: student.password },
                   ].map(({ label, value }) => (
-                    <div key={label} style={{ fontSize: 15, color: palette.text, lineHeight: 1.5 }}>
-                      <strong style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: palette.text3 }}>{label}</strong>
-                      <div style={{ fontSize: 16, fontWeight: 900, marginTop: 2, wordBreak: 'break-word' }}>{value}</div>
-                    </div>
+                    label === 'Password' ? (
+                      <CredentialField key={label} label="Password" value={value} icon={<LockKeyhole style={{ width: 12, height: 12 }} />} accent="#67e8f9" surface={palette.surface2} border={palette.border} text={palette.text} text3={palette.text3} />
+                    ) : (
+                      <CredentialField key={label} label="Username" value={value} icon={<UserCircle2 style={{ width: 12, height: 12 }} />} accent="#67e8f9" surface={palette.surface2} border={palette.border} text={palette.text} text3={palette.text3} compact />
+                    )
                   ))}
                 </div>
               </div>
@@ -945,6 +987,17 @@ export default function TeacherPage() {
     </div>
   );
 
+  const renderHomework = () => (
+    <TeacherHomeworkPanel
+      mode={mode}
+      palette={palette}
+      paletteStyle={paletteStyle}
+      classes={classes}
+      students={students}
+      authToken={authToken}
+    />
+  );
+
   const modeToggle = (
     <div style={{ display: 'flex', gap: 8 }}>
       <PillButton active={mode === 'dark'} accent="#67e8f9" onClick={() => setMode('dark')}><MoonStar style={{ width: 14, height: 14, marginRight: 6, verticalAlign: 'middle' }} />Dark</PillButton>
@@ -973,6 +1026,7 @@ export default function TeacherPage() {
         {activeTab === 'overview' ? renderOverview() : null}
         {activeTab === 'bulk' ? renderBulk() : null}
         {activeTab === 'classes' ? renderClasses() : null}
+        {activeTab === 'homework' ? renderHomework() : null}
         {activeTab === 'settings' ? renderSettings() : null}
       </div>
 

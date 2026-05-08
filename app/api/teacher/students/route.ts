@@ -32,36 +32,8 @@ async function generateUniqueStudentCode() {
   return generateStudentCode();
 }
 
-async function isUsernameTaken(username: string) {
-  const profilesResult = await adminSupabase.from('profiles').select('id, deleted_at').ilike('username', username);
-  if (profilesResult.error) {
-    console.warn('profiles username lookup failed during bulk student generation:', profilesResult.error.message);
-    return false;
-  }
-
-  const deletedAccountsResult = await adminSupabase.from('deleted_accounts').select('id').ilike('username', username).limit(1);
-  if (deletedAccountsResult.error) {
-    // Some environments may not have a fully migrated deleted_accounts table.
-    // Username reuse is better than failing the whole batch on that lookup.
-    console.warn('deleted_accounts username lookup failed during bulk student generation:', deletedAccountsResult.error.message);
-  }
-
-  const activeProfiles = (profilesResult.data ?? []).some((row) => !row.deleted_at);
-  return activeProfiles || Boolean((deletedAccountsResult.data ?? []).length > 0);
-}
-
-async function buildUsername(firstName: string, usedUsernames: Set<string>) {
-  const base = normalizeNamePart(firstName) || 'student';
-  let candidate = base;
-  let suffix = 2;
-
-  while (usedUsernames.has(candidate) || (await isUsernameTaken(candidate))) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-
-  usedUsernames.add(candidate);
-  return candidate;
+function buildUsername(firstName: string) {
+  return normalizeNamePart(firstName) || 'student';
 }
 
 function buildEmail(code: string) {
@@ -257,12 +229,10 @@ export async function POST(request: NextRequest) {
       password: string;
       studentCode: string;
     }> = [];
-    const usedUsernames = new Set<string>();
-
     for (const row of validRows) {
       const firstName = row.firstName;
       const lastName = row.lastName;
-      const username = await buildUsername(firstName, usedUsernames);
+      const username = buildUsername(firstName);
 
       let createdStudent = false;
       let lastError: string | null = null;
