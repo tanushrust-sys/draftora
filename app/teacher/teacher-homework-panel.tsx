@@ -701,8 +701,8 @@ export function TeacherHomeworkPanel({
           classId: targetClass.id,
           targetMode,
           studentIds: targetMode === 'students' ? selectedStudentIds : [],
-        weeklyPlan,
-      },
+          weeklyPlan,
+        },
       });
       setTimetableError(null);
       setAssignments((current) => [...rows, ...current]);
