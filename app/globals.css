@@ -11,6 +11,17 @@
   --text-muted: #888888;
 }
 
+/* Hide legacy third-party n8n chat overlays if injected externally */
+#n8n-chat,
+[id*="n8n-chat"],
+[class*="n8n-chat"],
+[data-n8n-chat],
+iframe[src*="n8n"][src*="chat"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* ══════════════════════════════════════
    THEME SYSTEM — 6 full visual themes
    Applied via [data-theme="..."] on <html>

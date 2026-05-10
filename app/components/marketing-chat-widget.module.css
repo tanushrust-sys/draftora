@@ -1,0 +1,138 @@
+.launcher {
+  position: fixed;
+  right: 2.75rem;
+  bottom: 1.15rem;
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  border: 1px solid rgba(13, 95, 204, 0.2);
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(9, 67, 126, 0.2);
+  overflow: hidden;
+  display: block;
+  cursor: pointer;
+  z-index: 50;
+}
+
+.launcherLogo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.panel {
+  position: fixed;
+  right: 2.75rem;
+  bottom: 5.45rem;
+  width: min(340px, calc(100vw - 1.6rem));
+  height: min(520px, calc(100vh - 8rem));
+  border-radius: 18px;
+  border: 1px solid rgba(32, 95, 160, 0.2);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(9px);
+  box-shadow: 0 20px 45px rgba(9, 67, 126, 0.22);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panelHeader {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid rgba(32, 95, 160, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panelTitleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f4f87;
+}
+
+.closeBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 89, 154, 0.2);
+  background: #ffffff;
+  color: #0f4f87;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.58rem;
+}
+
+.bubble {
+  font-size: 0.83rem;
+  line-height: 1.42;
+  padding: 0.55rem 0.62rem;
+  border-radius: 12px;
+  max-width: 90%;
+}
+
+.assistantBubble {
+  align-self: flex-start;
+  background: #edf5ff;
+  color: #0d2f53;
+}
+
+.userBubble {
+  align-self: flex-end;
+  background: linear-gradient(130deg, #0d5fcc, #1686e7);
+  color: #ffffff;
+}
+
+.inputRow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  border-top: 1px solid rgba(32, 95, 160, 0.14);
+  padding: 0.62rem;
+}
+
+.input {
+  flex: 1;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(24, 92, 159, 0.2);
+  padding: 0 0.75rem;
+  font-size: 0.84rem;
+  color: #163d66;
+}
+
+.input:focus {
+  outline: none;
+  border-color: rgba(18, 104, 189, 0.46);
+}
+
+.sendBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(19, 96, 173, 0.22);
+  background: linear-gradient(130deg, #0d5fcc, #1694e7);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.sendBtn:disabled,
+.input:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}

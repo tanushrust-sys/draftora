@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from '@/app/providers';
+import MarketingChatWidget from '@/app/components/marketing-chat-widget';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://draftora.com.au'),
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}>
         <Providers>{children}</Providers>
+        <MarketingChatWidget />
       </body>
     </html>
   );
