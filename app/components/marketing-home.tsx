@@ -605,19 +605,28 @@ export default function MarketingHome() {
           <div className={styles.sectionHead}>
             <h2>See how Draftora improves writing</h2>
             <p className={styles.sectionSubhead}>
-              A quick before-and-after snapshot from one revision cycle.
+              One guided revision turns flat sentences into specific, confident writing.
             </p>
           </div>
           <div className={styles.proofCard}>
             <article className={styles.proofBlock}>
-              <p className={styles.proofLabel}>Before</p>
+              <div className={styles.proofBlockHead}>
+                <p className={styles.proofLabel}>Before</p>
+                <span className={styles.proofToneTag}>Generic</span>
+              </div>
               <p className={styles.proofText}>
                 My school day was good. We did science and it was fun. I learned things and then I went home.
               </p>
             </article>
-            <ArrowRight className={styles.proofArrow} size={18} />
+            <div className={styles.proofArrowWrap} aria-hidden="true">
+              <ArrowRight className={styles.proofArrow} size={20} />
+              <span>One revision</span>
+            </div>
             <article className={styles.proofBlock}>
-              <p className={styles.proofLabel}>After</p>
+              <div className={styles.proofBlockHead}>
+                <p className={styles.proofLabel}>After</p>
+                <span className={`${styles.proofToneTag} ${styles.proofToneTagStrong}`}>Specific</span>
+              </div>
               <p className={styles.proofText}>
                 Today&apos;s science lesson was my favorite because we built a simple circuit. I learned how electricity flows, then explained it to my parents at home.
               </p>
@@ -625,7 +634,7 @@ export default function MarketingHome() {
           </div>
           <div className={styles.proofCtaWrap}>
             <Link href="/signup" className={styles.proofCta}>
-              Start Writing Free — takes seconds
+              Start writing free
             </Link>
           </div>
         </section>
