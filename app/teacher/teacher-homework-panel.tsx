@@ -735,9 +735,9 @@ export function TeacherHomeworkPanel({
     <div style={{ display: 'grid', gap: 16 }}>
       <section style={{ ...paletteStyle, ...panelFx, padding: 18, position: 'relative', zIndex: 5 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', position: 'relative', zIndex: 5 }}>
-          <HomeworkMainTab active={activeTab === 'assign'} label="Assign Homework" onClick={openWizard} accent={accent} />
+          <HomeworkMainTab active={activeTab === 'assign'} label="Assign" onClick={openWizard} accent={accent} />
           <HomeworkMainTab active={activeTab === 'timetable'} label="Timetable" onClick={() => setActiveTab('timetable')} accent={accent} />
-          <HomeworkMainTab active={activeTab === 'currentFuture'} label="Current/Future" onClick={() => setActiveTab('currentFuture')} accent={accent} />
+          <HomeworkMainTab active={activeTab === 'currentFuture'} label="Upcoming" onClick={() => setActiveTab('currentFuture')} accent={accent} />
           <HomeworkMainTab active={activeTab === 'review'} label="Review" onClick={() => setActiveTab('review')} accent={accent} />
         </div>
       </section>
@@ -745,7 +745,7 @@ export function TeacherHomeworkPanel({
       {activeTab === 'assign' ? (
         <section style={{ display: 'grid', gap: 16 }}>
           <section style={{ ...paletteStyle, ...panelFx, padding: 22 }}>
-            <SectionTitle eyebrow="Homework" title="Homework" copy="Assign weekly writing and vocabulary homework to classes or individual students." accent={accent} />
+            <SectionTitle eyebrow="Homework" title="Homework" copy="Assign work by class or by student." accent={accent} />
             <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
               {[
                 { label: 'Current homework', value: overviewStats.current, icon: <ClipboardCheck style={{ width: 16, height: 16 }} />, tone: accent },
@@ -771,9 +771,9 @@ export function TeacherHomeworkPanel({
           </section>
 
           <section style={{ ...paletteStyle, ...panelFx, padding: 20 }}>
-          <SectionTitle eyebrow="Assign Homework" title="Guided assignment flow" copy="Use the wizard to assign a one-off homework set with date, writing, vocab and review." accent={accent} />
+          <SectionTitle eyebrow="Assign" title="Guided flow" copy="Pick date, writing, vocab, then assign." accent={accent} />
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {['Date selection', 'Writing + vocab setup', 'Final review'].map((chip) => (
+            {['Date', 'Writing + vocab', 'Review'].map((chip) => (
               <span key={chip} style={{ borderRadius: 999, border: `1px solid ${palette.border}`, padding: '7px 10px', fontSize: 12, fontWeight: 800, color: palette.text }}>{chip}</span>
             ))}
           </div>
@@ -783,7 +783,7 @@ export function TeacherHomeworkPanel({
             onClick={openWizard}
             style={{ marginTop: 14, position: 'relative', zIndex: 2, borderRadius: 16, border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`, color: ctaText, padding: '12px 14px', fontWeight: 900, cursor: 'pointer', pointerEvents: 'auto' }}
           >
-            Open Assign Homework
+            Open assignment flow
           </button>
           </section>
         </section>
@@ -791,14 +791,14 @@ export function TeacherHomeworkPanel({
 
       {activeTab === 'timetable' ? (
         <section style={{ ...paletteStyle, ...panelFx, padding: 20 }}>
-          <SectionTitle eyebrow="Timetable" title="Weekly timetable planner" accent={accent} />
+          <SectionTitle eyebrow="Timetable" title="Weekly planner" accent={accent} />
           <div style={{ marginTop: 14, borderRadius: 20, border: `1px solid color-mix(in srgb, ${accent} 24%, ${palette.border})`, background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 8%, ${palette.surface2}), ${palette.surface2} 55%, color-mix(in srgb, ${accent} 4%, ${palette.surface}) 100%)`, padding: 16, display: 'grid', gap: 14, boxShadow: '0 18px 44px rgba(0,0,0,0.14)' }}>
             <div style={{ display: 'grid', gap: 6, maxWidth: 760 }}>
                 <div style={{ fontSize: 18, fontWeight: 950, color: palette.text, letterSpacing: '-0.02em' }}>
                   Open the weekly builder
                 </div>
               <div style={{ fontSize: 14, color: palette.text2, lineHeight: 1.55 }}>
-                Build Monday to Sunday one step at a time. Saved timetables repeat every week until you remove them.
+                Build Monday to Sunday in one pass. Saved timetables repeat weekly.
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -807,7 +807,7 @@ export function TeacherHomeworkPanel({
                 onClick={openTimetable}
                 style={{ borderRadius: 16, border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, background: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 70%, white))`, color: ctaText, padding: '13px 16px', fontWeight: 950, cursor: 'pointer', boxShadow: '0 10px 20px rgba(0,0,0,0.18)' }}
               >
-                Open Weekly Timetable
+                Open weekly planner
               </button>
               <button
                 type="button"
@@ -823,7 +823,7 @@ export function TeacherHomeworkPanel({
 
       {activeTab === 'currentFuture' ? (
         <section style={{ ...paletteStyle, ...panelFx, padding: 20 }}>
-          <SectionTitle eyebrow="Current/Future" title="Assigned homework" copy="Track current and future homework grouped by date." accent={accent} />
+          <SectionTitle eyebrow="Upcoming" title="Assigned homework" copy="Current and upcoming tasks by date." accent={accent} />
           <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
             <div style={{ borderRadius: 18, border: `1px solid ${palette.border}`, background: palette.surface2, padding: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

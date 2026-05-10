@@ -138,8 +138,8 @@ export default function TeacherPage() {
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => readPrefs());
   const palette = useMemo(() => getWorkspacePalette(mode), [mode]);
   const paletteStyle = {
-    borderRadius: 26,
-    padding: 20,
+    borderRadius: 22,
+    padding: 18,
     background: palette.surface,
     border: `1px solid ${palette.border}`,
     boxShadow: palette.softShadow,
@@ -221,11 +221,11 @@ export default function TeacherPage() {
   useEffect(() => { void loadReport(selectedStudentId); }, [loadReport, selectedStudentId]);
 
   const tabs = [
-    { key: 'overview', label: 'Student Overview', description: 'All students', icon: LayoutGrid },
-    { key: 'bulk', label: 'Bulk Generation', description: 'Create batches', icon: School },
-    { key: 'classes', label: 'Class Management', description: 'Groups and rosters', icon: Users },
-    { key: 'homework', label: 'Homework', description: 'Assign & review', icon: ClipboardCheck },
-    { key: 'settings', label: 'Settings', description: 'Account and prefs', icon: Settings },
+    { key: 'overview', label: 'Overview', description: 'Students', icon: LayoutGrid },
+    { key: 'bulk', label: 'Bulk Create', description: 'Accounts', icon: School },
+    { key: 'classes', label: 'Classes', description: 'Rosters', icon: Users },
+    { key: 'homework', label: 'Homework', description: 'Plan', icon: ClipboardCheck },
+    { key: 'settings', label: 'Settings', description: 'Account', icon: Settings },
   ] as const;
 
   const selectedStudent = students.find((student) => student.id === selectedStudentId) ?? null;
@@ -424,8 +424,8 @@ export default function TeacherPage() {
           onClick={() => toggleStudentCard(student.id)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleStudentCard(student.id); } }}
           style={{
-            borderRadius: 12,
-            padding: '10px 14px',
+            borderRadius: 14,
+            padding: '12px 14px',
             border: `1px solid ${isExpanded ? 'rgba(103,232,249,0.28)' : palette.border}`,
             background: isExpanded ? `color-mix(in srgb, #67e8f9 5%, ${palette.surface2})` : palette.surface2,
             color: palette.text,
@@ -436,11 +436,11 @@ export default function TeacherPage() {
             outline: 'none',
           }}
         >
-          <div style={{ width: 26, height: 26, borderRadius: 8, background: isExpanded ? 'rgba(103,232,249,0.14)' : 'rgba(255,255,255,0.04)', border: `1px solid ${palette.border}`, display: 'grid', placeItems: 'center', color: isExpanded ? '#67e8f9' : palette.text3, fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: isExpanded ? 'rgba(103,232,249,0.14)' : 'rgba(255,255,255,0.04)', border: `1px solid ${palette.border}`, display: 'grid', placeItems: 'center', color: isExpanded ? '#67e8f9' : palette.text3, fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
             {student.username[0].toUpperCase()}
           </div>
-          <div style={{ fontWeight: 900, fontSize: 14, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{student.username}</div>
-          <div style={{ display: 'flex', gap: 12, fontSize: 12, color: palette.text3, flexShrink: 0 }}>
+          <div style={{ fontWeight: 900, fontSize: 15, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{student.username}</div>
+          <div style={{ display: 'flex', gap: 10, fontSize: 12, color: palette.text3, flexShrink: 0 }}>
             <span>Lv.{student.level}</span>
             <span>{student.xp.toLocaleString()} XP</span>
             <span>{student.streak} 🔥</span>
@@ -460,7 +460,7 @@ export default function TeacherPage() {
         </div>
 
         {isExpanded ? (
-          <div style={{ margin: '4px 0 4px 0', borderRadius: 14, border: `1px solid ${palette.border}`, background: palette.surface, overflow: 'hidden' }}>
+          <div style={{ margin: '6px 0 4px 0', borderRadius: 16, border: `1px solid ${palette.border}`, background: palette.surface, overflow: 'hidden' }}>
             <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${palette.border}` }}>
               {(['report', 'code'] as const).map((mode_) => (
                 <button
@@ -483,7 +483,7 @@ export default function TeacherPage() {
                 </button>
               ))}
             </div>
-            <div style={{ padding: 16 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: 14 }} onClick={(e) => e.stopPropagation()}>
               {isSelected && studentDetailMode === 'report' ? (
                 reportBusy ? (
                   <div style={{ color: palette.text2 }}>Loading report...</div>
@@ -538,7 +538,7 @@ export default function TeacherPage() {
         ) : classes.length === 0 ? (
           <div style={{ color: palette.text2, fontSize: 14 }}>No classes yet. Use Bulk Generation to create your first class and students.</div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {classes.map((klass) => {
               const isActive = klass.id === selectedClassId;
               return (
@@ -554,8 +554,8 @@ export default function TeacherPage() {
                     }
                   }}
                   style={{
-                    borderRadius: 18,
-                    padding: '14px 18px',
+                    borderRadius: 16,
+                    padding: '14px 16px',
                     border: `1px solid ${isActive ? 'rgba(103,232,249,0.38)' : palette.border}`,
                     background: isActive
                       ? `linear-gradient(135deg, color-mix(in srgb, #67e8f9 10%, ${palette.surface}) 0%, ${palette.surface2} 100%)`
@@ -571,7 +571,7 @@ export default function TeacherPage() {
                 >
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900 }}>{klass.name}</div>
-                    <div style={{ marginTop: 3, fontSize: 13, color: palette.text2 }}>{klass.studentCount} student{klass.studentCount !== 1 ? 's' : ''}</div>
+                    <div style={{ marginTop: 4, fontSize: 12, color: palette.text2 }}>{klass.studentCount} student{klass.studentCount !== 1 ? 's' : ''}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <button
@@ -644,8 +644,8 @@ export default function TeacherPage() {
           >
             Welcome back, {profile?.username || 'Teacher'}
           </div>
-          <div style={{ maxWidth: 760, fontSize: 15, lineHeight: 1.7, color: palette.text2 }}>
-            Manage students, review progress, and generate accounts from one place.
+          <div style={{ maxWidth: 760, fontSize: 14, lineHeight: 1.55, color: palette.text2 }}>
+            Students, classes, and homework in one clean workspace.
           </div>
         </div>
       </div>
@@ -657,8 +657,8 @@ export default function TeacherPage() {
     <section style={{ ...paletteStyle, display: 'grid', gap: 16 }}>
       <SectionTitle
         eyebrow="Bulk generation"
-        title="Create student accounts in a simple flow"
-        copy="Add names, choose where the students belong, and generate complete accounts in one pass."
+        title="Create student accounts"
+        copy="Add names, choose a class, generate."
         accent="#67e8f9"
       />
 
@@ -675,8 +675,8 @@ export default function TeacherPage() {
         <div style={{ borderRadius: 20, padding: 16, background: palette.surface2, border: `1px solid ${palette.border}`, display: 'grid', gap: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: palette.text3 }}>Step 2</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: palette.text }}>Fill in student names</div>
-          <div style={{ fontSize: 13, lineHeight: 1.7, color: palette.text2 }}>
-            Each row creates one account. Keep it simple: first name, last name, then generate.
+          <div style={{ fontSize: 13, lineHeight: 1.55, color: palette.text2 }}>
+            One row = one student account.
           </div>
         </div>
       </div>
@@ -687,10 +687,10 @@ export default function TeacherPage() {
           <div style={{ fontSize: 16, fontWeight: 900, color: palette.text }}>
             {bulkClassMode === 'existing' ? 'Select an existing class' : 'Create a new class'}
           </div>
-          <div style={{ fontSize: 13, lineHeight: 1.7, color: palette.text2 }}>
+          <div style={{ fontSize: 13, lineHeight: 1.55, color: palette.text2 }}>
             {bulkClassMode === 'existing'
-              ? 'Pick the class where these students should be added.'
-              : 'Give the class a name first, then the generated students will be linked to it automatically.'}
+              ? 'Pick the destination class.'
+              : 'Name the class, then generate.'}
           </div>
           {bulkClassMode === 'existing' ? (
             <select
@@ -794,7 +794,7 @@ export default function TeacherPage() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 900, color: palette.text }}>Student {index + 1}</div>
-                    <div style={{ fontSize: 11, color: palette.text3, lineHeight: 1.45 }}>Enter the first and last name exactly as you want them shown.</div>
+                    <div style={{ fontSize: 11, color: palette.text3, lineHeight: 1.45 }}>First and last name.</div>
                   </div>
                 </div>
                 <button
@@ -882,7 +882,7 @@ export default function TeacherPage() {
       <SectionTitle
         eyebrow="Class management"
         title="Your classes"
-        copy="Select a class to view its students. Click a student row to see their report or credentials."
+        copy="Open a class to view students."
         accent="#67e8f9"
       />
 
@@ -941,7 +941,7 @@ export default function TeacherPage() {
               <div style={{ width: 54, height: 54, borderRadius: 18, background: 'linear-gradient(135deg, #67e8f9 0%, #60a5fa 100%)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 20, fontWeight: 900 }}>{profile?.username?.[0]?.toUpperCase() || 'T'}</div>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 900, color: palette.text }}>{profile?.username || 'Teacher account'}</div>
-                <div style={{ marginTop: 4, fontSize: 13, color: palette.text2 }}>{profile?.email || 'Email not set'}</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: palette.text2 }}>{profile?.email || 'No email'}</div>
               </div>
             </div>
           </div>
@@ -950,11 +950,11 @@ export default function TeacherPage() {
 
       <div style={{ display: 'grid', gap: 16 }}>
         <section style={paletteStyle}>
-          <SectionTitle eyebrow="Notifications" title="Alert preferences" copy="Control teacher-specific notification cues stored in this browser." accent="#67e8f9" />
+          <SectionTitle eyebrow="Notifications" title="Alert preferences" copy="Manage browser alerts for this workspace." accent="#67e8f9" />
           <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
-            <ToggleRow label="New student alerts" description="Show a cue when a new student account is generated." checked={prefs.newStudentAlerts} onChange={(value) => setPrefs((current) => ({ ...current, newStudentAlerts: value }))} />
-            <ToggleRow label="Class summary" description="Keep class summary reminders turned on." checked={prefs.classSummary} onChange={(value) => setPrefs((current) => ({ ...current, classSummary: value }))} />
-            <ToggleRow label="Weekly summary" description="Receive a weekly teaching summary digest." checked={prefs.weeklySummary} onChange={(value) => setPrefs((current) => ({ ...current, weeklySummary: value }))} />
+            <ToggleRow label="New student alerts" description="Alert when accounts are created." checked={prefs.newStudentAlerts} onChange={(value) => setPrefs((current) => ({ ...current, newStudentAlerts: value }))} />
+            <ToggleRow label="Class summary" description="Show class reminder cues." checked={prefs.classSummary} onChange={(value) => setPrefs((current) => ({ ...current, classSummary: value }))} />
+            <ToggleRow label="Weekly summary" description="Weekly teaching digest." checked={prefs.weeklySummary} onChange={(value) => setPrefs((current) => ({ ...current, weeklySummary: value }))} />
           </div>
         </section>
       </div>
@@ -1010,8 +1010,8 @@ export default function TeacherPage() {
     <RoleAppShell
       roleLabel="Teacher app"
       eyebrow="Teacher workspace"
-      title="Manage classes and students"
-      description="Run your teacher workspace, review progress, and generate student accounts."
+      title="Teacher workspace"
+      description="Classes, students, homework."
       accent="#67e8f9"
       expectedRole="teacher"
       mode={mode}
