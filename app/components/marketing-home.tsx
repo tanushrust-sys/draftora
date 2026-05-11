@@ -122,6 +122,29 @@ const APP_PREVIEWS = [
   },
 ] as const;
 
+const WRITING_UPGRADE_TOOLS = [
+  {
+    icon: MessageSquareText,
+    label: 'Feedback',
+    text: 'Shows what is vague, missing, or unclear.',
+  },
+  {
+    icon: Wand2,
+    label: 'Rewrite',
+    text: 'Models a stronger version without taking over the voice.',
+  },
+  {
+    icon: Sparkles,
+    label: 'Sentence Strength',
+    text: 'Improves detail, flow, and confidence.',
+  },
+  {
+    icon: BookOpen,
+    label: 'Vocabulary Lift',
+    text: 'Suggests richer words that still fit the sentence.',
+  },
+] as const;
+
 const TESTIMONIALS = [
   {
     quote: 'Helped me improve my writing so much.',
@@ -603,38 +626,82 @@ export default function MarketingHome() {
 
         <section className={`${styles.proofSection} ${styles.reveal}`} data-reveal>
           <div className={styles.sectionHead}>
-            <h2>See how Draftora improves writing</h2>
+            <h2>See the upgrade happen inside Draftora</h2>
             <p className={styles.sectionSubhead}>
-              One guided revision turns flat sentences into specific, confident writing.
+              Students do not just get a better sentence. They see which tools helped them make it stronger.
             </p>
           </div>
-          <div className={styles.proofCard}>
-            <article className={styles.proofBlock}>
-              <div className={styles.proofBlockHead}>
-                <p className={styles.proofLabel}>Before</p>
-                <span className={styles.proofToneTag}>Generic</span>
+          <div className={styles.proofShowcase}>
+            <article className={`${styles.proofPanel} ${styles.proofPanelBefore}`}>
+              <div className={styles.proofPanelTop}>
+                <div>
+                  <p className={styles.proofLabel}>Student draft</p>
+                  <h3>Good idea, flat writing</h3>
+                </div>
+                <span className={styles.proofToneTag}>Needs detail</span>
               </div>
-              <p className={styles.proofText}>
+              <p className={styles.proofDraftText}>
                 My school day was good. We did science and it was fun. I learned things and then I went home.
               </p>
+              <div className={styles.proofIssueList} aria-label="Writing issues Draftora detects">
+                <span>Generic words</span>
+                <span>No clear moment</span>
+                <span>Weak ending</span>
+              </div>
             </article>
-            <div className={styles.proofArrowWrap} aria-hidden="true">
-              <ArrowRight className={styles.proofArrow} size={20} />
-              <span>One revision</span>
+
+            <div className={styles.proofToolPanel}>
+              <p className={styles.proofToolEyebrow}>Draftora applies</p>
+              <div className={styles.proofToolGrid}>
+                {WRITING_UPGRADE_TOOLS.map(({ icon: Icon, label, text }) => (
+                  <article key={label} className={styles.proofToolCard}>
+                    <span className={styles.proofToolIcon}>
+                      <Icon size={15} />
+                    </span>
+                    <div>
+                      <h4>{label}</h4>
+                      <p>{text}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className={styles.proofRevisionBridge} aria-hidden="true">
+                <span>Guided revision</span>
+                <ArrowRight className={styles.proofArrow} size={18} />
+              </div>
             </div>
-            <article className={styles.proofBlock}>
-              <div className={styles.proofBlockHead}>
-                <p className={styles.proofLabel}>After</p>
+
+            <article className={`${styles.proofPanel} ${styles.proofPanelAfter}`}>
+              <div className={styles.proofPanelTop}>
+                <div>
+                  <p className={styles.proofLabel}>Upgraded draft</p>
+                  <h3>Specific, clear, confident</h3>
+                </div>
                 <span className={`${styles.proofToneTag} ${styles.proofToneTagStrong}`}>Specific</span>
               </div>
-              <p className={styles.proofText}>
-                Today&apos;s science lesson was my favorite because we built a simple circuit. I learned how electricity flows, then explained it to my parents at home.
+              <p className={styles.proofDraftText}>
+                During science, my group built a simple circuit and watched the bulb glow when the wires finally connected. I understood how electricity travels through a loop, and I explained the experiment to my parents at home.
               </p>
+              <ul className={styles.proofWinList}>
+                <li>
+                  <CheckCircle2 size={14} />
+                  <span>Concrete detail</span>
+                </li>
+                <li>
+                  <CheckCircle2 size={14} />
+                  <span>Stronger vocabulary</span>
+                </li>
+                <li>
+                  <CheckCircle2 size={14} />
+                  <span>Clear learning outcome</span>
+                </li>
+              </ul>
             </article>
           </div>
           <div className={styles.proofCtaWrap}>
             <Link href="/signup" className={styles.proofCta}>
               Start writing free
+              <ArrowRight size={16} />
             </Link>
           </div>
         </section>
