@@ -532,95 +532,173 @@ export default function MarketingHome() {
       <main className={styles.main}>
         <section className={`${styles.hero} ${styles.reveal}`} data-reveal>
           <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>AI writing app for students, parents, and teachers</p>
-            <h1 className={styles.heroTypeTitle} aria-label="AI writing app for students to improve writing skills with support for parents and teachers.">
-              <span className={`${styles.typeLine} ${styles.typeLineSky}`}>AI writing app</span>
-              <span className={`${styles.typeLine} ${styles.typeLineLake}`}>for students to</span>
-              <span className={`${styles.typeLine} ${styles.typeLineDark}`}>improve writing</span>
-              <span className={`${styles.typeLine} ${styles.typeLineDeep}`}>skills daily.</span>
+            <p className={styles.eyebrow}>AI WRITING WORKSPACE FOR STUDENTS</p>
+            <h1 aria-label="Build confident writers, one stronger draft at a time.">
+              Build confident writers, one stronger draft at a time.
             </h1>
-            <p className={styles.heroPunch}>Write better in minutes, not months.</p>
             <p className={styles.subhead}>
-              Draftora helps students improve writing skills with guided feedback, gives parents clear progress visibility, and helps teachers deliver faster writing support at scale.
+              Draftora helps students transform uncertain first drafts into clear, thoughtful writing by strengthening structure, deepening ideas, and building revision habits that create lasting confidence in how they express themselves.
             </p>
+            <p className={styles.heroPunch}>Better writing is not talent. It is a process students can learn, practice, and own.</p>
             <div className={styles.heroActions}>
               <Link href="/signup" className={styles.primaryCta}>
                 <span className={styles.ctaCopy}>
-                  <span className={styles.ctaMain}>Start Writing Free — takes seconds</span>
-                  <span className={styles.ctaSub}>Open your first draft instantly</span>
+                  <span className={styles.ctaMain}>Start Writing Free</span>
+                  <span className={styles.ctaSub}>Open Writing Studio in seconds</span>
                 </span>
                 <span className={styles.ctaArrowWrap}>
                   <ArrowRight size={16} />
                 </span>
               </Link>
-              <Link href="/dashboard?practice=1" className={styles.practiceHeroCta}>
-                <span className={styles.practiceHeroIcon}>
-                  <FlaskConical size={15} />
-                </span>
-                <span className={styles.practiceHeroCopy}>
-                  <span>Try Practice Mode (No Signup)</span>
-                  <small>Sign in as USER and auto-reset after all tabs close</small>
-                </span>
-              </Link>
-              <a href="#showcase" className={styles.secondaryHeroCta}>
-                See Product Walkthrough
-              </a>
+              <div className={styles.heroSecondaryActions}>
+                <Link href="/dashboard?practice=1" className={styles.practiceHeroCta}>
+                  <span className={styles.practiceHeroIcon}>
+                    <FlaskConical size={15} />
+                  </span>
+                  <span className={styles.practiceHeroCopy}>
+                    <span>Try Practice Mode</span>
+                    <small>No signup, resets after use</small>
+                  </span>
+                </Link>
+                <a href="#showcase" className={styles.secondaryHeroCta}>
+                  View Live Demo
+                </a>
+              </div>
             </div>
-            <p className={styles.heroTrustLine}>Built for students. Trusted by parents. Practical for teachers.</p>
+            <p className={styles.heroTrustLine}>Trusted by students, parents, tutors, and teachers across everyday writing practice.</p>
             <div className={styles.heroProofGrid}>
               <article className={styles.heroProofCard}>
                 <MessageSquareText size={15} />
                 <div>
-                  <strong>Instant feedback</strong>
-                  <span>Know what to fix right away</span>
+                  <strong>Writing Studio</strong>
+                  <span>Draft and revise with clear guided feedback</span>
                 </div>
               </article>
               <article className={styles.heroProofCard}>
-                <Wand2 size={15} />
+                <BookOpen size={15} />
                 <div>
-                  <strong>Clearer writing</strong>
-                  <span>Improve flow without losing voice</span>
+                  <strong>Vocabulary Growth</strong>
+                  <span>Build stronger word choice with daily practice</span>
                 </div>
               </article>
               <article className={styles.heroProofCard}>
-                <CalendarCheck2 size={15} />
+                <Sparkles size={15} />
                 <div>
-                  <strong>Builds confidence</strong>
-                  <span>Small wins that compound weekly</span>
+                  <strong>AI Coach</strong>
+                  <span>Personal support for writing goals and revision</span>
                 </div>
               </article>
             </div>
           </div>
 
           <div className={styles.heroVisual}>
-            <div className={styles.demoCard}>
-              <div className={styles.liveSignalRow}>
-                <span className={styles.liveSignal}>Live product preview</span>
-                <span className={styles.liveSignal}>Student-safe guidance</span>
+            <div className={styles.heroVisualGlow} aria-hidden="true" />
+            <article className={styles.liveWorkspaceShell} aria-label="Draftora live student workspace">
+              <div className={styles.liveDemoBrowserBar}>
+                <span />
+                <span />
+                <span />
+                <strong>draftora.com.au/student-workspace</strong>
               </div>
-              <div className={styles.dashboardShotWrap}>
-                <img
-                  src="/marketing/dashboard-real.png"
-                  alt="Draftora live product demo"
-                  className={styles.dashboardShot}
-                  loading="eager"
-                />
+
+              <div className={styles.liveDemoTabRow}>
+                <span className={styles.liveDemoTabActive}>Writing Studio</span>
+                <span>AI Feedback</span>
+                <span>Vocabulary</span>
+                <span>Teacher View</span>
               </div>
-            </div>
-            <div className={`${styles.demoCard} ${styles.secondaryDemoCard}`}>
-              <div className={styles.liveSignalRow}>
-                <span className={styles.liveSignal}>Secondary live demo</span>
-                <span className={styles.liveSignal}>Progress snapshot</span>
+
+              <div className={styles.liveDemoWorkspaceBody}>
+                <section className={styles.liveDemoWritingPane}>
+                  <p className={styles.liveDemoPrompt}>Prompt: Explain a moment that changed your perspective.</p>
+                  <h3>Your Writing</h3>
+                  <p>
+                    My science project taught me to test ideas before giving up. At first our circuit failed, and I thought I was doing everything wrong. After checking each wire step by step, we found a loose connection and the bulb lit up.
+                  </p>
+                  <div className={styles.liveDemoMetaPills}>
+                    <span>Writing score 82</span>
+                    <span>Clarity improved +14%</span>
+                    <span>Vocabulary suggestions ready</span>
+                  </div>
+                </section>
+
+                <aside className={styles.liveDemoFeedbackPane}>
+                  <p className={styles.liveDemoPanelTitle}>AI Feedback</p>
+                  <article className={styles.liveDemoFeedbackCard}>
+                    <strong>Strength</strong>
+                    <span>Clear personal reflection with a concrete outcome.</span>
+                  </article>
+                  <article className={styles.liveDemoFeedbackCard}>
+                    <strong>Next step</strong>
+                    <span>Add one sensory detail to make the experiment scene more vivid.</span>
+                  </article>
+                  <article className={styles.liveDemoFeedbackCard}>
+                    <strong>Rewritten version</strong>
+                    <span>Your revision keeps your voice but improves precision and flow.</span>
+                  </article>
+                  <article className={styles.liveDemoFeedbackCard}>
+                    <strong>Teacher review status</strong>
+                    <span>Assignment submitted, feedback synced, ready for review.</span>
+                  </article>
+                </aside>
               </div>
-              <div className={styles.dashboardShotWrap}>
-                <img
-                  src="/marketing/dashboard-real-2.png"
-                  alt="Draftora secondary live product demo"
-                  className={styles.dashboardShot}
-                  loading="lazy"
-                />
+            </article>
+
+            <article className={`${styles.liveDemoCallout} ${styles.liveDemoCalloutA}`}>
+              <p>Realtime Coaching</p>
+              <strong>AI Feedback Ready</strong>
+              <span>Instant strengths, improvements, and revision steps.</span>
+            </article>
+            <article className={`${styles.liveDemoCallout} ${styles.liveDemoCalloutB}`}>
+              <p>Vocabulary Progress</p>
+              <strong>Vocabulary Mastery +12</strong>
+              <span>Word usage and mastery signals stay visible per draft.</span>
+            </article>
+            <article className={`${styles.liveDemoCallout} ${styles.liveDemoCalloutC}`}>
+              <p>Submission Flow</p>
+              <strong>Revision steps ready</strong>
+              <span>Next actions are sequenced to keep writing momentum.</span>
+            </article>
+
+            <article className={styles.heroKpiStrip} aria-label="Draftora impact highlights">
+              <div>
+                <p>Teacher Review</p>
+                <strong>Assignments and submissions stay synced, clear, and review-ready.</strong>
               </div>
-            </div>
+            </article>
+
+            <article className={styles.liveDemoProgressCard}>
+              <div className={styles.liveDemoProgressTop}>
+                <span>Progress Snapshot</span>
+                <span>Teacher-ready</span>
+              </div>
+              <div className={styles.liveDemoProgressGrid}>
+                <section className={styles.liveDemoProgressColumn}>
+                  <h4>What&apos;s going well</h4>
+                  <ul>
+                    <li>Clearer idea development across paragraphs</li>
+                    <li>More precise vocabulary in context</li>
+                    <li>Stronger revision consistency this week</li>
+                  </ul>
+                </section>
+                <section className={styles.liveDemoProgressColumn}>
+                  <h4>Next improvements</h4>
+                  <ul>
+                    <li>Add one stronger opening hook</li>
+                    <li>Improve sentence variety in middle section</li>
+                    <li>Refine the ending with a clearer takeaway</li>
+                  </ul>
+                </section>
+                <section className={styles.liveDemoProgressColumn}>
+                  <h4>Teacher review status</h4>
+                  <div className={styles.liveDemoStatusPills}>
+                    <span>Assignment submitted</span>
+                    <span>Feedback synced</span>
+                    <span>Ready for review</span>
+                  </div>
+                </section>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -680,7 +758,7 @@ export default function MarketingHome() {
                 <span className={`${styles.proofToneTag} ${styles.proofToneTagStrong}`}>Specific</span>
               </div>
               <p className={styles.proofDraftText}>
-                During science, my group built a simple circuit and watched the bulb glow when the wires finally connected. I understood how electricity travels through a loop, and I explained the experiment to my parents at home.
+                In science, my group spent twenty minutes tracing a fault in our circuit before one loose wire finally clicked into place and lit the bulb. Seeing that tiny glow made the whole lesson real: electricity only flows when the loop is complete. I went home and showed my parents how each connection changes the outcome.
               </p>
               <ul className={styles.proofWinList}>
                 <li>
