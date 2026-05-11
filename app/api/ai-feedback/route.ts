@@ -481,7 +481,7 @@ function splitIntoSentences(text: string) {
     .filter(Boolean);
 }
 
-function wordCount(text: string) {
+function countWords(text: string) {
   return splitWords(text).length;
 }
 
@@ -591,7 +591,7 @@ function buildRewrittenFallback(content: string, prompt?: string, category?: str
 
 function ensureRewrittenVersion(feedback: WritingFeedback, content: string, prompt?: string, category?: string): WritingFeedback {
   const rewritten = sanitizeRewriteOnly(feedback.rewritten_version || '');
-  const rewrittenWords = wordCount(rewritten);
+  const rewrittenWords = countWords(rewritten);
 
   if (rewritten.length >= 40 && rewrittenWords >= 8) {
     return {
@@ -609,7 +609,7 @@ function ensureRewrittenVersion(feedback: WritingFeedback, content: string, prom
 function isFeedbackQualityAcceptable(feedback: WritingFeedback, sourceWordCount: number) {
   const paragraphLen = feedback.paragraph_feedback.trim().length;
   const overallLen = feedback.overall.trim().length;
-  const rewriteWords = wordCount(feedback.rewritten_version);
+  const rewriteWords = countWords(feedback.rewritten_version);
   const targetRewriteMin = Math.max(45, Math.min(190, Math.floor(sourceWordCount * 0.45)));
 
   const minimumParagraphLen = sourceWordCount < 120 ? 280 : sourceWordCount < 280 ? 460 : 620;
@@ -1074,7 +1074,7 @@ In rewritten_version, enforce:
         });
 
         const rescued = sanitizeRewriteOnly(rewriteOnlyRaw || '');
-        if (!isRewriteTooCloseToSource(rescued, content, prompt) && wordCount(rescued) >= 8) {
+        if (!isRewriteTooCloseToSource(rescued, content, prompt) && countWords(rescued) >= 8) {
           return rescued;
         }
       } catch (rewriteRecoveryError) {
