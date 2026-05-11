@@ -535,6 +535,16 @@ function isRewriteTooCloseToSource(rewrite: string, content: string, prompt?: st
   return false;
 }
 
+function isLikelyPromptEcho(content: string, prompt?: string) {
+  const cleanedContent = normalizeForSimilarity(content || '');
+  const cleanedPrompt = normalizeForSimilarity(prompt || '');
+  if (!cleanedContent || !cleanedPrompt) return false;
+  if (cleanedContent === cleanedPrompt) return true;
+  const overlap = tokenOverlapRatio(content, prompt || '');
+  const wordDelta = Math.abs(splitWords(cleanedContent).length - splitWords(cleanedPrompt).length);
+  return overlap >= 0.82 && wordDelta <= 10;
+}
+
 function sanitizeRewriteOnly(text: string) {
   const cleaned = text
     .replace(/\r/g, '')
@@ -569,13 +579,25 @@ function sanitizeRewriteOnly(text: string) {
 
 function buildRewrittenFallback(content: string, prompt?: string, category?: string) {
   const cleaned = content.replace(/\r/g, '').replace(/[“”"]/g, '').trim();
+  const sourceSentences = splitIntoSentences(cleaned);
+  if (sourceSentences.length >= 2) {
+    const opening = sourceSentences[0];
+    const middle = sourceSentences[Math.min(1, sourceSentences.length - 1)];
+    const ending = sourceSentences[sourceSentences.length - 1];
+    return [
+      `At first, ${opening.charAt(0).toLowerCase()}${opening.slice(1)}`,
+      `As things moved forward, ${middle.charAt(0).toLowerCase()}${middle.slice(1)}`,
+      `In the end, ${ending.charAt(0).toLowerCase()}${ending.slice(1)}`,
+    ].join('\n\n');
+  }
+
   const sourceWords = splitWords(cleaned);
   if (sourceWords.length > 0) {
-    const hint = sourceWords.slice(0, 12).join(' ');
+    const focus = sourceWords.slice(0, 10).join(' ');
     return [
-      `I started with one clear moment: ${hint}.`,
-      'Then I added what changed, why it mattered, and how each step led to the next.',
-      'By the end, the piece had a clear direction and a stronger final point.',
+      `The moment began with ${focus}, and I could feel the tension straight away.`,
+      'I made a choice, watched what changed next, and explained why that change mattered.',
+      'By the final lines, the experience felt complete and the message was clear.',
     ].join('\n\n');
   }
 
@@ -1047,6 +1069,7 @@ In rewritten_version, enforce:
       }
 
       try {
+        const promptEcho = isLikelyPromptEcho(content, prompt);
         const rewriteOnlyPrompt = [
           `Age group: ${mappedAgeGroup}`,
           `Writing type: ${mappedWritingType}`,
@@ -1063,6 +1086,7 @@ In rewritten_version, enforce:
           '- Keep the same core meaning and events.',
           '- Use the writing prompt as guidance, but do not copy the prompt text.',
           '- Do not copy long phrases from the student draft.',
+          ...(promptEcho ? ['- The student draft mostly repeats the prompt, so you must add concrete scene details, actions, and outcomes while keeping the same premise.'] : []),
           '- No labels, no explanation, no bullets. Output only the rewritten draft text in multiple short paragraphs.',
         ].join('\n');
 
@@ -1076,6 +1100,29 @@ In rewritten_version, enforce:
         const rescued = sanitizeRewriteOnly(rewriteOnlyRaw || '');
         if (!isRewriteTooCloseToSource(rescued, content, prompt) && countWords(rescued) >= 8) {
           return rescued;
+        }
+
+        const secondPassRaw = await chat({
+          tier: 'fast',
+          system: 'Rewrite only. Output draft text only. No labels.',
+          maxTokens: Math.max(260, Math.min(860, Math.floor(rewriteTargetWordCount * 2.8))),
+          messages: [{
+            role: 'user',
+            content: [
+              `Age group: ${mappedAgeGroup}`,
+              `Prompt: ${prompt?.trim() || '(No prompt provided)'}`,
+              '',
+              'Rewrite the student draft into a complete, original piece.',
+              'Do not repeat prompt wording. Add concrete events and details.',
+              '',
+              'Student draft:',
+              buildCompactExcerpt(content),
+            ].join('\n'),
+          }],
+        });
+        const rescuedSecondPass = sanitizeRewriteOnly(secondPassRaw || '');
+        if (!isRewriteTooCloseToSource(rescuedSecondPass, content, prompt) && countWords(rescuedSecondPass) >= 8) {
+          return rescuedSecondPass;
         }
       } catch (rewriteRecoveryError) {
         console.error('ai-feedback rewrite recovery error:', rewriteRecoveryError);
