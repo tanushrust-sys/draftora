@@ -495,6 +495,46 @@ function splitIntoParagraphs(text: string, sentencesPerParagraph = 3) {
   return paragraphs;
 }
 
+function normalizeForSimilarity(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenOverlapRatio(a: string, b: string) {
+  const aTokens = normalizeForSimilarity(a).split(' ').filter(Boolean);
+  const bTokens = new Set(normalizeForSimilarity(b).split(' ').filter(Boolean));
+  if (aTokens.length === 0 || bTokens.size === 0) return 0;
+  let shared = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) shared += 1;
+  }
+  return shared / aTokens.length;
+}
+
+function isRewriteTooCloseToSource(rewrite: string, content: string, prompt?: string) {
+  const cleanRewrite = sanitizeRewriteOnly(rewrite);
+  if (!cleanRewrite) return true;
+
+  const normalizedRewrite = normalizeForSimilarity(cleanRewrite);
+  const normalizedContent = normalizeForSimilarity(content || '');
+  const normalizedPrompt = normalizeForSimilarity(prompt || '');
+
+  if (normalizedRewrite.length < 40) return true;
+  if (normalizedContent && normalizedRewrite === normalizedContent) return true;
+  if (normalizedPrompt && normalizedRewrite === normalizedPrompt) return true;
+
+  const overlapWithContent = tokenOverlapRatio(cleanRewrite, content || '');
+  const overlapWithPrompt = tokenOverlapRatio(cleanRewrite, prompt || '');
+
+  if (overlapWithContent > 0.9) return true;
+  if (prompt && overlapWithPrompt > 0.92) return true;
+
+  return false;
+}
+
 function sanitizeRewriteOnly(text: string) {
   const cleaned = text
     .replace(/\r/g, '')
@@ -528,15 +568,15 @@ function sanitizeRewriteOnly(text: string) {
 }
 
 function buildRewrittenFallback(content: string, prompt?: string, category?: string) {
-  const cleaned = content
-    .replace(/\r/g, '')
-    .replace(/[“”"]/g, '')
-    .trim();
-
-  if (cleaned.length > 0) {
-    const paragraphs = splitIntoParagraphs(cleaned, 3);
-    if (paragraphs.length > 0) return paragraphs.join('\n\n');
-    return cleaned;
+  const cleaned = content.replace(/\r/g, '').replace(/[“”"]/g, '').trim();
+  const sourceWords = splitWords(cleaned);
+  if (sourceWords.length > 0) {
+    const hint = sourceWords.slice(0, 12).join(' ');
+    return [
+      `I started with one clear moment: ${hint}.`,
+      'Then I added what changed, why it mattered, and how each step led to the next.',
+      'By the end, the piece had a clear direction and a stronger final point.',
+    ].join('\n\n');
   }
 
   const topicHint = (prompt || category || 'this topic').replace(/[“”"]/g, '').trim();
@@ -1001,6 +1041,49 @@ In rewritten_version, enforce:
 - Keep length target; do not add meta commentary or labels.
 - Upgrade diction, clarity, flow, and specificity without changing the core meaning.`;
 
+    const regenerateRewriteIfNeeded = async (candidate: string) => {
+      if (!isRewriteTooCloseToSource(candidate, content, prompt)) {
+        return sanitizeRewriteOnly(candidate);
+      }
+
+      try {
+        const rewriteOnlyPrompt = [
+          `Age group: ${mappedAgeGroup}`,
+          `Writing type: ${mappedWritingType}`,
+          `Target length: about ${rewriteTargetWordCount} words (roughly plus or minus 10%)`,
+          `Writing prompt: ${prompt?.trim() || '(No prompt provided)'}`,
+          '',
+          'Student draft:',
+          '"""',
+          buildCompactExcerpt(content),
+          '"""',
+          '',
+          'Task:',
+          '- Write a strong rewritten draft as the student.',
+          '- Keep the same core meaning and events.',
+          '- Use the writing prompt as guidance, but do not copy the prompt text.',
+          '- Do not copy long phrases from the student draft.',
+          '- No labels, no explanation, no bullets. Output only the rewritten draft text in multiple short paragraphs.',
+        ].join('\n');
+
+        const rewriteOnlyRaw = await chat({
+          tier: 'smart',
+          system: `You are a high-precision rewrite engine for student writing. Always produce an original rewrite that matches age group and prompt.`,
+          maxTokens: Math.max(320, Math.min(980, Math.floor(rewriteTargetWordCount * 3.2))),
+          messages: [{ role: 'user', content: rewriteOnlyPrompt }],
+        });
+
+        const rescued = sanitizeRewriteOnly(rewriteOnlyRaw || '');
+        if (!isRewriteTooCloseToSource(rescued, content, prompt) && wordCount(rescued) >= 8) {
+          return rescued;
+        }
+      } catch (rewriteRecoveryError) {
+        console.error('ai-feedback rewrite recovery error:', rewriteRecoveryError);
+      }
+
+      return sanitizeRewriteOnly(buildRewrittenFallback(content, prompt, category));
+    };
+
     const fastMaxTokens = safeWordCount < 120
       ? 700
       : safeWordCount < 260
@@ -1038,7 +1121,9 @@ In rewritten_version, enforce:
     });
     const fastParsed = tryParseFeedback(fastRaw);
     if (fastParsed && isFeedbackQualityAcceptable(fastParsed, safeWordCount)) {
-      return NextResponse.json({ feedback: ensureRewrittenVersion(fastParsed, content, prompt, category) });
+      const fastFeedback = ensureRewrittenVersion(fastParsed, content, prompt, category);
+      const rewritten_version = await regenerateRewriteIfNeeded(fastFeedback.rewritten_version);
+      return NextResponse.json({ feedback: { ...fastFeedback, rewritten_version } });
     }
 
     const smartRaw = await chat({
@@ -1053,7 +1138,9 @@ In rewritten_version, enforce:
       return NextResponse.json({ feedback: buildStructuredFallbackFeedback(content, prompt, category) });
     }
 
-    return NextResponse.json({ feedback: ensureRewrittenVersion(smartParsed, content, prompt, category) });
+    const smartFeedback = ensureRewrittenVersion(smartParsed, content, prompt, category);
+    const rewritten_version = await regenerateRewriteIfNeeded(smartFeedback.rewritten_version);
+    return NextResponse.json({ feedback: { ...smartFeedback, rewritten_version } });
   } catch (err) {
     console.error('ai-feedback error:', err);
     if (payload.content && payload.content.trim().length > 0) {
