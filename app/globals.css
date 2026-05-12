@@ -3813,3 +3813,330 @@ select:focus-visible {
     transition: none !important;
   }
 }
+
+/* ══════════════════════════════════════
+   UI CUSTOM RARE/EPIC/LEGENDARY OVERHAUL
+   Per-skin, component-level identity pass
+   ══════════════════════════════════════ */
+
+/* ── RARE: Cyber Studyline ───────────────────────── */
+.app-frame[data-ui-custom="cyber-studyline"] .dashboard-content,
+.app-frame[data-ui-custom="cyber-studyline"] .app-surface,
+.app-frame[data-ui-custom="cyber-studyline"] .shop-item-card,
+.app-frame[data-ui-custom="cyber-studyline"] .inv-item-card {
+  border-radius: 14px !important;
+  background:
+    linear-gradient(160deg, rgba(7, 23, 48, 0.92) 0%, rgba(10, 31, 62, 0.88) 100%),
+    linear-gradient(115deg, rgba(67, 197, 255, 0.08), rgba(94, 108, 255, 0.08)) !important;
+}
+
+.app-frame[data-ui-custom="cyber-studyline"] .dashboard-topbar,
+.app-frame[data-ui-custom="cyber-studyline"] .dashboard-bottomnav {
+  background:
+    linear-gradient(180deg, rgba(5, 16, 35, 0.95), rgba(8, 24, 49, 0.92)) !important;
+}
+
+.app-frame[data-ui-custom="cyber-studyline"] .shop-card-action--buy,
+.app-frame[data-ui-custom="cyber-studyline"] .shop-card-action--combo,
+.app-frame[data-ui-custom="cyber-studyline"] .db-primary-btn,
+.app-frame[data-ui-custom="cyber-studyline"] .auth-primary-btn,
+.app-frame[data-ui-custom="cyber-studyline"] .inv-action {
+  background: linear-gradient(132deg, #1e9bd1 0%, #3f6cff 100%) !important;
+  border: 1px solid rgba(109, 206, 255, 0.45) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 800 !important;
+}
+
+.app-frame[data-ui-custom="cyber-studyline"] .shop-card-action--buy::before,
+.app-frame[data-ui-custom="cyber-studyline"] .shop-card-action--combo::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid rgba(132, 223, 255, 0.48);
+  pointer-events: none;
+}
+
+.app-frame[data-ui-custom="cyber-studyline"] .writing-area {
+  background:
+    linear-gradient(rgba(70, 166, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(70, 166, 255, 0.04) 1px, transparent 1px),
+    rgba(7, 23, 48, 0.9) !important;
+  background-size: 22px 22px;
+}
+
+/* ── RARE: Sakura Desk ───────────────────────────── */
+.app-frame[data-ui-custom="sakura-desk"] .dashboard-content,
+.app-frame[data-ui-custom="sakura-desk"] .app-surface,
+.app-frame[data-ui-custom="sakura-desk"] .shop-item-card,
+.app-frame[data-ui-custom="sakura-desk"] .inv-item-card {
+  border-radius: 24px !important;
+  background: linear-gradient(165deg, rgba(255, 249, 243, 0.94), rgba(255, 241, 237, 0.9)) !important;
+  border-color: rgba(206, 112, 141, 0.22) !important;
+}
+
+.app-frame[data-ui-custom="sakura-desk"] .dashboard-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 14px 14px, rgba(214, 130, 153, 0.10) 1.1px, transparent 1.2px);
+  background-size: 22px 22px;
+  opacity: 0.42;
+}
+
+.app-frame[data-ui-custom="sakura-desk"] .shop-card-action--buy,
+.app-frame[data-ui-custom="sakura-desk"] .shop-card-action--combo,
+.app-frame[data-ui-custom="sakura-desk"] .db-primary-btn,
+.app-frame[data-ui-custom="sakura-desk"] .auth-primary-btn,
+.app-frame[data-ui-custom="sakura-desk"] .inv-action {
+  background: linear-gradient(145deg, #df7e9f 0%, #bf5c7d 100%) !important;
+  border-color: rgba(195, 89, 127, 0.48) !important;
+  box-shadow: 0 14px 28px rgba(190, 90, 120, 0.24) !important;
+}
+
+.app-frame[data-ui-custom="sakura-desk"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="sakura-desk"] .shop-chip,
+.app-frame[data-ui-custom="sakura-desk"] .inv-chip {
+  border-radius: 12px !important;
+}
+
+.app-frame[data-ui-custom="sakura-desk"] .writing-area {
+  background:
+    linear-gradient(180deg, rgba(211, 113, 145, 0.11) 1px, transparent 1px),
+    rgba(255, 251, 246, 0.96) !important;
+  background-size: 100% 30px;
+}
+
+/* ── EPIC: Aurora Forge ──────────────────────────── */
+.app-frame[data-ui-custom="aurora-forge"] .dashboard-content,
+.app-frame[data-ui-custom="aurora-forge"] .app-surface,
+.app-frame[data-ui-custom="aurora-forge"] .shop-item-card,
+.app-frame[data-ui-custom="aurora-forge"] .inv-item-card {
+  border-radius: 18px !important;
+  background:
+    linear-gradient(165deg, rgba(9, 17, 35, 0.9), rgba(13, 23, 46, 0.86)),
+    linear-gradient(120deg, rgba(86, 178, 255, 0.13), rgba(109, 82, 255, 0.12), rgba(38, 199, 181, 0.11)) !important;
+  border-color: rgba(114, 198, 255, 0.28) !important;
+}
+
+.app-frame[data-ui-custom="aurora-forge"] .dashboard-content::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 74%;
+  pointer-events: none;
+  background: conic-gradient(from 210deg, rgba(70, 194, 255, 0.36), rgba(132, 100, 255, 0.24), rgba(35, 209, 182, 0.22), rgba(70, 194, 255, 0.36));
+  filter: blur(32px);
+  opacity: 0.58;
+  animation: auroraForgeShift 10s ease-in-out infinite alternate;
+}
+
+.app-frame[data-ui-custom="aurora-forge"] .shop-card-action--buy,
+.app-frame[data-ui-custom="aurora-forge"] .shop-card-action--combo,
+.app-frame[data-ui-custom="aurora-forge"] .db-primary-btn,
+.app-frame[data-ui-custom="aurora-forge"] .auth-primary-btn,
+.app-frame[data-ui-custom="aurora-forge"] .inv-action {
+  background: linear-gradient(135deg, #2f59d2 0%, #1dbcd6 55%, #8e64ff 100%) !important;
+  border-color: rgba(139, 201, 255, 0.45) !important;
+  box-shadow:
+    0 0 0 1px rgba(116, 193, 255, 0.28),
+    0 20px 38px rgba(66, 130, 255, 0.34),
+    0 0 24px rgba(110, 146, 255, 0.42) !important;
+}
+
+.app-frame[data-ui-custom="aurora-forge"] .dashboard-bottomnav__link--active,
+.app-frame[data-ui-custom="aurora-forge"] .dashboard-topbar__badge {
+  background: linear-gradient(132deg, rgba(60, 109, 255, 0.2), rgba(28, 192, 214, 0.18)) !important;
+  box-shadow: 0 0 22px rgba(95, 162, 255, 0.34) !important;
+}
+
+/* ── EPIC: Prism Studio ──────────────────────────── */
+.app-frame[data-ui-custom="prism-studio"] .dashboard-content,
+.app-frame[data-ui-custom="prism-studio"] .app-surface,
+.app-frame[data-ui-custom="prism-studio"] .shop-item-card,
+.app-frame[data-ui-custom="prism-studio"] .inv-item-card {
+  border-radius: 20px !important;
+  border-color: rgba(109, 114, 255, 0.28) !important;
+  background:
+    linear-gradient(170deg, rgba(255, 255, 255, 0.95), rgba(245, 247, 255, 0.92)),
+    linear-gradient(120deg, rgba(110, 101, 255, 0.10), rgba(59, 201, 236, 0.12), rgba(184, 111, 255, 0.10)) !important;
+}
+
+.app-frame[data-ui-custom="prism-studio"] .dashboard-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(103, 110, 255, 0.08), rgba(58, 198, 232, 0.08) 46%, rgba(188, 118, 255, 0.08));
+  mix-blend-mode: screen;
+}
+
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--buy,
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--combo,
+.app-frame[data-ui-custom="prism-studio"] .db-primary-btn,
+.app-frame[data-ui-custom="prism-studio"] .auth-primary-btn,
+.app-frame[data-ui-custom="prism-studio"] .inv-action {
+  background: linear-gradient(135deg, #3d6eff 0%, #6b5dff 44%, #31c7e5 100%) !important;
+  border-color: rgba(101, 125, 255, 0.48) !important;
+  box-shadow:
+    0 0 0 1px rgba(101, 125, 255, 0.24),
+    0 16px 32px rgba(102, 120, 255, 0.3) !important;
+}
+
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--buy::before,
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--combo::before,
+.app-frame[data-ui-custom="prism-studio"] .inv-action::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(125deg, rgba(96,116,255,0) 8%, rgba(96,116,255,0.75) 26%, rgba(50,196,232,0.62) 45%, rgba(183,118,255,0.58) 66%, rgba(96,116,255,0) 88%);
+  opacity: 0;
+  transform: translateX(-130%);
+  animation: uiPrismSweep 2.9s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── LEGENDARY: Hologram Academy ─────────────────── */
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-main {
+  max-width: 1500px;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-content,
+.app-frame[data-ui-custom="hologram-academy"] .app-surface,
+.app-frame[data-ui-custom="hologram-academy"] .shop-item-card,
+.app-frame[data-ui-custom="hologram-academy"] .inv-item-card,
+.app-frame[data-ui-custom="hologram-academy"] .shop-showcase {
+  border-radius: 12px !important;
+  border-color: rgba(95, 234, 255, 0.42) !important;
+  background:
+    linear-gradient(155deg, rgba(6, 18, 44, 0.76), rgba(10, 24, 58, 0.72)),
+    linear-gradient(115deg, rgba(83, 234, 255, 0.12), rgba(99, 132, 255, 0.11), rgba(170, 120, 255, 0.11)) !important;
+  box-shadow:
+    0 0 0 1px rgba(95, 232, 255, 0.3),
+    0 28px 72px rgba(7, 18, 46, 0.66),
+    0 0 32px rgba(80, 209, 255, 0.26) !important;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] aside > div {
+  border-radius: 14px !important;
+  box-shadow:
+    0 0 0 1px rgba(100, 229, 255, 0.35),
+    0 24px 56px rgba(5, 14, 35, 0.66) !important;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-topbar,
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-bottomnav {
+  border-color: rgba(102, 234, 255, 0.4) !important;
+  background:
+    linear-gradient(180deg, rgba(6, 18, 41, 0.92), rgba(8, 23, 52, 0.88)) !important;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 16% 14%, rgba(77, 228, 255, 0.18), transparent 22%),
+    radial-gradient(circle at 84% 20%, rgba(128, 132, 255, 0.14), transparent 24%),
+    radial-gradient(circle at 78% 86%, rgba(160, 111, 255, 0.16), transparent 22%),
+    repeating-linear-gradient(180deg, rgba(117, 236, 255, 0.08) 0px, rgba(117, 236, 255, 0.08) 1px, transparent 2px, transparent 7px);
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  animation: holoSweep 8.4s linear infinite;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] .shop-card-action--buy,
+.app-frame[data-ui-custom="hologram-academy"] .shop-card-action--combo,
+.app-frame[data-ui-custom="hologram-academy"] .db-primary-btn,
+.app-frame[data-ui-custom="hologram-academy"] .auth-primary-btn,
+.app-frame[data-ui-custom="hologram-academy"] .inv-action {
+  background: linear-gradient(130deg, #2248db 0%, #1db8d5 54%, #8092ff 100%) !important;
+  border-color: rgba(104, 235, 255, 0.55) !important;
+  box-shadow:
+    0 0 0 1px rgba(111, 235, 255, 0.45),
+    0 0 34px rgba(96, 208, 255, 0.52),
+    0 22px 40px rgba(39, 105, 212, 0.44) !important;
+}
+
+/* ── LEGENDARY: Royal Manuscript ─────────────────── */
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-content,
+.app-frame[data-ui-custom="royal-manuscript"] .app-surface,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-item-card,
+.app-frame[data-ui-custom="royal-manuscript"] .inv-item-card,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-showcase {
+  border-radius: 18px !important;
+  border-color: rgba(177, 132, 64, 0.42) !important;
+  background:
+    linear-gradient(165deg, rgba(255, 249, 235, 0.94), rgba(246, 232, 198, 0.9)),
+    radial-gradient(circle at 15% 18%, rgba(196, 147, 71, 0.14), transparent 32%) !important;
+  box-shadow:
+    0 0 0 1px rgba(182, 136, 63, 0.24),
+    0 26px 58px rgba(122, 89, 40, 0.36),
+    inset 0 1px 0 rgba(255, 248, 230, 0.68) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-topbar,
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-bottomnav {
+  background:
+    linear-gradient(180deg, rgba(251, 241, 217, 0.95), rgba(240, 222, 186, 0.92)) !important;
+  border-color: rgba(178, 132, 58, 0.4) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(196, 145, 69, 0.15), transparent 24%),
+    radial-gradient(circle at 88% 84%, rgba(182, 124, 47, 0.11), transparent 26%),
+    repeating-linear-gradient(180deg, rgba(152, 111, 51, 0.07) 0px, rgba(152, 111, 51, 0.07) 1px, transparent 2px, transparent 10px);
+  opacity: 0.42;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--combo,
+.app-frame[data-ui-custom="royal-manuscript"] .db-primary-btn,
+.app-frame[data-ui-custom="royal-manuscript"] .auth-primary-btn,
+.app-frame[data-ui-custom="royal-manuscript"] .inv-action {
+  background: linear-gradient(136deg, #6f4b1a 0%, #a2742e 56%, #dcb66a 100%) !important;
+  border-color: rgba(191, 145, 72, 0.54) !important;
+  box-shadow:
+    0 0 0 1px rgba(188, 139, 64, 0.48),
+    0 18px 34px rgba(141, 96, 34, 0.35),
+    inset 0 1px 0 rgba(255, 238, 197, 0.7) !important;
+  color: #fff6e3 !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .writing-area {
+  background:
+    linear-gradient(180deg, rgba(177, 132, 62, 0.10) 1px, transparent 1px),
+    rgba(255, 249, 235, 0.95) !important;
+  background-size: 100% 30px;
+  border-color: rgba(172, 127, 56, 0.4) !important;
+}
+
+@keyframes auroraForgeShift {
+  0% { transform: translate3d(-3%, -2%, 0) scale(1); opacity: 0.46; }
+  100% { transform: translate3d(3%, 2%, 0) scale(1.06); opacity: 0.68; }
+}
+
+@keyframes holoSweep {
+  0% { transform: translateX(-3%); opacity: 0.5; }
+  50% { opacity: 0.72; }
+  100% { transform: translateX(3%); opacity: 0.48; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-frame[data-ui-custom="aurora-forge"] .dashboard-content::before,
+  .app-frame[data-ui-custom="hologram-academy"] .dashboard-content::before,
+  .app-frame[data-ui-custom="prism-studio"] .shop-card-action--buy::before,
+  .app-frame[data-ui-custom="prism-studio"] .shop-card-action--combo::before,
+  .app-frame[data-ui-custom="prism-studio"] .inv-action::before {
+    animation: none !important;
+  }
+}
