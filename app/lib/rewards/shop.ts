@@ -12,6 +12,7 @@ type SupabaseAdmin = {
     select: (...args: any[]) => any;
     insert: (values: Record<string, unknown> | Array<Record<string, unknown>>) => any;
     upsert: (values: Record<string, unknown> | Array<Record<string, unknown>>, options?: Record<string, unknown>) => any;
+    delete: () => any;
   };
 };
 
@@ -164,6 +165,24 @@ function buildRotationRows(catalog: CatalogItem[], seed: string) {
     });
   }
 
+  for (const category of SHOP_INVENTORY_CATEGORIES) {
+    if (picked.length >= ROTATION_SIZE) break;
+    const categoryCandidate = seededSort(
+      catalog.filter((item) => item.category === category),
+      (item) => `${item.id}:category:${category}`,
+      seed,
+    ).find((item) => !chosenIds.has(item.id));
+
+    if (!categoryCandidate) continue;
+    chosenIds.add(categoryCandidate.id);
+    picked.push({
+      item: categoryCandidate,
+      slot_type: 'standard',
+      is_featured: false,
+      price_override_coins: null,
+    });
+  }
+
   const remainingPool = seededSort(catalog, (item) => `${item.id}:standard`, seed)
     .filter((item) => !chosenIds.has(item.id));
 
@@ -185,6 +204,12 @@ function buildRotationRows(catalog: CatalogItem[], seed: string) {
     is_featured: entry.is_featured,
     price_override_coins: entry.price_override_coins,
   }));
+}
+
+function isRotationHealthy(items: ShopRotationItem[]) {
+  if (items.length < ROTATION_SIZE) return false;
+  const categorySet = new Set(items.map((item) => item.item.category));
+  return SHOP_INVENTORY_CATEGORIES.every((category) => categorySet.has(category));
 }
 
 async function fetchRotationByWeekStart(adminSupabase: SupabaseAdmin, weekStart: string) {
@@ -264,23 +289,47 @@ export async function ensureCurrentWeeklyRotation(adminSupabase: SupabaseAdmin):
   const weekStart = toDateKey(weekStartDate);
   const weekEnd = toDateKey(weekEndDate);
 
+  const getActiveCatalog = async () => {
+    const { data: catalogRows, error: catalogError } = await adminSupabase
+      .from('cosmetic_items')
+      .select('id, slug, name, description, category, rarity, price_coins, asset_ref, metadata, is_active, is_seasonal, season_key')
+      .eq('is_active', true)
+      .in('category', SHOP_INVENTORY_CATEGORIES);
+    if (catalogError) throw catalogError;
+    return (catalogRows ?? []) as CatalogItem[];
+  };
+
+  const rebuildRotationItems = async (rotationId: string, seed: string) => {
+    const catalog = await getActiveCatalog();
+    if (catalog.length === 0) throw new Error('Cosmetic catalog is empty.');
+    const rotationRows = buildRotationRows(catalog, seed);
+    if (rotationRows.length === 0) throw new Error('Could not build shop rotation.');
+
+    const { error: clearError } = await adminSupabase
+      .from('weekly_shop_items')
+      .delete()
+      .eq('rotation_id', rotationId);
+    if (clearError) throw clearError;
+
+    const { error: insertError } = await adminSupabase
+      .from('weekly_shop_items')
+      .insert(rotationRows.map((row) => ({ ...row, rotation_id: rotationId })));
+    if (insertError) throw insertError;
+  };
+
   const existing = await fetchRotationByWeekStart(adminSupabase, weekStart);
   if (existing) {
-    const items = await fetchRotationItems(adminSupabase, existing.id);
+    let items = await fetchRotationItems(adminSupabase, existing.id);
+    if (!isRotationHealthy(items)) {
+      await rebuildRotationItems(existing.id, existing.seed || `shop:${weekStart}`);
+      items = await fetchRotationItems(adminSupabase, existing.id);
+    }
     return toRotationResponse(existing, items);
   }
 
   const seed = `shop:${weekStart}`;
 
-  const { data: catalogRows, error: catalogError } = await adminSupabase
-    .from('cosmetic_items')
-    .select('id, slug, name, description, category, rarity, price_coins, asset_ref, metadata, is_active, is_seasonal, season_key')
-    .eq('is_active', true)
-    .in('category', SHOP_INVENTORY_CATEGORIES);
-
-  if (catalogError) throw catalogError;
-
-  const catalog = (catalogRows ?? []) as CatalogItem[];
+  const catalog = await getActiveCatalog();
   if (catalog.length === 0) {
     throw new Error('Cosmetic catalog is empty.');
   }
