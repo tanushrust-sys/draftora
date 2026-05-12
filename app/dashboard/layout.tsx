@@ -39,6 +39,7 @@ import { CATEGORY_LABELS, COSMETIC_CATEGORIES, type CosmeticCategory } from '@/a
 import { EquippedCosmeticsProvider, type EquippedCosmeticItem } from '@/app/context/EquippedCosmeticsContext';
 import { isPrismAccessory } from '@/app/lib/rewards/prism';
 import PrismWearableCrown from '@/app/components/rewards/PrismWearableCrown';
+import { getUiCustomSkinVars, resolveUiCustomSkin } from '@/app/lib/rewards/ui-custom-skins';
 
 function PrismNameAccessory({ rarity }: { rarity: NonNullable<EquippedCosmeticItem['rarity']> }) {
   const spec = {
@@ -645,7 +646,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 	  const equippedFrame = equippedItemsByCategory.profile_frames;
 	  const equippedStreakEffect = equippedItemsByCategory.streak_effects;
 	  const equippedXpVisual = equippedItemsByCategory.xp_visuals;
+	  const equippedUiCustom = equippedItemsByCategory.ui_custom;
 	  const hasPrismFrame = isPrismAccessory(equippedFrame);
+  const activeUiCustomSkin = useMemo(
+    () => resolveUiCustomSkin({
+      id: equippedUiCustom?.id,
+      slug: equippedUiCustom?.slug,
+      name: equippedUiCustom?.name,
+    }),
+    [equippedUiCustom?.id, equippedUiCustom?.name, equippedUiCustom?.slug],
+  );
+  const uiCustomThemeKey = activeUiCustomSkin?.themeKey ?? 'default';
+  const uiCustomCssVars = useMemo(
+    () => getUiCustomSkinVars(uiCustomThemeKey),
+    [uiCustomThemeKey],
+  );
   const rarityAccentByName: Record<NonNullable<EquippedCosmeticItem['rarity']>, string> = {
     common: 'var(--t-acc)',
     rare: '#0ea5a6',
@@ -685,7 +700,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading) {
     return (
-      <div className="app-frame min-h-screen" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--t-acc) 10%, transparent) 0%, transparent 34%), var(--t-bg)' }}>
+      <div className="app-frame min-h-screen" data-ui-custom="default" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--t-acc) 10%, transparent) 0%, transparent 34%), var(--t-bg)' }}>
         <div className="flex min-h-screen items-center justify-center px-6">
           <div className="w-full max-w-3xl overflow-hidden rounded-[32px] border"
             style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 96%, var(--t-acc) 4%) 0%, color-mix(in srgb, var(--t-card) 98%, black) 100%)', borderColor: 'color-mix(in srgb, var(--t-brd) 58%, transparent)', boxShadow: '0 30px 80px rgba(0,0,0,0.28)' }}>
@@ -714,7 +729,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!hasAuthContext && isPublicDashboardRoute) {
     return (
-      <div className="app-frame min-h-screen" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--t-acc) 10%, transparent) 0%, transparent 32%), var(--t-bg)' }}>
+      <div className="app-frame min-h-screen" data-ui-custom="default" style={{ background: 'radial-gradient(circle at top, color-mix(in srgb, var(--t-acc) 10%, transparent) 0%, transparent 32%), var(--t-bg)' }}>
         <div className="dashboard-main">
           <div className="dashboard-content app-surface">
             <div className="dashboard-topbar">
@@ -742,7 +757,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!hasAuthContext && !isPublicDashboardRoute) {
     return (
-      <div className="app-frame min-h-screen" style={{ display: 'grid', placeItems: 'center' }}>
+      <div className="app-frame min-h-screen" data-ui-custom="default" style={{ display: 'grid', placeItems: 'center' }}>
         <div style={{ color: 'var(--t-tx2)', fontSize: 13, fontWeight: 600 }}>Redirecting to login…</div>
       </div>
     );
@@ -750,7 +765,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <EquippedCosmeticsProvider value={{ equippedItemsByCategory }}>
-      <div className="app-frame">
+      <div
+        className="app-frame"
+        data-ui-custom={uiCustomThemeKey}
+        data-ui-custom-rarity={activeUiCustomSkin?.rarity ?? 'none'}
+        style={uiCustomCssVars as React.CSSProperties}
+      >
       {!isPracticeMode && <OnboardingModal />}
 
       {/* Mobile overlay */}

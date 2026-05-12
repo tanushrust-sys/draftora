@@ -3418,3 +3418,258 @@ select:focus-visible {
     line-height: 1.5;
   }
 }
+
+/* ══════════════════════════════════════
+   UI CUSTOM SKINS — runtime layer
+   Applied via [data-ui-custom="..."] on .app-frame
+   ══════════════════════════════════════ */
+
+.app-frame[data-ui-custom] {
+  --ui-bg: var(--t-bg);
+  --ui-bg-2: var(--t-card2);
+  --ui-surface: color-mix(in srgb, var(--t-card) 92%, transparent);
+  --ui-surface-soft: color-mix(in srgb, var(--t-card2) 88%, transparent);
+  --ui-border: color-mix(in srgb, var(--t-brd) 82%, transparent);
+  --ui-text: var(--t-tx);
+  --ui-muted: var(--t-tx3);
+  --ui-accent: var(--t-acc);
+  --ui-accent-soft: color-mix(in srgb, var(--t-acc) 15%, transparent);
+  --ui-btn: var(--t-btn);
+  --ui-btn-text: var(--t-btn-color);
+  --ui-sidebar: var(--t-sb);
+  --ui-sidebar-border: var(--t-sb-brd);
+  --ui-input: color-mix(in srgb, var(--t-card2) 88%, transparent);
+  --ui-focus: color-mix(in srgb, var(--t-acc) 30%, white);
+  --ui-shadow: var(--t-shadow);
+  --ui-glow: color-mix(in srgb, var(--t-acc) 24%, transparent);
+  --ui-rail: var(--t-acc);
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) {
+  background:
+    radial-gradient(circle at 9% 7%, color-mix(in srgb, var(--ui-glow) 56%, transparent) 0%, transparent 34%),
+    radial-gradient(circle at 88% 90%, color-mix(in srgb, var(--ui-accent-soft) 66%, transparent) 0%, transparent 38%),
+    linear-gradient(170deg, var(--ui-bg) 0%, var(--ui-bg-2) 100%);
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .app-surface,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .app-surface-soft,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-content,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .practice-banner,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-item-card,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-showcase,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .inv-item-card,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .inv-panel {
+  border-color: var(--ui-border) !important;
+  color: var(--ui-text);
+  box-shadow:
+    0 24px 68px color-mix(in srgb, var(--ui-shadow) 48%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .app-surface,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-content {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--ui-surface) 96%, white 4%), color-mix(in srgb, var(--ui-surface-soft) 86%, black 14%)) !important;
+  backdrop-filter: blur(22px) saturate(1.06);
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ui-surface) 92%, white 8%), color-mix(in srgb, var(--ui-surface-soft) 80%, black 20%)) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar__meta h1,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar__badge,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .page-shell__title {
+  color: var(--ui-text) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar__meta p,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-bottomnav__label,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .page-shell__description {
+  color: var(--ui-muted) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar__badge {
+  border-color: var(--ui-border) !important;
+  background: color-mix(in srgb, var(--ui-accent-soft) 70%, transparent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) aside > div {
+  background: var(--ui-sidebar) !important;
+  border-color: var(--ui-sidebar-border) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-bottomnav,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-bottomnav__link--active {
+  border-color: var(--ui-border) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-bottomnav__link--active {
+  background: color-mix(in srgb, var(--ui-accent-soft) 72%, transparent) !important;
+  color: var(--ui-accent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) button,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .auth-primary-btn,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-card-action,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .inv-action,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-primary-btn {
+  border-color: color-mix(in srgb, var(--ui-border) 88%, transparent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-card-action--buy,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-card-action--combo,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-primary-btn,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .auth-primary-btn {
+  background: var(--ui-btn) !important;
+  color: var(--ui-btn-text) !important;
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--ui-glow) 64%, transparent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) input,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) textarea,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) select,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .auth-input,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .lp-input,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .writing-area {
+  background: var(--ui-input) !important;
+  border-color: var(--ui-border) !important;
+  color: var(--ui-text) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) input::placeholder,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) textarea::placeholder {
+  color: color-mix(in srgb, var(--ui-muted) 82%, transparent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) input:focus-visible,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) textarea:focus-visible,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) select:focus-visible,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) button:focus-visible {
+  outline-color: var(--ui-focus) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .page-shell__eyebrow {
+  color: var(--ui-accent) !important;
+}
+
+.app-frame[data-ui-custom] .theme-main {
+  position: relative;
+}
+
+.app-frame[data-ui-custom="paperboard-minimal"] .writing-area {
+  background-image: linear-gradient(to bottom, rgba(143, 109, 70, 0.10) 1px, transparent 1px);
+  background-size: 100% 31px;
+}
+
+.app-frame[data-ui-custom="blueberry-glass"] .app-surface,
+.app-frame[data-ui-custom="blueberry-glass"] .dashboard-content {
+  backdrop-filter: blur(24px) saturate(1.1);
+}
+
+.app-frame[data-ui-custom="cyber-studyline"] .theme-main::before,
+.app-frame[data-ui-custom="hologram-academy"] .theme-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(97, 182, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(97, 182, 255, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.32;
+  z-index: 0;
+}
+
+.app-frame[data-ui-custom="cyber-studyline"] .dashboard-topbar,
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-topbar {
+  border-bottom-color: color-mix(in srgb, var(--ui-rail) 42%, transparent) !important;
+}
+
+.app-frame[data-ui-custom="sakura-desk"] .theme-main::after,
+.app-frame[data-ui-custom="royal-manuscript"] .theme-main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 8% 10%, rgba(230, 152, 175, 0.1), transparent 36%), radial-gradient(circle at 92% 88%, rgba(208, 161, 99, 0.12), transparent 40%);
+  z-index: 0;
+}
+
+.app-frame[data-ui-custom="aurora-forge"] .app-frame,
+.app-frame[data-ui-custom="aurora-forge"] .theme-main,
+.app-frame[data-ui-custom="hologram-academy"] .theme-main {
+  position: relative;
+}
+
+.app-frame[data-ui-custom="aurora-forge"] .theme-main::before,
+.app-frame[data-ui-custom="prism-studio"] .theme-main::before,
+.app-frame[data-ui-custom="hologram-academy"] .theme-main::before,
+.app-frame[data-ui-custom="royal-manuscript"] .theme-main::before {
+  content: '';
+  position: absolute;
+  inset: -18% -8% auto -8%;
+  height: 64%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 40% 40%, color-mix(in srgb, var(--ui-glow) 62%, transparent) 0%, transparent 72%);
+  filter: blur(16px);
+  opacity: 0.34;
+  z-index: 0;
+  animation: uiCustomFloat 16s ease-in-out infinite alternate;
+}
+
+.app-frame[data-ui-custom="prism-studio"] .shop-item-card,
+.app-frame[data-ui-custom="prism-studio"] .inv-item-card {
+  background-image: linear-gradient(165deg, rgba(121, 94, 255, 0.10) 0%, rgba(56, 200, 228, 0.08) 32%, rgba(255, 255, 255, 0.06) 100%) !important;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-bottomnav__link--active,
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="hologram-academy"] .shop-card-action--combo {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-rail) 48%, transparent), 0 0 28px color-mix(in srgb, var(--ui-glow) 72%, transparent) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-topbar,
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-content,
+.app-frame[data-ui-custom="royal-manuscript"] .app-surface {
+  border-color: color-mix(in srgb, #b98a45 34%, var(--ui-border)) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--combo,
+.app-frame[data-ui-custom="royal-manuscript"] .auth-primary-btn {
+  box-shadow:
+    0 0 0 1px rgba(187, 139, 65, 0.45),
+    0 16px 32px rgba(154, 102, 36, 0.26),
+    inset 0 1px 0 rgba(255, 240, 205, 0.6) !important;
+}
+
+.app-frame[data-ui-custom-rarity="epic"] .dashboard-content,
+.app-frame[data-ui-custom-rarity="legendary"] .dashboard-content {
+  backdrop-filter: blur(24px) saturate(1.12);
+}
+
+.app-frame[data-ui-custom-rarity="legendary"] .dashboard-content,
+.app-frame[data-ui-custom-rarity="legendary"] .app-surface,
+.app-frame[data-ui-custom-rarity="legendary"] .shop-showcase {
+  box-shadow:
+    0 36px 90px color-mix(in srgb, var(--ui-shadow) 70%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--ui-rail) 22%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+@keyframes uiCustomFloat {
+  0% { transform: translate3d(-1%, -2%, 0) scale(1); opacity: 0.25; }
+  100% { transform: translate3d(1%, 2%, 0) scale(1.05); opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-frame[data-ui-custom] .theme-main::before,
+  .app-frame[data-ui-custom] .theme-main::after,
+  .app-frame[data-ui-custom] .shop-item-card,
+  .app-frame[data-ui-custom] .shop-showcase,
+  .app-frame[data-ui-custom] .inv-item-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}

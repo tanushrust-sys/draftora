@@ -1,3 +1,5 @@
+import { UI_CUSTOM_SKINS } from '@/app/lib/rewards/ui-custom-skins';
+
 export type CosmeticCategory =
   | 'editor_themes'
   | 'profile_frames'
@@ -61,7 +63,7 @@ const RARITY_INDEX: Record<CosmeticRarity, number> = {
   legendary: 4,
 };
 
-const CATALOG_QUALITY_VERSION = '2026-05-premium-v2';
+const CATALOG_QUALITY_VERSION = '2026-05-premium-v3-ui-custom-skins';
 
 export const COSMETIC_CATEGORIES: CosmeticCategory[] = [
   'editor_themes',
@@ -323,6 +325,33 @@ export function buildCosmeticCatalog() {
   const catalog: CatalogItem[] = [];
 
   for (const category of COSMETIC_CATEGORIES) {
+    if (category === 'ui_custom') {
+      for (const [index, skin] of UI_CUSTOM_SKINS.entries()) {
+        catalog.push({
+          slug: skin.slug,
+          name: skin.name,
+          description: skin.description,
+          category: 'ui_custom',
+          rarity: skin.rarity,
+          price_coins: skin.price,
+          asset_ref: `catalog/${CATALOG_QUALITY_VERSION}/ui_custom/${skin.rarity}/${skin.themeKey}`,
+          metadata: {
+            display_category: CATEGORY_LABELS.ui_custom,
+            collection: skin.name,
+            collection_index: index + 1,
+            rarity_rank: RARITY_INDEX[skin.rarity],
+            catalog_version: CATALOG_QUALITY_VERSION,
+            category_line: CATALOG_BLUEPRINTS.ui_custom.categoryLine,
+            theme_key: skin.themeKey,
+          },
+          is_active: true,
+          is_seasonal: false,
+          season_key: null,
+        });
+      }
+      continue;
+    }
+
     const blueprint = CATALOG_BLUEPRINTS[category];
 
     for (const rarity of COSMETIC_RARITIES) {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { CATEGORY_LABELS, type CosmeticCategory, type CosmeticRarity } from '@/app/lib/rewards/catalog';
 import PrismWearableCrown from '@/app/components/rewards/PrismWearableCrown';
+import { resolveUiCustomSkin } from '@/app/lib/rewards/ui-custom-skins';
 import {
   FIRE_THEMES_BY_RARITY,
   FIRE_THEME_UPDATED_EVENT,
@@ -199,6 +200,9 @@ export default function CosmeticLivePreview({
     '--fire-recolor': activeFireTheme.recolor,
     '--fire-recolor-opacity': String(activeFireTheme.recolorOpacity),
   } as CSSProperties;
+  const uiCustomSkin = category === 'ui_custom'
+    ? resolveUiCustomSkin({ slug, name })
+    : null;
 
   return (
     <div
@@ -363,11 +367,22 @@ export default function CosmeticLivePreview({
       )}
 
       {category === 'ui_custom' && (
-        <div className="scene scene--ui" aria-hidden="true">
+        <div
+          className={`scene scene--ui ${uiCustomSkin ? `scene--ui-${uiCustomSkin.themeKey}` : ''}`}
+          aria-hidden="true"
+          style={{
+            ['--ui-prev-accent' as string]: uiCustomSkin?.preview.accent ?? 'var(--cp-a)',
+            ['--ui-prev-panel' as string]: uiCustomSkin?.preview.panel ?? 'rgba(255,255,255,0.54)',
+          }}
+        >
+          <span className="ui-prev-gradient" style={{ background: uiCustomSkin?.preview.gradient ?? 'linear-gradient(135deg, var(--cp-a), var(--cp-b))' }} />
           <span className="ui-pill ui-pill--1" />
           <span className="ui-pill ui-pill--2" />
           <span className="ui-pill ui-pill--3" />
           <span className="ui-accent-dot" />
+          <span className="ui-prev-line ui-prev-line--1" />
+          <span className="ui-prev-line ui-prev-line--2" />
+          <span className="ui-prev-name">{uiCustomSkin?.name ?? name}</span>
           {appliedStyle ? (
             <>
               <span className="ui-applied-rail ui-applied-rail--1" />
@@ -1254,6 +1269,52 @@ export default function CosmeticLivePreview({
           top: 44px;
           height: 10px;
           opacity: 0.72;
+        }
+
+        .ui-prev-gradient {
+          position: absolute;
+          inset: 0;
+          opacity: 0.34;
+        }
+
+        .ui-prev-line {
+          position: absolute;
+          right: 14px;
+          height: 3px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--ui-prev-accent) 74%, white);
+          box-shadow: 0 0 10px color-mix(in srgb, var(--ui-prev-accent) 34%, transparent);
+        }
+
+        .ui-prev-line--1 {
+          top: 58px;
+          width: 22px;
+          opacity: 0.88;
+        }
+
+        .ui-prev-line--2 {
+          top: 66px;
+          width: 14px;
+          opacity: 0.64;
+        }
+
+        .ui-prev-name {
+          position: absolute;
+          left: 10px;
+          right: 10px;
+          bottom: 8px;
+          z-index: 1;
+          font-size: 9.5px;
+          font-weight: 820;
+          color: color-mix(in srgb, var(--ui-prev-accent) 82%, #0f172a);
+          letter-spacing: 0.01em;
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+          padding: 3px 8px;
+          border-radius: 999px;
+          border: 1px solid color-mix(in srgb, var(--ui-prev-accent) 24%, transparent);
+          background: var(--ui-prev-panel);
         }
 
         .scene--title .title-crown {
