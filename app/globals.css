@@ -4077,6 +4077,8 @@ select:focus-visible {
     0 0 0 1px rgba(182, 136, 63, 0.24),
     0 26px 58px rgba(122, 89, 40, 0.36),
     inset 0 1px 0 rgba(255, 248, 230, 0.68) !important;
+  position: relative;
+  overflow: hidden;
 }
 
 .app-frame[data-ui-custom="royal-manuscript"] .dashboard-topbar,
@@ -4084,6 +4086,51 @@ select:focus-visible {
   background:
     linear-gradient(180deg, rgba(251, 241, 217, 0.95), rgba(240, 222, 186, 0.92)) !important;
   border-color: rgba(178, 132, 58, 0.4) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .app-frame,
+.app-frame[data-ui-custom="royal-manuscript"] .theme-main {
+  position: relative;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .theme-main::before {
+  content: '';
+  position: absolute;
+  inset: -8% -10% -6% -10%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 12%, rgba(214, 169, 92, 0.22) 0%, transparent 36%),
+    radial-gradient(circle at 84% 22%, rgba(173, 123, 54, 0.18) 0%, transparent 34%),
+    radial-gradient(circle at 78% 88%, rgba(137, 96, 40, 0.18) 0%, transparent 30%);
+  filter: blur(18px);
+  opacity: 0.75;
+  z-index: 0;
+  animation: royalGlowDrift 14s ease-in-out infinite alternate;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .theme-main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(140, 101, 48, 0.06) 0px,
+      rgba(140, 101, 48, 0.06) 1px,
+      transparent 2px,
+      transparent 13px
+    ),
+    linear-gradient(
+      118deg,
+      rgba(215, 170, 91, 0) 10%,
+      rgba(215, 170, 91, 0.12) 36%,
+      rgba(158, 113, 51, 0.1) 52%,
+      rgba(215, 170, 91, 0) 78%
+    );
+  mix-blend-mode: multiply;
+  opacity: 0.42;
+  z-index: 0;
 }
 
 .app-frame[data-ui-custom="royal-manuscript"] .dashboard-content::before {
@@ -4098,6 +4145,21 @@ select:focus-visible {
   opacity: 0.42;
 }
 
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-content::after,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-item-card::after,
+.app-frame[data-ui-custom="royal-manuscript"] .inv-item-card::after,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-showcase::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255, 236, 196, 0) 8%, rgba(255, 236, 196, 0.56) 42%, rgba(255, 236, 196, 0) 74%);
+  transform: translateX(-135%);
+  opacity: 0;
+  animation: royalPanelShine 6.8s ease-in-out infinite;
+}
+
 .app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy,
 .app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--combo,
 .app-frame[data-ui-custom="royal-manuscript"] .db-primary-btn,
@@ -4110,6 +4172,48 @@ select:focus-visible {
     0 18px 34px rgba(141, 96, 34, 0.35),
     inset 0 1px 0 rgba(255, 238, 197, 0.7) !important;
   color: #fff6e3 !important;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.01em;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy::after,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--combo::after,
+.app-frame[data-ui-custom="royal-manuscript"] .db-primary-btn::after,
+.app-frame[data-ui-custom="royal-manuscript"] .auth-primary-btn::after,
+.app-frame[data-ui-custom="royal-manuscript"] .inv-action::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(126deg, rgba(255, 236, 197, 0) 10%, rgba(255, 236, 197, 0.64) 44%, rgba(255, 236, 197, 0) 72%);
+  transform: translateX(-125%);
+  animation: royalButtonShine 4.2s ease-in-out infinite;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-chip,
+.app-frame[data-ui-custom="royal-manuscript"] .inv-chip,
+.app-frame[data-ui-custom="royal-manuscript"] .equip-pill {
+  border-color: rgba(184, 136, 62, 0.52) !important;
+  background: linear-gradient(140deg, rgba(255, 245, 221, 0.84), rgba(248, 229, 188, 0.82)) !important;
+  color: #6e4a20 !important;
+  box-shadow:
+    0 0 0 1px rgba(186, 139, 63, 0.2),
+    0 10px 18px rgba(136, 95, 42, 0.2) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] input,
+.app-frame[data-ui-custom="royal-manuscript"] textarea,
+.app-frame[data-ui-custom="royal-manuscript"] select,
+.app-frame[data-ui-custom="royal-manuscript"] .auth-input,
+.app-frame[data-ui-custom="royal-manuscript"] .lp-input,
+.app-frame[data-ui-custom="royal-manuscript"] .writing-area {
+  border-color: rgba(176, 127, 52, 0.42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 247, 226, 0.72),
+    0 8px 18px rgba(144, 101, 43, 0.14) !important;
 }
 
 .app-frame[data-ui-custom="royal-manuscript"] .writing-area {
@@ -4131,12 +4235,41 @@ select:focus-visible {
   100% { transform: translateX(3%); opacity: 0.48; }
 }
 
+@keyframes royalGlowDrift {
+  0% { transform: translate3d(-1.5%, -1%, 0) scale(1); opacity: 0.62; }
+  100% { transform: translate3d(1.5%, 1.2%, 0) scale(1.06); opacity: 0.86; }
+}
+
+@keyframes royalPanelShine {
+  0% { transform: translateX(-135%); opacity: 0; }
+  20% { opacity: 0.55; }
+  44% { opacity: 0.2; }
+  100% { transform: translateX(135%); opacity: 0; }
+}
+
+@keyframes royalButtonShine {
+  0% { transform: translateX(-125%); opacity: 0; }
+  24% { opacity: 0.66; }
+  56% { opacity: 0.24; }
+  100% { transform: translateX(125%); opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-frame[data-ui-custom="aurora-forge"] .dashboard-content::before,
   .app-frame[data-ui-custom="hologram-academy"] .dashboard-content::before,
   .app-frame[data-ui-custom="prism-studio"] .shop-card-action--buy::before,
   .app-frame[data-ui-custom="prism-studio"] .shop-card-action--combo::before,
-  .app-frame[data-ui-custom="prism-studio"] .inv-action::before {
+  .app-frame[data-ui-custom="prism-studio"] .inv-action::before,
+  .app-frame[data-ui-custom="royal-manuscript"] .theme-main::before,
+  .app-frame[data-ui-custom="royal-manuscript"] .dashboard-content::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .shop-item-card::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .inv-item-card::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .shop-showcase::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--combo::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .db-primary-btn::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .auth-primary-btn::after,
+  .app-frame[data-ui-custom="royal-manuscript"] .inv-action::after {
     animation: none !important;
   }
 }
