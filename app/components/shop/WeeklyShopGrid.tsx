@@ -280,6 +280,7 @@ export default function WeeklyShopGrid({ items, xpBalance, actionKey, ageGroup =
                   collection={collection}
                   ageGroup={ageGroup}
                   showMeta={false}
+                  renderStyle="applied"
                   className={[
                     rarityStyle.previewClass,
                     previewItem.item.category === 'streak_effects' ? 'shop-preview--streak' : '',

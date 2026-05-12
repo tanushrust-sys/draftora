@@ -22,6 +22,7 @@ type CosmeticLivePreviewProps = {
   className?: string;
   showMeta?: boolean;
   fireThemeItemId?: string | null;
+  renderStyle?: 'default' | 'applied';
 };
 
 const CATEGORY_PALETTE: Record<CosmeticCategory, { a: string; b: string; c: string }> = {
@@ -68,7 +69,9 @@ export default function CosmeticLivePreview({
   className = '',
   showMeta = true,
   fireThemeItemId = null,
+  renderStyle = 'default',
 }: CosmeticLivePreviewProps) {
+  const appliedStyle = renderStyle === 'applied';
   const [fireThemeIndex, setFireThemeIndex] = useState(0);
   const shouldPersistFireThemeIndexRef = useRef(false);
   const fallbackPalette = CATEGORY_PALETTE.xp_visuals;
@@ -272,6 +275,12 @@ export default function CosmeticLivePreview({
           <span className="badge-core">*</span>
           <span className="badge-ring" />
           <span className="badge-shine" />
+          {appliedStyle ? (
+            <span className="badge-applied-chip" aria-hidden="true">
+              <span className="badge-applied-dot">*</span>
+              <span className="badge-applied-name">{name}</span>
+            </span>
+          ) : null}
         </div>
       )}
 
@@ -359,6 +368,12 @@ export default function CosmeticLivePreview({
           <span className="ui-pill ui-pill--2" />
           <span className="ui-pill ui-pill--3" />
           <span className="ui-accent-dot" />
+          {appliedStyle ? (
+            <>
+              <span className="ui-applied-rail ui-applied-rail--1" />
+              <span className="ui-applied-rail ui-applied-rail--2" />
+            </>
+          ) : null}
         </div>
       )}
 
@@ -699,6 +714,46 @@ export default function CosmeticLivePreview({
           transform: skewX(-20deg);
           background: rgba(255,255,255,0.56);
           animation: preview-shine calc(var(--cp-speed) * 0.82) ease-in-out infinite;
+        }
+
+        .badge-applied-chip {
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          bottom: 8px;
+          height: 24px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0 8px;
+          border: 1px solid color-mix(in srgb, var(--cp-a) 34%, transparent);
+          background: color-mix(in srgb, var(--cp-a) 14%, white 86%);
+          color: color-mix(in srgb, var(--cp-a) 74%, #0f172a);
+          box-shadow: 0 8px 16px rgba(15, 23, 42, 0.14);
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+        }
+
+        .badge-applied-dot {
+          width: 14px;
+          height: 14px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid color-mix(in srgb, var(--cp-a) 34%, transparent);
+          background: color-mix(in srgb, var(--cp-a) 18%, white 82%);
+          font-size: 8px;
+          font-weight: 900;
+          flex: 0 0 auto;
+        }
+
+        .badge-applied-name {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .writing-caret {
@@ -1178,6 +1233,27 @@ export default function CosmeticLivePreview({
           background: linear-gradient(135deg, color-mix(in srgb, var(--cp-a) 68%, white 32%), color-mix(in srgb, var(--cp-b) 68%, white 32%));
           box-shadow: 0 10px 22px color-mix(in srgb, var(--cp-a) calc(20% * var(--rq-glow, 1)), transparent);
           animation: ui-pop calc(var(--cp-speed) * 0.72) ease-in-out infinite;
+        }
+
+        .ui-applied-rail {
+          position: absolute;
+          right: 14px;
+          width: 4px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, color-mix(in srgb, var(--cp-a) 84%, white), color-mix(in srgb, var(--cp-b) 78%, white));
+          box-shadow: 0 0 10px color-mix(in srgb, var(--cp-b) 38%, transparent);
+          opacity: 0.9;
+        }
+
+        .ui-applied-rail--1 {
+          top: 16px;
+          height: 22px;
+        }
+
+        .ui-applied-rail--2 {
+          top: 44px;
+          height: 10px;
+          opacity: 0.72;
         }
 
         .scene--title .title-crown {

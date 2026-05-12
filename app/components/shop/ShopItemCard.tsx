@@ -132,6 +132,7 @@ export default function ShopItemCard({
         ageGroup={ageGroup}
         compact
         showMeta={false}
+        renderStyle="applied"
         fireThemeItemId={entry.item.category === 'streak_effects' ? entry.item.id : null}
         className={[
           rarity.previewClass,
