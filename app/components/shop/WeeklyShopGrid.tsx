@@ -525,8 +525,12 @@ export default function WeeklyShopGrid({ items, xpBalance, actionKey, ageGroup =
         }
 
         .shop-showcase.shop-rarity-card--legendary {
-          border-color: rgba(251, 146, 60, 0.58);
-          box-shadow: 0 20px 38px rgba(217, 119, 6, 0.26);
+          border-color: rgba(245, 158, 11, 0.74);
+          background:
+            radial-gradient(circle at 16% 14%, rgba(255, 251, 235, 0.92), rgba(255,255,255,0) 34%),
+            radial-gradient(circle at 88% 16%, rgba(252, 211, 77, 0.34), rgba(255,255,255,0) 34%),
+            linear-gradient(146deg, color-mix(in srgb, #fffbeb 42%, var(--t-card) 58%) 0%, color-mix(in srgb, #fef3c7 22%, var(--t-card) 78%) 100%);
+          box-shadow: 0 24px 46px rgba(180, 83, 9, 0.3);
         }
 
         .shop-showcase__rarity.shop-rarity-badge--common {
@@ -553,10 +557,10 @@ export default function WeeklyShopGrid({ items, xpBalance, actionKey, ageGroup =
         }
 
         .shop-showcase__rarity.shop-rarity-badge--legendary {
-          border: 1px solid rgba(251, 146, 60, 0.54);
-          background: linear-gradient(130deg, rgba(255,255,255,0.62), rgba(251, 191, 36, 0.22), rgba(249, 115, 22, 0.24));
-          color: #b45309;
-          box-shadow: inset 0 0 14px rgba(251, 191, 36, 0.2);
+          border: 1px solid rgba(245, 158, 11, 0.62);
+          background: linear-gradient(130deg, rgba(255,255,255,0.74), rgba(252, 211, 77, 0.34), rgba(251, 146, 60, 0.3));
+          color: #92400e;
+          box-shadow: inset 0 0 14px rgba(251, 191, 36, 0.28), 0 10px 20px rgba(180, 83, 9, 0.2);
           position: relative;
           overflow: hidden;
         }
@@ -588,9 +592,9 @@ export default function WeeklyShopGrid({ items, xpBalance, actionKey, ageGroup =
           inset: -1px;
           border-radius: inherit;
           background: linear-gradient(112deg, transparent 0%, rgba(255,255,255,0.7) 46%, transparent 72%);
-          animation: showcase-legend-shine 3.4s linear infinite;
+          animation: showcase-legend-shine 2.6s linear infinite;
           pointer-events: none;
-          opacity: 0.66;
+          opacity: 0.78;
         }
 
         .shop-showcase.shop-rarity-anim--epic::after {

@@ -1043,14 +1043,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                   if (effectiveCollapsed) {
                     return (
-                      <Link key={href} href={href} title={label}
+                    <Link key={href} href={href} title={label}
                         style={{
-                          width: 50, height: 50, borderRadius: 15, margin: '0 auto',
+                          width: 52, height: 52, borderRadius: 16, margin: '0 auto',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           textDecoration: 'none',
-                          background: active ? `linear-gradient(180deg, color-mix(in srgb, ${color} 20%, var(--t-sb-act)) 0%, color-mix(in srgb, ${color} 12%, var(--t-sb)) 100%)` : 'transparent',
-                          border: active ? '1px solid var(--t-sb-act-brd)' : '1px solid color-mix(in srgb, var(--t-sb-mu) 18%, transparent)',
-                          boxShadow: active ? `0 8px 20px color-mix(in srgb, ${color} 34%, transparent)` : 'none',
+                          background: active
+                            ? `linear-gradient(170deg, color-mix(in srgb, ${color} 26%, rgba(255,255,255,0.85)) 0%, color-mix(in srgb, ${color} 15%, var(--t-sb)) 100%)`
+                            : 'color-mix(in srgb, var(--t-sb-mu) 10%, transparent)',
+                          border: active ? '1px solid var(--t-sb-act-brd)' : '1px solid color-mix(in srgb, var(--t-sb-mu) 24%, transparent)',
+                          boxShadow: active
+                            ? `0 14px 28px color-mix(in srgb, ${color} 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.5)`
+                            : 'inset 0 1px 0 rgba(255,255,255,0.35)',
                           transition: 'all 0.2s ease',
                         }}>
                         <Icon style={{ width: 20, height: 20, color: active ? color : 'var(--t-sb-mu)' }} />
@@ -1063,59 +1067,64 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       style={{
                         display: 'flex', alignItems: 'center', gap: 11,
                         padding: '9px 11px',
-                        borderRadius: 15,
+                        borderRadius: 16,
                         textDecoration: 'none',
                         background: active
-                          ? `linear-gradient(135deg, color-mix(in srgb, ${color} 16%, var(--t-sb-act)) 0%, color-mix(in srgb, ${color} 8%, var(--t-sb-hov)) 100%)`
-                          : 'transparent',
+                          ? `linear-gradient(148deg, color-mix(in srgb, ${color} 24%, rgba(255,255,255,0.82)) 0%, color-mix(in srgb, ${color} 12%, var(--t-sb-hov)) 56%, color-mix(in srgb, ${color} 8%, var(--t-sb)) 100%)`
+                          : 'color-mix(in srgb, var(--t-sb-mu) 7%, transparent)',
                         border: active
                           ? '1px solid var(--t-sb-act-brd)'
-                          : '1px solid color-mix(in srgb, var(--t-sb-mu) 14%, transparent)',
-                        boxShadow: active ? `0 10px 24px color-mix(in srgb, ${color} 22%, transparent)` : 'none',
+                          : '1px solid color-mix(in srgb, var(--t-sb-mu) 18%, transparent)',
+                        boxShadow: active
+                          ? `0 16px 32px color-mix(in srgb, ${color} 28%, transparent), inset 0 1px 0 rgba(255,255,255,0.42)`
+                          : 'inset 0 1px 0 rgba(255,255,255,0.26)',
                         transition: 'all 0.2s ease',
                         position: 'relative',
+                        overflow: 'hidden',
                       }}
                       onMouseEnter={e => {
                         if (!active) {
                           const el = e.currentTarget as HTMLElement;
-                          el.style.background = 'var(--t-sb-hov)';
-                          el.style.border = '1px solid var(--t-sb-hov-brd)';
+                          el.style.background = `linear-gradient(148deg, color-mix(in srgb, ${color} 14%, rgba(255,255,255,0.68)) 0%, var(--t-sb-hov) 100%)`;
+                          el.style.border = '1px solid color-mix(in srgb, var(--t-sb-hov-brd) 72%, transparent)';
                           el.style.transform = 'translateY(-1px)';
-                          el.style.boxShadow = '0 8px 18px color-mix(in srgb, var(--t-shadow) 18%, transparent)';
+                          el.style.boxShadow = `0 12px 24px color-mix(in srgb, ${color} 16%, transparent)`;
                         }
                       }}
                       onMouseLeave={e => {
                         if (!active) {
                           const el = e.currentTarget as HTMLElement;
-                          el.style.background = 'transparent';
-                          el.style.border = '1px solid color-mix(in srgb, var(--t-sb-mu) 14%, transparent)';
+                          el.style.background = 'color-mix(in srgb, var(--t-sb-mu) 7%, transparent)';
+                          el.style.border = '1px solid color-mix(in srgb, var(--t-sb-mu) 18%, transparent)';
                           el.style.transform = 'translateY(0)';
-                          el.style.boxShadow = 'none';
+                          el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.26)';
                         }
                       }}
                     >
                       {active && (
                         <div style={{
                           position: 'absolute',
-                          left: 0,
-                          top: 9,
-                          bottom: 9,
-                          width: 3,
+                          left: 2,
+                          top: 8,
+                          bottom: 8,
+                          width: 4,
                           borderRadius: 99,
                           background: `linear-gradient(180deg, ${color} 0%, color-mix(in srgb, ${color} 65%, white) 100%)`,
-                          boxShadow: `0 0 10px color-mix(in srgb, ${color} 45%, transparent)`,
+                          boxShadow: `0 0 14px color-mix(in srgb, ${color} 55%, transparent)`,
                         }} />
                       )}
                       {/* Icon box */}
                       <div style={{
-                        width: 36, height: 36, borderRadius: 11, flexShrink: 0,
+                        width: 38, height: 38, borderRadius: 12, flexShrink: 0,
                         background: active
-                          ? `linear-gradient(180deg, color-mix(in srgb, ${color} 30%, transparent) 0%, color-mix(in srgb, ${color} 16%, transparent) 100%)`
-                          : 'color-mix(in srgb, var(--t-sb-mu) 13%, transparent)',
-                        border: `1px solid ${active ? `color-mix(in srgb, ${color} 48%, transparent)` : 'color-mix(in srgb, var(--t-sb-mu) 26%, transparent)'}`,
+                          ? `linear-gradient(180deg, color-mix(in srgb, ${color} 34%, rgba(255,255,255,0.32)) 0%, color-mix(in srgb, ${color} 20%, transparent) 100%)`
+                          : 'color-mix(in srgb, var(--t-sb-mu) 16%, transparent)',
+                        border: `1px solid ${active ? `color-mix(in srgb, ${color} 56%, transparent)` : 'color-mix(in srgb, var(--t-sb-mu) 30%, transparent)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'all 0.2s ease',
-                        boxShadow: active ? `0 0 0 1px color-mix(in srgb, ${color} 18%, transparent), 0 8px 14px color-mix(in srgb, ${color} 22%, transparent)` : 'none',
+                        boxShadow: active
+                          ? `0 0 0 1px color-mix(in srgb, ${color} 20%, transparent), 0 10px 18px color-mix(in srgb, ${color} 28%, transparent), inset 0 1px 0 rgba(255,255,255,0.42)`
+                          : 'inset 0 1px 0 rgba(255,255,255,0.25)',
                       }}>
                         <Icon style={{ width: 16, height: 16, color: active ? color : 'var(--t-sb-mu)', transition: 'color 0.18s' }} />
                       </div>

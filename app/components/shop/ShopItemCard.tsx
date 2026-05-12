@@ -521,12 +521,13 @@ export default function ShopItemCard({
         }
 
         .shop-rarity-card--legendary {
-          border-color: rgba(251, 146, 60, 0.58);
+          border-color: rgba(245, 158, 11, 0.72);
           background:
-            radial-gradient(circle at 20% 18%, rgba(254,215,170,0.72), rgba(255,255,255,0) 48%),
-            radial-gradient(circle at 86% 70%, rgba(251,191,36,0.22), rgba(255,255,255,0) 56%),
-            linear-gradient(160deg, color-mix(in srgb, #ffedd5 30%, var(--t-card) 70%) 0%, color-mix(in srgb, #fef3c7 12%, var(--t-card) 88%) 100%);
-          box-shadow: 0 16px 34px rgba(217, 119, 6, 0.2);
+            radial-gradient(circle at 16% 14%, rgba(255, 243, 199, 0.95), rgba(255,255,255,0) 36%),
+            radial-gradient(circle at 88% 12%, rgba(252, 211, 77, 0.42), rgba(255,255,255,0) 32%),
+            radial-gradient(circle at 84% 78%, rgba(249, 115, 22, 0.3), rgba(255,255,255,0) 48%),
+            linear-gradient(165deg, color-mix(in srgb, #fffbeb 48%, var(--t-card) 52%) 0%, color-mix(in srgb, #fef3c7 30%, var(--t-card) 70%) 52%, color-mix(in srgb, #fed7aa 22%, var(--t-card) 78%) 100%);
+          box-shadow: 0 20px 42px rgba(180, 83, 9, 0.28), inset 0 1px 0 rgba(255,255,255,0.68);
         }
 
         .shop-rarity-badge--common {
@@ -553,10 +554,10 @@ export default function ShopItemCard({
         }
 
         .shop-rarity-badge--legendary {
-          border-color: rgba(251, 146, 60, 0.52);
-          background: linear-gradient(130deg, rgba(255,255,255,0.62), rgba(251, 191, 36, 0.22), rgba(249, 115, 22, 0.22));
-          color: #b45309;
-          box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.18), 0 10px 18px rgba(217, 119, 6, 0.16);
+          border-color: rgba(245, 158, 11, 0.62);
+          background: linear-gradient(130deg, rgba(255,255,255,0.74), rgba(252, 211, 77, 0.35), rgba(251, 146, 60, 0.3));
+          color: #92400e;
+          box-shadow: inset 0 0 14px rgba(251, 191, 36, 0.28), 0 12px 22px rgba(180, 83, 9, 0.24);
           position: relative;
           overflow: hidden;
         }
@@ -597,10 +598,11 @@ export default function ShopItemCard({
         }
 
         .shop-rarity-button--legendary {
-          border-color: rgba(245, 158, 11, 0.58);
-          background: linear-gradient(135deg, #f59e0b, #f97316, #ef4444);
+          border-color: rgba(245, 158, 11, 0.68);
+          background: linear-gradient(135deg, #facc15, #f59e0b, #f97316, #ea580c);
           color: #ffffff;
-          background-size: 160% 100%;
+          background-size: 200% 100%;
+          box-shadow: 0 12px 24px rgba(180, 83, 9, 0.36), inset 0 1px 0 rgba(255,255,255,0.32);
         }
 
         .shop-rarity-anim--rare:hover {
@@ -628,8 +630,8 @@ export default function ShopItemCard({
         }
 
         .shop-rarity-anim--legendary::before {
-          background: conic-gradient(from 210deg, rgba(251,146,60,0.0), rgba(251,146,60,0.52), rgba(251,191,36,0.38), rgba(244,114,182,0.18), rgba(251,146,60,0.0));
-          filter: blur(14px);
+          background: conic-gradient(from 210deg, rgba(251,146,60,0.0), rgba(245,158,11,0.7), rgba(252,211,77,0.56), rgba(251,146,60,0.46), rgba(244,114,182,0.2), rgba(251,146,60,0.0));
+          filter: blur(16px);
         }
 
         .shop-item-card:hover.shop-rarity-anim--epic::before,
@@ -643,8 +645,8 @@ export default function ShopItemCard({
         }
 
         .shop-rarity-anim--legendary::after {
-          opacity: 0.66;
-          animation: shop-shine 3.2s linear infinite;
+          opacity: 0.84;
+          animation: shop-shine 2.5s linear infinite;
         }
 
         .shop-rarity-anim--legendary .shop-rarity-button--legendary:not(:disabled) {
