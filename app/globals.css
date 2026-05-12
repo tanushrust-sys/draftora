@@ -3446,6 +3446,23 @@ select:focus-visible {
 }
 
 .app-frame[data-ui-custom]:not([data-ui-custom="default"]) {
+  --t-bg: var(--ui-bg);
+  --t-card: color-mix(in srgb, var(--ui-surface) 94%, transparent);
+  --t-card2: color-mix(in srgb, var(--ui-surface-soft) 92%, transparent);
+  --t-card3: color-mix(in srgb, var(--ui-surface-soft) 84%, black 16%);
+  --t-brd: var(--ui-border);
+  --t-brd-a: color-mix(in srgb, var(--ui-border) 84%, white 16%);
+  --t-tx: var(--ui-text);
+  --t-tx2: color-mix(in srgb, var(--ui-text) 82%, var(--ui-muted) 18%);
+  --t-tx3: var(--ui-muted);
+  --t-acc: var(--ui-accent);
+  --t-acc-a: var(--ui-accent-soft);
+  --t-btn: var(--ui-btn);
+  --t-btn-color: var(--ui-btn-text);
+  --t-sb: var(--ui-sidebar);
+  --t-sb-brd: var(--ui-sidebar-border);
+  --t-shadow: var(--ui-shadow);
+  --t-overlay: color-mix(in srgb, var(--ui-shadow) 36%, rgba(0, 0, 0, 0.28));
   background:
     radial-gradient(circle at 9% 7%, color-mix(in srgb, var(--ui-glow) 56%, transparent) 0%, transparent 34%),
     radial-gradient(circle at 88% 90%, color-mix(in srgb, var(--ui-accent-soft) 66%, transparent) 0%, transparent 38%),
@@ -3495,6 +3512,16 @@ select:focus-visible {
   background: color-mix(in srgb, var(--ui-accent-soft) 70%, transparent) !important;
 }
 
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-topbar__menu,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-filter,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-chip,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .equip-pill,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .inv-chip {
+  border-color: var(--ui-border) !important;
+  background: color-mix(in srgb, var(--ui-surface-soft) 88%, transparent) !important;
+  color: var(--ui-text) !important;
+}
+
 .app-frame[data-ui-custom]:not([data-ui-custom="default"]) aside > div {
   background: var(--ui-sidebar) !important;
   border-color: var(--ui-sidebar-border) !important;
@@ -3508,6 +3535,16 @@ select:focus-visible {
 .app-frame[data-ui-custom]:not([data-ui-custom="default"]) .dashboard-bottomnav__link--active {
   background: color-mix(in srgb, var(--ui-accent-soft) 72%, transparent) !important;
   color: var(--ui-accent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) a[style*="border"],
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-quick-link,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-weekly-card,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-progress-card,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-streak-card,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .db-reward-card {
+  border-color: var(--ui-border) !important;
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--ui-shadow) 34%, transparent) !important;
 }
 
 .app-frame[data-ui-custom]:not([data-ui-custom="default"]) button,
@@ -3525,6 +3562,15 @@ select:focus-visible {
   background: var(--ui-btn) !important;
   color: var(--ui-btn-text) !important;
   box-shadow: 0 16px 30px color-mix(in srgb, var(--ui-glow) 64%, transparent) !important;
+}
+
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) button:not(:disabled):hover,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .shop-card-action:not(:disabled):hover,
+.app-frame[data-ui-custom]:not([data-ui-custom="default"]) .inv-action:not(:disabled):hover {
+  filter: saturate(1.14) brightness(1.05);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ui-accent) 24%, transparent),
+    0 18px 32px color-mix(in srgb, var(--ui-glow) 82%, transparent) !important;
 }
 
 .app-frame[data-ui-custom]:not([data-ui-custom="default"]) input,
@@ -3586,6 +3632,12 @@ select:focus-visible {
   border-bottom-color: color-mix(in srgb, var(--ui-rail) 42%, transparent) !important;
 }
 
+.app-frame[data-ui-custom="cyber-studyline"] .dashboard-bottomnav__link--active,
+.app-frame[data-ui-custom="cyber-studyline"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="cyber-studyline"] .shop-rarity-badge {
+  box-shadow: 0 0 0 1px color-mix(in srgb, #42d5ff 28%, transparent), 0 0 18px rgba(66, 213, 255, 0.24) !important;
+}
+
 .app-frame[data-ui-custom="sakura-desk"] .theme-main::after,
 .app-frame[data-ui-custom="royal-manuscript"] .theme-main::after {
   content: '';
@@ -3618,9 +3670,37 @@ select:focus-visible {
   animation: uiCustomFloat 16s ease-in-out infinite alternate;
 }
 
+.app-frame[data-ui-custom="aurora-forge"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="aurora-forge"] .shop-card-action--buy,
+.app-frame[data-ui-custom="aurora-forge"] .shop-card-action--combo {
+  background-image: linear-gradient(132deg, rgba(87, 138, 255, 0.3), rgba(41, 205, 230, 0.22), rgba(154, 96, 255, 0.28)) !important;
+  box-shadow: 0 0 0 1px rgba(117, 191, 255, 0.28), 0 0 28px rgba(111, 163, 255, 0.34) !important;
+}
+
 .app-frame[data-ui-custom="prism-studio"] .shop-item-card,
 .app-frame[data-ui-custom="prism-studio"] .inv-item-card {
   background-image: linear-gradient(165deg, rgba(121, 94, 255, 0.10) 0%, rgba(56, 200, 228, 0.08) 32%, rgba(255, 255, 255, 0.06) 100%) !important;
+}
+
+.app-frame[data-ui-custom="prism-studio"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--buy,
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--combo {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-frame[data-ui-custom="prism-studio"] .dashboard-topbar__badge::after,
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--buy::after,
+.app-frame[data-ui-custom="prism-studio"] .shop-card-action--combo::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(125deg, rgba(96, 116, 255, 0) 8%, rgba(96, 116, 255, 0.6) 24%, rgba(50, 196, 232, 0.46) 43%, rgba(183, 118, 255, 0.45) 66%, rgba(96, 116, 255, 0) 86%);
+  opacity: 0;
+  transform: translateX(-120%);
+  animation: uiPrismSweep 3.8s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .app-frame[data-ui-custom="hologram-academy"] .dashboard-bottomnav__link--active,
@@ -3629,10 +3709,39 @@ select:focus-visible {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-rail) 48%, transparent), 0 0 28px color-mix(in srgb, var(--ui-glow) 72%, transparent) !important;
 }
 
+.app-frame[data-ui-custom="hologram-academy"] .app-surface,
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-content,
+.app-frame[data-ui-custom="hologram-academy"] .shop-item-card,
+.app-frame[data-ui-custom="hologram-academy"] .inv-item-card {
+  background:
+    linear-gradient(165deg, rgba(15, 48, 96, 0.48), rgba(17, 35, 72, 0.52)),
+    linear-gradient(105deg, rgba(103, 233, 255, 0.11), rgba(123, 139, 255, 0.1), rgba(180, 122, 255, 0.12)) !important;
+  border-color: rgba(111, 236, 255, 0.35) !important;
+}
+
+.app-frame[data-ui-custom="hologram-academy"] .dashboard-content::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(180deg, rgba(108, 236, 255, 0.08) 0px, rgba(108, 236, 255, 0.08) 1px, transparent 2px, transparent 8px);
+  mix-blend-mode: screen;
+  opacity: 0.26;
+}
+
 .app-frame[data-ui-custom="royal-manuscript"] .dashboard-topbar,
 .app-frame[data-ui-custom="royal-manuscript"] .dashboard-content,
 .app-frame[data-ui-custom="royal-manuscript"] .app-surface {
   border-color: color-mix(in srgb, #b98a45 34%, var(--ui-border)) !important;
+}
+
+.app-frame[data-ui-custom="royal-manuscript"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy,
+.app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--combo,
+.app-frame[data-ui-custom="royal-manuscript"] .inv-action {
+  border-color: rgba(184, 135, 61, 0.52) !important;
+  background-image: linear-gradient(136deg, rgba(135, 93, 30, 0.95), rgba(172, 125, 52, 0.95), rgba(214, 177, 95, 0.94)) !important;
+  color: #fff5e0 !important;
 }
 
 .app-frame[data-ui-custom="royal-manuscript"] .shop-card-action--buy,
@@ -3658,9 +3767,37 @@ select:focus-visible {
     inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
 }
 
+.app-frame[data-ui-custom-rarity="legendary"] .dashboard-bottomnav__link--active,
+.app-frame[data-ui-custom-rarity="legendary"] .dashboard-topbar__badge,
+.app-frame[data-ui-custom-rarity="legendary"] .shop-card-action--combo,
+.app-frame[data-ui-custom-rarity="legendary"] .shop-card-action--buy {
+  animation: uiLegendaryPulse 2.9s ease-in-out infinite;
+}
+
 @keyframes uiCustomFloat {
   0% { transform: translate3d(-1%, -2%, 0) scale(1); opacity: 0.25; }
   100% { transform: translate3d(1%, 2%, 0) scale(1.05); opacity: 0.4; }
+}
+
+@keyframes uiPrismSweep {
+  0% { transform: translateX(-120%); opacity: 0; }
+  22% { opacity: 0.65; }
+  56% { opacity: 0.3; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+
+@keyframes uiLegendaryPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ui-accent) 28%, transparent),
+      0 16px 32px color-mix(in srgb, var(--ui-glow) 64%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ui-accent) 48%, transparent),
+      0 0 28px color-mix(in srgb, var(--ui-glow) 80%, transparent),
+      0 24px 44px color-mix(in srgb, var(--ui-shadow) 62%, transparent);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3668,7 +3805,10 @@ select:focus-visible {
   .app-frame[data-ui-custom] .theme-main::after,
   .app-frame[data-ui-custom] .shop-item-card,
   .app-frame[data-ui-custom] .shop-showcase,
-  .app-frame[data-ui-custom] .inv-item-card {
+  .app-frame[data-ui-custom] .inv-item-card,
+  .app-frame[data-ui-custom] .dashboard-topbar__badge,
+  .app-frame[data-ui-custom] .shop-card-action--buy,
+  .app-frame[data-ui-custom] .shop-card-action--combo {
     animation: none !important;
     transition: none !important;
   }
