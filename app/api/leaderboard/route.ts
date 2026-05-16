@@ -24,6 +24,11 @@ type ProfileLite = {
   country?: string | null;
 };
 
+function asProfileLiteArray(value: unknown): ProfileLite[] {
+  if (!Array.isArray(value)) return [];
+  return value as ProfileLite[];
+}
+
 function getWeekStartISO(now = new Date()) {
   const d = new Date(now);
   const day = d.getUTCDay();
@@ -83,10 +88,10 @@ export async function GET(request: NextRequest) {
       const retry = await adminSupabase
         .from('profiles')
         .select('id, username, xp, streak, level, deleted_at');
-      allProfilesRaw = (retry.data ?? []) as ProfileLite[];
+      allProfilesRaw = asProfileLiteArray(retry.data);
       profilesError = retry.error as { message?: string } | null;
     } else {
-      allProfilesRaw = (firstAttempt.data ?? []) as ProfileLite[];
+      allProfilesRaw = asProfileLiteArray(firstAttempt.data);
       profilesError = firstAttempt.error as { message?: string } | null;
     }
   }
@@ -95,7 +100,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Could not load leaderboard profiles.' }, { status: 500 });
   }
 
-  const allProfiles = ((allProfilesRaw ?? []) as ProfileLite[]).filter((profile) => {
+  const allProfiles = asProfileLiteArray(allProfilesRaw).filter((profile) => {
     if (!profile || !profile.id) return false;
     if (profile.deleted_at) return false;
     return true;

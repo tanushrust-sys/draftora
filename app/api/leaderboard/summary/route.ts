@@ -8,6 +8,11 @@ type ProfileLite = {
   country?: string | null;
 };
 
+function asProfileLiteArray(value: unknown): ProfileLite[] {
+  if (!Array.isArray(value)) return [];
+  return value as ProfileLite[];
+}
+
 function getWeekStartISO(now = new Date()) {
   const d = new Date(now);
   const day = d.getUTCDay();
@@ -48,10 +53,10 @@ export async function GET(request: NextRequest) {
       const retry = await adminSupabase
         .from('profiles')
         .select('id, deleted_at');
-      profileRows = (retry.data ?? []) as ProfileLite[];
+      profileRows = asProfileLiteArray(retry.data);
       profileError = retry.error as { message?: string } | null;
     } else {
-      profileRows = (firstAttempt.data ?? []) as ProfileLite[];
+      profileRows = asProfileLiteArray(firstAttempt.data);
       profileError = firstAttempt.error as { message?: string } | null;
     }
   }
@@ -60,7 +65,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Could not load leaderboard summary.' }, { status: 500 });
   }
 
-  const profiles = ((profileRows ?? []) as ProfileLite[]).filter((profile) => !profile.deleted_at);
+  const profiles = asProfileLiteArray(profileRows).filter((profile) => !profile.deleted_at);
 
   const { data: weeklyRows, error: weeklyError } = await adminSupabase
     .from('xp_log')
