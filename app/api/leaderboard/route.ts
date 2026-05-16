@@ -22,6 +22,10 @@ type ProfileLite = {
   deleted_at?: string | null;
   suburb?: string | null;
   country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 function asProfileLiteArray(value: unknown): ProfileLite[] {
@@ -38,12 +42,6 @@ function getWeekStartISO(now = new Date()) {
   return d.toISOString();
 }
 
-function normalizeScopeValue(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 function scoreWeeklyXP(logRows: Array<{ user_id: string; amount: number }>, scopedIds: Set<string>) {
   const totals = new Map<string, number>();
   for (const row of logRows) {
@@ -52,6 +50,30 @@ function scoreWeeklyXP(logRows: Array<{ user_id: string; amount: number }>, scop
     totals.set(row.user_id, (totals.get(row.user_id) ?? 0) + (row.amount ?? 0));
   }
   return totals;
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value;
+}
+
+function getCoords(profile: ProfileLite): { lat: number; lng: number } | null {
+  const lat = asFiniteNumber(profile.latitude ?? profile.lat);
+  const lng = asFiniteNumber(profile.longitude ?? profile.lng);
+  if (lat === null || lng === null) return null;
+  return { lat, lng };
+}
+
+function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const aa = s1 * s1 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * s2 * s2;
+  const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+  return R * c;
 }
 
 export async function GET(request: NextRequest) {
@@ -68,23 +90,19 @@ export async function GET(request: NextRequest) {
     ? filterParam
     : 'weekly';
 
-  const userSuburb = normalizeScopeValue(userProfile.suburb);
-  const effectiveFilter: LeaderboardFilter =
-    filter === 'suburb' && !userSuburb
-      ? 'weekly'
-      : filter;
+  const effectiveFilter: LeaderboardFilter = filter;
 
-  let supportsLocationColumns = true;
+  let supportsAreaColumns = true;
   let allProfilesRaw: ProfileLite[] | null = null;
   let profilesError: { message?: string } | null = null;
 
   {
     const firstAttempt = await adminSupabase
       .from('profiles')
-      .select('id, username, xp, streak, level, deleted_at, suburb, country');
+      .select('id, username, xp, streak, level, deleted_at, suburb, country, latitude, longitude, lat, lng');
 
     if (firstAttempt.error && firstAttempt.error.message?.toLowerCase().includes('column')) {
-      supportsLocationColumns = false;
+      supportsAreaColumns = false;
       const retry = await adminSupabase
         .from('profiles')
         .select('id, username, xp, streak, level, deleted_at');
@@ -106,14 +124,22 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
+  const myProfile = allProfiles.find((profile) => profile.id === auth.userId) ?? userProfile;
+  const myCoords = getCoords(myProfile);
+  const areaRadiusKm = 5;
+
   const scopedProfiles = allProfiles.filter((profile) => {
-    if (!supportsLocationColumns && effectiveFilter === 'suburb') {
+    if (effectiveFilter !== 'suburb') {
       return true;
     }
-    if (effectiveFilter === 'suburb') {
-      return normalizeScopeValue(profile.suburb) === userSuburb;
+
+    if (!supportsAreaColumns || !myCoords) {
+      return false;
     }
-    return true;
+
+    const targetCoords = getCoords(profile);
+    if (!targetCoords) return false;
+    return distanceKm(myCoords, targetCoords) <= areaRadiusKm;
   });
 
   const scopedIds = new Set(scopedProfiles.map((profile) => profile.id));
@@ -189,7 +215,7 @@ export async function GET(request: NextRequest) {
 
   const scopeLabel =
     effectiveFilter === 'suburb'
-      ? (supportsLocationColumns ? (userSuburb ?? 'Your Area') : 'Weekly')
+      ? 'Your Area (5km)'
       : effectiveFilter === 'all_time'
         ? 'All Time'
         : 'Weekly';

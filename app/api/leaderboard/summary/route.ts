@@ -6,6 +6,10 @@ type ProfileLite = {
   deleted_at?: string | null;
   suburb?: string | null;
   country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 function asProfileLiteArray(value: unknown): ProfileLite[] {
@@ -22,10 +26,28 @@ function getWeekStartISO(now = new Date()) {
   return d.toISOString();
 }
 
-function normalizeScopeValue(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value;
+}
+
+function getCoords(profile: ProfileLite): { lat: number; lng: number } | null {
+  const lat = asFiniteNumber(profile.latitude ?? profile.lat);
+  const lng = asFiniteNumber(profile.longitude ?? profile.lng);
+  if (lat === null || lng === null) return null;
+  return { lat, lng };
+}
+
+function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const aa = s1 * s1 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * s2 * s2;
+  const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+  return R * c;
 }
 
 export async function GET(request: NextRequest) {
@@ -36,20 +58,19 @@ export async function GET(request: NextRequest) {
 
   const { auth, adminSupabase } = authResult;
   const me = auth.profile as unknown as ProfileLite;
-  const userSuburb = normalizeScopeValue(me.suburb);
   const weekStartISO = getWeekStartISO();
 
-  let supportsLocationColumns = true;
+  let supportsAreaColumns = true;
   let profileRows: ProfileLite[] | null = null;
   let profileError: { message?: string } | null = null;
 
   {
     const firstAttempt = await adminSupabase
       .from('profiles')
-      .select('id, deleted_at, suburb, country');
+      .select('id, deleted_at, suburb, country, latitude, longitude, lat, lng');
 
     if (firstAttempt.error && firstAttempt.error.message?.toLowerCase().includes('column')) {
-      supportsLocationColumns = false;
+      supportsAreaColumns = false;
       const retry = await adminSupabase
         .from('profiles')
         .select('id, deleted_at');
@@ -66,6 +87,9 @@ export async function GET(request: NextRequest) {
   }
 
   const profiles = asProfileLiteArray(profileRows).filter((profile) => !profile.deleted_at);
+  const meProfile = profiles.find((profile) => profile.id === auth.userId) ?? me;
+  const myCoords = getCoords(meProfile);
+  const areaRadiusKm = 5;
 
   const { data: weeklyRows, error: weeklyError } = await adminSupabase
     .from('xp_log')
@@ -103,8 +127,12 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.xp - a.xp);
   const allTimeRank = allTimeSorted.findIndex((profile) => profile.id === auth.userId) + 1;
 
-  const suburbProfiles = (supportsLocationColumns && userSuburb)
-    ? profiles.filter((profile) => normalizeScopeValue(profile.suburb) === userSuburb)
+  const suburbProfiles = (supportsAreaColumns && myCoords)
+    ? profiles.filter((profile) => {
+      const targetCoords = getCoords(profile);
+      if (!targetCoords) return false;
+      return distanceKm(myCoords, targetCoords) <= areaRadiusKm;
+    })
     : [];
   const suburbSorted = suburbProfiles
     .map((profile) => ({ id: profile.id, xp: allTimeTotals.get(profile.id) ?? 0 }))
@@ -119,7 +147,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     weekStartISO,
-    suburbLabel: userSuburb,
+    suburbLabel: 'Your Area (5km)',
     countryLabel: null,
     weeklyRank: weeklyRank > 0 ? weeklyRank : null,
     allTimeRank: allTimeRank > 0 ? allTimeRank : null,
