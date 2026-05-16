@@ -110,13 +110,35 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     } as Record<string, string | null>;
 
-    const { data: equippedRow, error: equippedError } = await adminSupabase
-      .from('equipped_cosmetics')
-      .upsert(patch as any, { onConflict: 'user_id' })
-      .select(EQUIPPED_COLUMNS)
-      .single();
+    if (category === 'ui_custom') {
+      // UI Custom behaves as the active visual theme layer. Ensure classic equipped editor theme is cleared.
+      patch.dashboard_theme_item_id = null;
+    }
 
-    if (equippedError) throw equippedError;
+    let equippedRow: unknown = null;
+    {
+      const first = await adminSupabase
+        .from('equipped_cosmetics')
+        .upsert(patch as any, { onConflict: 'user_id' })
+        .select(EQUIPPED_COLUMNS)
+        .single();
+
+      if (first.error && category === 'ui_custom' && first.error.message?.toLowerCase().includes('dashboard_theme_item_id')) {
+        // Backward compatibility: some deployed schemas may not have dashboard_theme_item_id.
+        const retryPatch = { ...patch };
+        delete retryPatch.dashboard_theme_item_id;
+        const retry = await adminSupabase
+          .from('equipped_cosmetics')
+          .upsert(retryPatch as any, { onConflict: 'user_id' })
+          .select(EQUIPPED_COLUMNS)
+          .single();
+        if (retry.error) throw retry.error;
+        equippedRow = retry.data;
+      } else {
+        if (first.error) throw first.error;
+        equippedRow = first.data;
+      }
+    }
 
     const equipped = {
       ...createEmptyEquippedState(),

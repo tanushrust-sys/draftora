@@ -198,7 +198,7 @@ function SectionHeader({ icon, title, subtitle, right }: {
 
 /* ─── Main component ─── */
 export default function SettingsPage() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, session, profile, refreshProfile } = useAuth();
   const { theme: activeTheme, setTheme } = useTheme();
   const router = useRouter();
   const cosmetics = useEquippedCosmetics();
@@ -299,16 +299,18 @@ export default function SettingsPage() {
         await supabase.from('profiles')
           .update({ active_theme: themeName, unlocked_themes: newUnlocked })
           .eq('id', profile.id);
-        await supabase
-          .from('equipped_cosmetics')
-          .upsert(
-            {
-              user_id: profile.id,
-              ui_custom_item_id: null,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'user_id' },
-          );
+        const unequipResponse = await fetch('/api/inventory/unequip', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ category: 'ui_custom' }),
+        });
+        if (!unequipResponse.ok) {
+          const payload = await unequipResponse.json().catch(() => ({} as { error?: string }));
+          throw new Error(payload.error || 'Could not unequip UI Custom.');
+        }
         window.dispatchEvent(new Event('draftora:cosmetics-updated'));
       } catch {
         // keep the local theme change even if cloud sync lags
