@@ -22,6 +22,7 @@ export default function MarketingChatWidget() {
   ]);
 
   const hasMessages = useMemo(() => messages.length > 0, [messages.length]);
+  const SUPPORT_REQUEST_TIMEOUT_MS = 7000;
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -33,11 +34,14 @@ export default function MarketingChatWidget() {
     setPending(true);
 
     try {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), SUPPORT_REQUEST_TIMEOUT_MS);
       const response = await fetch('/api/support-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: trimmed }),
-      });
+        signal: controller.signal,
+      }).finally(() => window.clearTimeout(timeout));
 
       if (!response.ok) {
         throw new Error('Support chat request failed');

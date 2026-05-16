@@ -6,6 +6,23 @@ type Payload = {
   message?: string;
 };
 
+const SUPPORT_CHAT_TIMEOUT_MS = 6500;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('support_chat_timeout')), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+  });
+}
+
 export async function POST(request: Request) {
   let message = '';
   try {
@@ -26,16 +43,26 @@ Keep answers concise, specific, and product-focused.
 Draftora context:
 ${scopedContext}`;
 
-    const response = await chat({
-      tier: 'nano',
-      system,
-      messages: [{ role: 'user', content: message }],
-      maxTokens: 220,
-    });
+    const fallbackReply = localSupportReply(message);
+
+    // Fast path for known support intents: keep response instant and deterministic.
+    if (message.length <= 220) {
+      return NextResponse.json({ reply: fallbackReply, source: 'local-fast' });
+    }
+
+    const response = await withTimeout(
+      chat({
+        tier: 'nano',
+        system,
+        messages: [{ role: 'user', content: message }],
+        maxTokens: 220,
+      }),
+      SUPPORT_CHAT_TIMEOUT_MS,
+    );
 
     const text = response.trim();
     if (!text) {
-      return NextResponse.json({ reply: localSupportReply(message), source: 'local-fallback' });
+      return NextResponse.json({ reply: fallbackReply, source: 'local-fallback' });
     }
 
     return NextResponse.json({ reply: text, source: 'api' });

@@ -371,17 +371,31 @@ export default function CosmeticLivePreview({
           className={`scene scene--ui ${uiCustomSkin ? `scene--ui-${uiCustomSkin.themeKey}` : ''}`}
           aria-hidden="true"
           style={{
+            ...(uiCustomSkin?.cssVars ?? {}),
             ['--ui-prev-accent' as string]: uiCustomSkin?.preview.accent ?? 'var(--cp-a)',
             ['--ui-prev-panel' as string]: uiCustomSkin?.preview.panel ?? 'rgba(255,255,255,0.54)',
           }}
         >
           <span className="ui-prev-gradient" style={{ background: uiCustomSkin?.preview.gradient ?? 'linear-gradient(135deg, var(--cp-a), var(--cp-b))' }} />
-          <span className="ui-pill ui-pill--1" />
-          <span className="ui-pill ui-pill--2" />
-          <span className="ui-pill ui-pill--3" />
-          <span className="ui-accent-dot" />
-          <span className="ui-prev-line ui-prev-line--1" />
-          <span className="ui-prev-line ui-prev-line--2" />
+          <div className="ui-dashboard-shell">
+            <span className="ui-prev-sidebar" />
+            <div className="ui-prev-main">
+              <span className="ui-prev-topbar">
+                <span className="ui-prev-topbar-dot" />
+                <span className="ui-prev-topbar-line" />
+              </span>
+              <div className="ui-prev-metrics">
+                <span className="ui-prev-metric ui-prev-metric--primary" />
+                <span className="ui-prev-metric ui-prev-metric--secondary" />
+              </div>
+              <div className="ui-prev-card">
+                <span className="ui-prev-line ui-prev-line--1" />
+                <span className="ui-prev-line ui-prev-line--2" />
+                <span className="ui-prev-line ui-prev-line--3" />
+                <span className="ui-prev-cta" />
+              </div>
+            </div>
+          </div>
           <span className="ui-prev-name">{uiCustomSkin?.name ?? name}</span>
           {appliedStyle ? (
             <>
@@ -1224,78 +1238,107 @@ export default function CosmeticLivePreview({
         .xp-micro--2 { right: 40px; top: 44px; animation-delay: -0.9s; }
         .xp-micro--3 { left: 26px; top: 18px; animation-delay: -1.3s; }
 
-        .scene--ui .ui-pill {
+        .scene--ui {
+          overflow: hidden;
+        }
+
+        .ui-dashboard-shell {
           position: absolute;
-          left: 10px;
-          height: 10px;
+          inset: 10px 10px 24px;
+          border-radius: 12px;
+          display: grid;
+          grid-template-columns: 23% 1fr;
+          border: 1px solid var(--ui-border, color-mix(in srgb, var(--ui-prev-accent) 25%, transparent));
+          background: var(--ui-surface, color-mix(in srgb, var(--ui-prev-panel) 75%, white 25%));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 10px 22px var(--ui-shadow, rgba(15, 23, 42, 0.18));
+          backdrop-filter: blur(6px);
+        }
+
+        .ui-prev-sidebar {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 23%;
+          background: var(--ui-sidebar, linear-gradient(180deg, color-mix(in srgb, var(--ui-prev-accent) 14%, white 86%) 0%, color-mix(in srgb, var(--ui-prev-accent) 10%, white 90%) 100%));
+          border-right: 1px solid var(--ui-sidebar-border, color-mix(in srgb, var(--ui-prev-accent) 22%, transparent));
+        }
+
+        .ui-prev-main {
+          position: relative;
+          padding: 8px 8px 6px;
+          margin-left: 23%;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .ui-prev-topbar {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          min-height: 8px;
+        }
+
+        .ui-prev-topbar-dot {
+          width: 7px;
+          height: 7px;
           border-radius: 999px;
-          background: rgba(255,255,255,0.62);
-          border: 1px solid rgba(255,255,255,0.76);
-          animation: ui-pulse calc(var(--cp-speed) * 0.72) ease-in-out infinite;
+          background: var(--ui-accent, var(--ui-prev-accent));
+          box-shadow: 0 0 8px color-mix(in srgb, var(--ui-accent, var(--ui-prev-accent)) 42%, transparent);
         }
 
-        .ui-pill--1 { width: 42px; top: 15px; }
-        .ui-pill--2 { width: 58px; top: 33px; animation-delay: -0.42s; }
-        .ui-pill--3 { width: 34px; top: 51px; animation-delay: -0.72s; }
-
-        .ui-accent-dot {
-          position: absolute;
-          right: 14px;
-          top: 25px;
-          width: 24px;
-          height: 24px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, color-mix(in srgb, var(--cp-a) 68%, white 32%), color-mix(in srgb, var(--cp-b) 68%, white 32%));
-          box-shadow: 0 10px 22px color-mix(in srgb, var(--cp-a) calc(20% * var(--rq-glow, 1)), transparent);
-          animation: ui-pop calc(var(--cp-speed) * 0.72) ease-in-out infinite;
-        }
-
-        .ui-applied-rail {
-          position: absolute;
-          right: 14px;
-          width: 4px;
+        .ui-prev-topbar-line {
+          width: 46px;
+          height: 5px;
           border-radius: 999px;
-          background: linear-gradient(180deg, color-mix(in srgb, var(--cp-a) 84%, white), color-mix(in srgb, var(--cp-b) 78%, white));
-          box-shadow: 0 0 10px color-mix(in srgb, var(--cp-b) 38%, transparent);
-          opacity: 0.9;
+          background: color-mix(in srgb, var(--ui-muted, var(--ui-prev-accent)) 28%, white 72%);
         }
 
-        .ui-applied-rail--1 {
-          top: 16px;
-          height: 22px;
+        .ui-prev-metrics {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 5px;
         }
 
-        .ui-applied-rail--2 {
-          top: 44px;
-          height: 10px;
-          opacity: 0.72;
+        .ui-prev-metric {
+          height: 9px;
+          border-radius: 7px;
+          border: 1px solid var(--ui-border, rgba(15,23,42,0.12));
+          background: var(--ui-surface-soft, color-mix(in srgb, var(--ui-prev-panel) 75%, white 25%));
         }
 
-        .ui-prev-gradient {
-          position: absolute;
-          inset: 0;
-          opacity: 0.34;
+        .ui-prev-metric--primary {
+          background: color-mix(in srgb, var(--ui-accent, var(--ui-prev-accent)) 20%, var(--ui-surface-soft, white));
+        }
+
+        .ui-prev-card {
+          border-radius: 8px;
+          border: 1px solid var(--ui-border, rgba(15,23,42,0.12));
+          background: var(--ui-input, var(--ui-prev-panel));
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
         }
 
         .ui-prev-line {
-          position: absolute;
-          right: 14px;
-          height: 3px;
+          height: 4px;
           border-radius: 999px;
-          background: color-mix(in srgb, var(--ui-prev-accent) 74%, white);
-          box-shadow: 0 0 10px color-mix(in srgb, var(--ui-prev-accent) 34%, transparent);
+          background: color-mix(in srgb, var(--ui-text, var(--ui-prev-accent)) 22%, white 78%);
         }
 
-        .ui-prev-line--1 {
-          top: 58px;
-          width: 22px;
-          opacity: 0.88;
-        }
+        .ui-prev-line--1 { width: 72%; opacity: 0.86; }
+        .ui-prev-line--2 { width: 58%; opacity: 0.68; }
+        .ui-prev-line--3 { width: 39%; opacity: 0.58; }
 
-        .ui-prev-line--2 {
-          top: 66px;
-          width: 14px;
-          opacity: 0.64;
+        .ui-prev-cta {
+          margin-top: 2px;
+          width: 44px;
+          height: 10px;
+          border-radius: 999px;
+          background: var(--ui-btn, linear-gradient(135deg, var(--ui-accent, var(--ui-prev-accent)) 0%, color-mix(in srgb, var(--ui-accent, var(--ui-prev-accent)) 68%, black 32%) 100%));
+          box-shadow: 0 6px 16px color-mix(in srgb, var(--ui-glow, var(--ui-prev-accent)) 42%, transparent);
         }
 
         .ui-prev-name {
@@ -1315,6 +1358,33 @@ export default function CosmeticLivePreview({
           border-radius: 999px;
           border: 1px solid color-mix(in srgb, var(--ui-prev-accent) 24%, transparent);
           background: var(--ui-prev-panel);
+        }
+
+        .ui-applied-rail {
+          position: absolute;
+          right: 14px;
+          width: 4px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, color-mix(in srgb, var(--ui-accent, var(--cp-a)) 84%, white), color-mix(in srgb, var(--ui-accent, var(--cp-b)) 78%, white));
+          box-shadow: 0 0 10px color-mix(in srgb, var(--ui-accent, var(--cp-b)) 38%, transparent);
+          opacity: 0.9;
+        }
+
+        .ui-applied-rail--1 {
+          top: 16px;
+          height: 22px;
+        }
+
+        .ui-applied-rail--2 {
+          top: 44px;
+          height: 10px;
+          opacity: 0.72;
+        }
+
+        .ui-prev-gradient {
+          position: absolute;
+          inset: 0;
+          opacity: 0.34;
         }
 
         .scene--title .title-crown {
@@ -1456,14 +1526,14 @@ export default function CosmeticLivePreview({
         .cos-prev--epic .scene--frame .frame-avatar,
         .cos-prev--epic .scene--badge .badge-core,
         .cos-prev--epic .scene--xp .xp-track,
-        .cos-prev--epic .scene--ui .ui-accent-dot,
+        .cos-prev--epic .scene--ui .ui-prev-cta,
         .cos-prev--epic .scene--title .title-name {
           filter: saturate(1.14) contrast(1.08);
         }
 
         .cos-prev--epic .scene--editor .editor-tier-comet,
         .cos-prev--epic .scene--xp .xp-spark,
-        .cos-prev--epic .scene--ui .ui-pill,
+        .cos-prev--epic .scene--ui .ui-prev-metric,
         .cos-prev--epic .scene--frame .frame-ring {
           animation-duration: calc(var(--cp-speed) * 0.6);
           opacity: 0.95;
@@ -1517,7 +1587,7 @@ export default function CosmeticLivePreview({
         .cos-prev--legendary .scene--frame .frame-avatar,
         .cos-prev--legendary .scene--badge .badge-core,
         .cos-prev--legendary .scene--xp .xp-track,
-        .cos-prev--legendary .scene--ui .ui-accent-dot,
+        .cos-prev--legendary .scene--ui .ui-prev-cta,
         .cos-prev--legendary .scene--title .title-name {
           filter: saturate(1.22) contrast(1.14) brightness(1.06);
           box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 14px 30px rgba(15, 23, 42, 0.18);
@@ -1525,7 +1595,7 @@ export default function CosmeticLivePreview({
 
         .cos-prev--legendary .scene--editor .editor-tier-comet,
         .cos-prev--legendary .scene--xp .xp-spark,
-        .cos-prev--legendary .scene--ui .ui-pill,
+        .cos-prev--legendary .scene--ui .ui-prev-metric,
         .cos-prev--legendary .scene--frame .frame-ring {
           animation-duration: calc(var(--cp-speed) * 0.46);
           opacity: 1;

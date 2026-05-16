@@ -8,6 +8,7 @@ import {
   Award,
   BookOpen,
   CheckCircle2,
+  Crown,
   FileText,
   PenLine,
   Sparkles,
@@ -37,6 +38,15 @@ type DashCache = {
 };
 
 type DashboardRole = 'student' | 'teacher' | 'parent';
+type LeaderboardSummary = {
+  suburbLabel: string | null;
+  countryLabel: string | null;
+  weeklyRank: number | null;
+  allTimeRank: number | null;
+  countryRank: number | null;
+  suburbRank: number | null;
+  weeklyXpEarned: number;
+};
 
 export default function DashboardPage() {
   const { profile, session, user, loading, isPracticeMode } = useAuth();
@@ -66,6 +76,7 @@ export default function DashboardPage() {
   const [vocabMastered, setVocabMastered]       = useState(cached?.vocabMastered ?? 0);
   const [vocabTotal, setVocabTotal]             = useState(cached?.vocabTotal ?? 0);
   const [weekStats, setWeekStats]               = useState<DailyStats[]>(cached?.weekStats ?? []);
+  const [leaderboardSummary, setLeaderboardSummary] = useState<LeaderboardSummary | null>(null);
 
   const startPracticeMode = useCallback(async () => {
     if (practiceStarting) return;
@@ -150,6 +161,32 @@ export default function DashboardPage() {
   }, [ageGroup, cacheKey, profile]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    if (!session?.access_token || !profile?.id) return;
+    let alive = true;
+    fetch('/api/leaderboard/summary', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({} as { error?: string }));
+        if (!response.ok) throw new Error(payload.error || 'Could not load leaderboard summary.');
+        return payload as LeaderboardSummary;
+      })
+      .then((payload) => {
+        if (!alive) return;
+        setLeaderboardSummary(payload);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setLeaderboardSummary(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [profile?.id, session?.access_token]);
   useEffect(() => {
     const timer = setTimeout(() => loadData(), msUntilNextLocalMidnight() + 1000);
     return () => clearTimeout(timer);
@@ -410,6 +447,60 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        <div style={{
+          ...cardSurface,
+          borderRadius: 24,
+          padding: '1rem 1.05rem',
+          border: '1px solid color-mix(in srgb, var(--t-warning) 34%, var(--t-brd))',
+          background: 'linear-gradient(150deg, color-mix(in srgb, var(--t-card) 74%, var(--t-warning) 26%) 0%, color-mix(in srgb, var(--t-card2) 86%, var(--t-mod-rewards) 14%) 100%)',
+          boxShadow: '0 16px 36px color-mix(in srgb, var(--t-warning) 14%, transparent)',
+          display: 'grid',
+          gap: '0.7rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 42, height: 42, borderRadius: 13, border: '1px solid color-mix(in srgb, var(--t-warning) 48%, transparent)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-warning) 32%, white) 0%, color-mix(in srgb, var(--t-warning) 14%, var(--t-card2)) 100%)', display: 'grid', placeItems: 'center' }}>
+                <Crown style={{ width: 20, height: 20, color: 'var(--t-warning)' }} />
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 900, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--t-warning)' }}>My Leaderboard</p>
+                <h2 style={{ margin: '0.25rem 0 0', color: 'var(--t-tx)', fontSize: '1.15rem', fontWeight: 900 }}>Compete this week, climb all-time</h2>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/leaderboard')}
+              style={{
+                border: '1px solid color-mix(in srgb, var(--t-warning) 50%, transparent)',
+                borderRadius: 999,
+                padding: '0.48rem 0.9rem',
+                background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-warning) 75%, black 25%) 0%, color-mix(in srgb, var(--t-mod-rewards) 72%, black 28%) 100%)',
+                color: '#fff',
+                fontSize: 12.5,
+                fontWeight: 850,
+                cursor: 'pointer',
+                boxShadow: '0 12px 22px color-mix(in srgb, var(--t-warning) 26%, transparent)',
+              }}
+            >
+              Open Leaderboard
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.48rem' }}>
+            {[
+              { label: 'Weekly rank', value: leaderboardSummary?.weeklyRank ? `#${leaderboardSummary.weeklyRank}` : '—' },
+              { label: 'All-time rank', value: leaderboardSummary?.allTimeRank ? `#${leaderboardSummary.allTimeRank}` : '—' },
+              { label: leaderboardSummary?.suburbLabel || 'Suburb rank', value: leaderboardSummary?.suburbRank ? `#${leaderboardSummary.suburbRank}` : '—' },
+              { label: 'Weekly XP earned', value: `${(leaderboardSummary?.weeklyXpEarned ?? 0).toLocaleString()} XP` },
+            ].map((entry) => (
+              <div key={entry.label} style={{ borderRadius: 14, border: '1px solid color-mix(in srgb, var(--t-warning) 24%, var(--t-brd))', background: 'color-mix(in srgb, var(--t-card2) 92%, white 8%)', padding: '0.62rem 0.7rem' }}>
+                <p style={{ margin: 0, color: 'var(--t-tx3)', fontSize: 11, fontWeight: 700 }}>{entry.label}</p>
+                <p style={{ margin: '0.2rem 0 0', color: 'var(--t-tx)', fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em' }}>{entry.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* ── QUICK NAV ── */}
         <div style={{
           ...cardSurface,
@@ -425,6 +516,7 @@ export default function DashboardPage() {
               { href: '/dashboard/vocab', label: 'Vocab', phrase: 'Learn new vocab and master saved words.', Icon: BookOpen, tone: vocabTone },
               { href: '/dashboard/coach', label: 'Coach', phrase: 'Get feedback and sharpen your next piece.', Icon: Sparkles, tone: 'var(--t-acc)' },
               { href: '/dashboard/rewards', label: 'Rewards', phrase: 'Look at your XP bar and unlocks.', Icon: Star, tone: xpTone },
+              { href: '/dashboard/leaderboard', label: 'Leaderboard', phrase: 'Track weekly, all-time, and local ranks.', Icon: TrendingUp, tone: 'var(--t-warning)' },
               { href: '/dashboard/settings', label: 'Settings', phrase: 'Tune your goals and daily practice.', Icon: Target, tone: 'var(--t-success)' },
             ] as const).map(({ href, label, phrase, Icon, tone }) => (
               <button

@@ -19,12 +19,10 @@ import {
 } from '@/app/lib/writing-history-storage';
 import {
   awardRewardEvent,
-  awardXP,
   createIdempotencyKey,
   getLocalDateKey,
   msUntilNextLocalMidnight,
   updateDailyStats,
-  XP_REWARDS,
 } from '@/app/lib/xp';
 import { getExperienceIncreaseForAction, persistWritingExperienceScore, readWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { incrementProfileOverride } from '@/app/lib/profile-overrides';
@@ -56,6 +54,7 @@ const CATEGORIES = [
 const JOURNAL_CATEGORIES = ['All', ...CATEGORIES];
 const FREE_WRITING_CATEGORY = 'Free Writing';
 const FREE_WRITING_PROMPT = 'Write anything you like!';
+const MAX_DAILY_WRITING_SUBMISSIONS = 3;
 type ActiveTab = 'write' | 'journal' | 'progress';
 type TimeRange = 'week' | 'month' | '3m' | 'year' | 'all';
 type WritingFeedback = { overall: string; paragraph_feedback: string; rewritten_version: string };
@@ -432,6 +431,15 @@ function buildDraftSignature(input: {
   category: string;
 }) {
   return JSON.stringify(input);
+}
+
+function getWritingXpFromScore(score: number) {
+  const bounded = Math.max(0, Math.min(100, Math.round(score)));
+  if (bounded <= 20) return 5;
+  if (bounded <= 50) return 10;
+  if (bounded <= 75) return 15;
+  if (bounded <= 90) return 25;
+  return 30;
 }
 
 function trimToWordLimit(text: string, wordLimit: number) {
@@ -1635,6 +1643,90 @@ function WritingsContent() {
     );
   }, [profile?.age_group, writings]);
 
+  useEffect(() => {
+    loadProgress();
+  }, [loadProgress]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const reviewed = writings.filter((row) => row.status === 'reviewed');
+    if (reviewed.length === 0) {
+      aiAnalysisFetched.current = null;
+      setProgressAnalysis(null);
+      setProgressAnalysisLoading(false);
+      return;
+    }
+
+    const analysisSignature = reviewed
+      .map((row) => `${row.id}:${row.updated_at || row.created_at}:${row.word_count}`)
+      .join('|');
+    if (aiAnalysisFetched.current === analysisSignature) return;
+    aiAnalysisFetched.current = analysisSignature;
+
+    let cancelled = false;
+    setProgressAnalysisLoading(true);
+
+    const localFallback = buildAgeAwareProgressAnalysis(reviewed, profile.age_group ?? null);
+
+    (async () => {
+      try {
+        if (!session?.access_token) {
+          if (!cancelled) setProgressAnalysis(localFallback);
+          return;
+        }
+
+        const payload = await authFetchJson<{
+          scores?: Array<{ id: string; score: number; note: string }>;
+          analysis?: {
+            summary: string;
+            strengths: string[];
+            areasToImprove: string[];
+            writingPatterns: string;
+            vocabularyTrend: string;
+            recommendation: string;
+          } | null;
+        }>('/api/ai-progress', {
+          token: session.access_token,
+          method: 'POST',
+          timeoutMs: 25000,
+          body: {
+            writings: reviewed.map((row) => ({
+              id: row.id,
+              title: row.title,
+              content: row.content,
+              prompt: row.prompt,
+              word_count: row.word_count,
+              strengths: row.strengths,
+              improvements: row.improvements,
+              feedback: row.feedback,
+              created_at: row.created_at,
+              category: row.category,
+            })),
+            ageGroup: profile.age_group,
+          },
+        });
+
+        if (cancelled) return;
+
+        if (Array.isArray(payload.scores) && payload.scores.length > 0) {
+          setProgressScores(payload.scores);
+        }
+
+        setProgressAnalysis(payload.analysis ?? localFallback);
+      } catch {
+        if (cancelled) return;
+        setProgressAnalysis(localFallback);
+      } finally {
+        if (!cancelled) setProgressAnalysisLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.age_group, profile?.id, progressRefreshToken, session?.access_token, writings]);
+
   const saveDraft = useCallback(async () => {
     if (!profile?.id) return;
     if (!content.trim()) return;
@@ -1710,7 +1802,7 @@ function WritingsContent() {
   }, [loadJournal]);
   // (Legacy submitForFeedback removed — submitForFeedbackSafe is the active path)
 
-  const grantWritingSubmitRewards = useCallback(async () => {
+  const grantWritingSubmitRewards = useCallback(async (score: number) => {
     if (writingRewardsGrantedRef.current) return;
     if (!profile?.id || !session?.access_token) return;
 
@@ -1718,6 +1810,7 @@ function WritingsContent() {
     const todayKey = getLocalDateKey();
     const submissionRef = writingId ?? `draft-${todayKey}-${wordCount}`;
 
+    const writingXp = getWritingXpFromScore(score);
     try {
       await Promise.allSettled([
         awardRewardEvent({
@@ -1730,26 +1823,13 @@ function WritingsContent() {
             todayKey,
           ]),
           sourceRef: submissionRef,
-          metadata: { category, words: wordCount, has_prompt: Boolean(prompt) },
-          eventSource: 'writings-page',
-        }),
-        awardRewardEvent({
-          token: session.access_token,
-          eventType: 'ai_feedback_received',
-          idempotencyKey: createIdempotencyKey([
-            'ai-feedback',
-            profile.id,
-            submissionRef,
-            todayKey,
-          ]),
-          sourceRef: submissionRef,
-          metadata: { category, words: wordCount },
+          metadata: { category, words: wordCount, has_prompt: Boolean(prompt), score },
           eventSource: 'writings-page',
         }),
         updateDailyStats(profile.id, {
           words_written: wordCount,
           writings_completed: 1,
-          xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK,
+          xp_earned: writingXp,
         }),
       ]);
     } catch {
@@ -1778,6 +1858,25 @@ function WritingsContent() {
     if (wordCount >= 30 && uniqueWordRatio(content) < 0.12) {
       setError('Your writing looks repetitive, but I am still sending it for feedback so you can improve it.');
     }
+
+    const localNow = new Date();
+    const localDayStart = new Date(localNow);
+    localDayStart.setHours(0, 0, 0, 0);
+    const { count: submissionsToday, error: submissionsCountError } = await supabase
+      .from('writings')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', profile.id)
+      .in('status', ['submitted', 'reviewed'])
+      .gte('created_at', localDayStart.toISOString());
+    if (submissionsCountError) {
+      setError('Could not validate your daily submission limit. Please try again.');
+      return;
+    }
+    if ((submissionsToday ?? 0) >= MAX_DAILY_WRITING_SUBMISSIONS) {
+      setError(`Daily submission limit reached (${MAX_DAILY_WRITING_SUBMISSIONS}). Come back tomorrow.`);
+      return;
+    }
+
     todayWordsAtSubmitStartRef.current = todayWords;
 
     writingMutationLock.current = true;
@@ -1802,14 +1901,37 @@ function WritingsContent() {
     let savedWriting: Writing | null = null;
     let latestFeedback: WritingFeedback | null = null;
     let feedbackSaved = false;
+    let latestSubmissionScore = 0;
+    let latestSubmissionXp = 0;
 
     const persistReviewedFeedback = async (writingIdToUpdate: string, feedbackData: WritingFeedback) => {
+      const scoreSource: Writing = {
+        id: writingIdToUpdate,
+        user_id: profile.id,
+        title: title || 'Untitled',
+        content,
+        prompt: prompt || null,
+        category,
+        status: 'reviewed',
+        word_count: wordCount,
+        xp_earned: 0,
+        is_favorite: false,
+        feedback: feedbackData.overall,
+        strengths: feedbackData.rewritten_version,
+        improvements: feedbackData.paragraph_feedback,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as Writing;
+      const scoreResult = buildProgressScores([scoreSource], profile?.age_group ?? null)[0];
+      latestSubmissionScore = scoreResult?.score ?? 10;
+      latestSubmissionXp = getWritingXpFromScore(latestSubmissionScore);
+
       const { data: reviewedWriting, error: reviewError } = await supabase.from('writings').update({
         status: 'reviewed',
         feedback: feedbackData.overall,
         strengths: feedbackData.rewritten_version,
         improvements: feedbackData.paragraph_feedback,
-        xp_earned: XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK,
+        xp_earned: latestSubmissionXp,
       }).eq('id', writingIdToUpdate).select().single();
 
       if (!reviewError && reviewedWriting) {
@@ -1851,7 +1973,7 @@ function WritingsContent() {
 
         latestFeedback = data.feedback;
         setFeedback(data.feedback);
-        setXpEarned(XP_REWARDS.WRITING_SUBMIT + XP_REWARDS.AI_FEEDBACK);
+        setXpEarned(latestSubmissionXp);
         setStatus('done');
 
         if (id && !feedbackSaved) {
@@ -1936,7 +2058,7 @@ function WritingsContent() {
         debouncedLoadJournal();
       }
 
-      void grantWritingSubmitRewards().catch(() => {});
+      void grantWritingSubmitRewards(latestSubmissionScore).catch(() => {});
 
       if (latestFeedback && id && !feedbackSaved) {
         await persistReviewedFeedback(id, latestFeedback).catch(() => {});
@@ -1953,7 +2075,7 @@ function WritingsContent() {
             savedWriting = recoveredWriting;
             syncStoredWriting(recoveredWriting);
             debouncedLoadJournal();
-            void grantWritingSubmitRewards().catch(() => {});
+            void grantWritingSubmitRewards(latestSubmissionScore).catch(() => {});
             if (latestFeedback && !feedbackSaved) {
               void persistReviewedFeedback(recoveredWriting.id, latestFeedback).catch(() => {});
             }

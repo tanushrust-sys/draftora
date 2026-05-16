@@ -46,6 +46,7 @@ const BASE_RULES: Record<Exclude<RewardEventType, 'vocab_drill_completed' | 'voc
 };
 
 const EVENT_CAPS: Partial<Record<RewardEventType, CapRule>> = {
+  writing_submit: { perDay: 3 },
   ai_feedback_received: { perDay: 6 },
   vocab_sentence_success: { perDay: 12 },
   vocab_drill_completed: { perDay: 3 },
@@ -91,7 +92,18 @@ function resolveVocabTest(metadata: RewardMetadata): RewardResolution {
   };
 }
 
+function resolveWritingSubmit(metadata: RewardMetadata): RewardResolution {
+  const score = clamp(numberFromMetadata(metadata, 'score'), 0, 100);
+
+  if (score <= 20) return { xp: 5, reason: `Writing submitted (score ${score}/100)` };
+  if (score <= 50) return { xp: 10, reason: `Writing submitted (score ${score}/100)` };
+  if (score <= 75) return { xp: 15, reason: `Writing submitted (score ${score}/100)` };
+  if (score <= 90) return { xp: 25, reason: `Writing submitted (score ${score}/100)` };
+  return { xp: 30, reason: `Writing submitted (score ${score}/100)` };
+}
+
 export function resolveReward(eventType: RewardEventType, metadata: RewardMetadata): RewardResolution {
+  if (eventType === 'writing_submit') return resolveWritingSubmit(metadata);
   if (eventType === 'vocab_drill_completed') return resolveDrill(metadata);
   if (eventType === 'vocab_test_completed') return resolveVocabTest(metadata);
 
