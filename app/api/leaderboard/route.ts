@@ -19,6 +19,7 @@ type ProfileLite = {
   xp: number | null;
   streak: number | null;
   level: number | null;
+  account_type?: string | null;
   deleted_at?: string | null;
   suburb?: string | null;
   country?: string | null;
@@ -99,13 +100,13 @@ export async function GET(request: NextRequest) {
   {
     const firstAttempt = await adminSupabase
       .from('profiles')
-      .select('id, username, xp, streak, level, deleted_at, suburb, country, latitude, longitude, lat, lng');
+      .select('id, username, xp, streak, level, account_type, deleted_at, suburb, country, latitude, longitude, lat, lng');
 
     if (firstAttempt.error && firstAttempt.error.message?.toLowerCase().includes('column')) {
       supportsAreaColumns = false;
       const retry = await adminSupabase
         .from('profiles')
-        .select('id, username, xp, streak, level, deleted_at');
+        .select('id, username, xp, streak, level, account_type, deleted_at');
       allProfilesRaw = asProfileLiteArray(retry.data);
       profilesError = retry.error as { message?: string } | null;
     } else {
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
   const allProfiles = asProfileLiteArray(allProfilesRaw).filter((profile) => {
     if (!profile || !profile.id) return false;
     if (profile.deleted_at) return false;
+    if (profile.account_type === 'teacher' || profile.account_type === 'parent') return false;
     return true;
   });
 

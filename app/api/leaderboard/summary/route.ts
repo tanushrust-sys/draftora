@@ -3,6 +3,7 @@ import { requireRouteAuth } from '@/app/lib/server-auth';
 
 type ProfileLite = {
   id: string;
+  account_type?: string | null;
   deleted_at?: string | null;
   suburb?: string | null;
   country?: string | null;
@@ -67,13 +68,13 @@ export async function GET(request: NextRequest) {
   {
     const firstAttempt = await adminSupabase
       .from('profiles')
-      .select('id, deleted_at, suburb, country, latitude, longitude, lat, lng');
+      .select('id, account_type, deleted_at, suburb, country, latitude, longitude, lat, lng');
 
     if (firstAttempt.error && firstAttempt.error.message?.toLowerCase().includes('column')) {
       supportsAreaColumns = false;
       const retry = await adminSupabase
         .from('profiles')
-        .select('id, deleted_at');
+        .select('id, account_type, deleted_at');
       profileRows = asProfileLiteArray(retry.data);
       profileError = retry.error as { message?: string } | null;
     } else {
@@ -86,7 +87,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Could not load leaderboard summary.' }, { status: 500 });
   }
 
-  const profiles = asProfileLiteArray(profileRows).filter((profile) => !profile.deleted_at);
+  const profiles = asProfileLiteArray(profileRows).filter((profile) => {
+    if (profile.deleted_at) return false;
+    if (profile.account_type === 'teacher' || profile.account_type === 'parent') return false;
+    return true;
+  });
   const meProfile = profiles.find((profile) => profile.id === auth.userId) ?? me;
   const myCoords = getCoords(meProfile);
   const areaRadiusKm = 5;
