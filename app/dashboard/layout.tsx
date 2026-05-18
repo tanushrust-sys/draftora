@@ -396,6 +396,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isLargeViewport, setIsLargeViewport] = useState(false);
   const [streakGifPopup, setStreakGifPopup] = useState<{ streak: number } | null>(null);
   const streakGifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rewardProfileRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [rewardToasts, setRewardToasts] = useState<RewardToastEntry[]>([]);
   const [equippedItemsByCategory, setEquippedItemsByCategory] = useState<Record<CosmeticCategory, EquippedCosmeticItem | null>>(
     () => createEmptyEquippedItemsByCategory(),
@@ -506,6 +507,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     return () => {
       if (streakGifTimerRef.current) clearTimeout(streakGifTimerRef.current);
+      if (rewardProfileRefreshTimerRef.current) clearTimeout(rewardProfileRefreshTimerRef.current);
     };
   }, []);
 
@@ -587,13 +589,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         });
       }
 
+      if (rewardProfileRefreshTimerRef.current) {
+        clearTimeout(rewardProfileRefreshTimerRef.current);
+      }
+      rewardProfileRefreshTimerRef.current = setTimeout(() => {
+        rewardProfileRefreshTimerRef.current = null;
+        void refreshProfile();
+      }, 120);
     };
 
     window.addEventListener(REWARD_AWARDED_EVENT, onRewardAwarded as EventListener);
     return () => {
       window.removeEventListener(REWARD_AWARDED_EVENT, onRewardAwarded as EventListener);
     };
-  }, [isPracticeMode]);
+  }, [isPracticeMode, refreshProfile]);
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
@@ -775,7 +784,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <button type="button" className="fixed inset-0 z-40 xl:hidden"
+        <button type="button" className="fixed inset-0 z-20 xl:hidden"
           style={{ background: 'var(--t-overlay)' }}
           onClick={() => setSidebarOpen(false)}
           aria-label="Close navigation" />
