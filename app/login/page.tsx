@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AtSign, Eye, EyeOff, LockKeyhole } from 'lucide-react';
+import { clearPendingGoogleSignup } from '@/app/lib/google-auth';
 import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
 import { AuthShell } from '@/app/components/auth-shell';
 import { useAuth } from '@/app/context/AuthContext';
@@ -124,6 +125,30 @@ export default function LoginPage() {
     window.location.assign(homePath);
   };
 
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    clearPendingGoogleSignup();
+    clearSupabaseClientSession();
+
+    const redirectTo = `${window.location.origin}/auth/callback?mode=signin`;
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
+      },
+    });
+
+    if (googleError) {
+      setError(googleError.message || 'Could not start Google sign-in.');
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthShell
       eyebrow="Welcome back"
@@ -236,6 +261,26 @@ export default function LoginPage() {
           }}
         >
           {loading ? 'Signing in...' : 'Log in'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleGoogleSignIn()}
+          disabled={loading}
+          style={{
+            width: '100%',
+            minHeight: '3.45rem',
+            borderRadius: '1.08rem',
+            border: '1px solid rgba(76, 147, 214, 0.28)',
+            background: 'rgba(255, 255, 255, 0.92)',
+            color: '#12395f',
+            fontWeight: 800,
+            fontSize: '0.98rem',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            boxShadow: '0 12px 24px rgba(88, 142, 191, 0.16)',
+          }}
+        >
+          Continue with Google
         </button>
 
       </form>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { AtSign, Eye, EyeOff, LockKeyhole, UserRound } from 'lucide-react';
+import { writePendingGoogleSignup } from '@/app/lib/google-auth';
 import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
 import { AuthShell } from '@/app/components/auth-shell';
 import { getAccountHomePath } from '@/app/lib/account-type';
@@ -106,6 +107,54 @@ export default function SignupPage() {
       signInData.user?.user_metadata?.account_type ?? 'student',
     );
     window.location.assign(homePath);
+  };
+
+  const handleGoogleSignup = async () => {
+    setError('');
+
+    const trimmed = username.trim();
+    if (!trimmed) {
+      setError('Username is required for Google signup.');
+      return;
+    }
+    if (trimmed.length < 3) {
+      setError('Username must be at least 3 characters.');
+      return;
+    }
+
+    setLoading(true);
+
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('username', trimmed)
+      .limit(1);
+
+    if ((existing ?? []).length > 0) {
+      setError('That username is already taken.');
+      setLoading(false);
+      return;
+    }
+
+    writePendingGoogleSignup({ username: trimmed, accountType });
+    clearSupabaseClientSession();
+
+    const redirectTo = `${window.location.origin}/auth/callback?mode=signup`;
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
+      },
+    });
+
+    if (googleError) {
+      setError(googleError.message || 'Could not start Google signup.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -286,6 +335,25 @@ export default function SignupPage() {
           }}
         >
           {loading ? 'Creating account...' : 'Create account'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleGoogleSignup()}
+          disabled={loading}
+          style={{
+            width: '100%',
+            minHeight: '3.45rem',
+            borderRadius: '1.08rem',
+            border: '1px solid rgba(84, 154, 221, 0.32)',
+            background: 'rgba(255, 255, 255, 0.92)',
+            color: '#12395f',
+            fontWeight: 800,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            boxShadow: '0 12px 24px rgba(88, 142, 191, 0.16)',
+          }}
+        >
+          Sign up with Google
         </button>
 
       </form>

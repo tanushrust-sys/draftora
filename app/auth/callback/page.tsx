@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { clearPendingGoogleSignup, readPendingGoogleSignup } from '@/app/lib/google-auth';
 import { clearSupabaseClientSession, getVerifiedSession, supabase } from '@/app/lib/supabase';
 import { AuthShell } from '@/app/components/auth-shell';
 
@@ -34,6 +35,7 @@ function AuthCallbackContent() {
     const run = async () => {
       const code = searchParams.get('code');
       const rawNext = searchParams.get('next');
+      const mode = searchParams.get('mode');
       const recoveryType = searchParams.get('type');
       const hash = typeof window !== 'undefined' ? window.location.hash : '';
       const hasRecoveryHash =
@@ -69,6 +71,40 @@ function AuthCallbackContent() {
         }
 
         const session = await getVerifiedSession();
+        if (!session) {
+          setError('Authentication failed.');
+          return;
+        }
+
+        if (!isRecoveryFlow) {
+          const pendingGoogleSignup = mode === 'signup' ? readPendingGoogleSignup() : null;
+          const bootstrapResponse = await fetch('/api/auth-google', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              username: pendingGoogleSignup?.username,
+              accountType: pendingGoogleSignup?.accountType,
+            }),
+          });
+
+          clearPendingGoogleSignup();
+
+          if (!bootstrapResponse.ok) {
+            const payload = await bootstrapResponse.json().catch(() => null);
+            await supabase.auth.signOut().catch(() => {});
+            clearSupabaseClientSession();
+            setError(
+              payload && typeof payload.error === 'string'
+                ? payload.error
+                : 'We could not finish your Google sign-in.',
+            );
+            return;
+          }
+        }
+
         const homePath = next === '/dashboard'
           ? await getResolvedHomePath(session?.access_token ?? null, next)
           : next;
