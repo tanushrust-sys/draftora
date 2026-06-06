@@ -38,10 +38,7 @@ function AuthCallbackContent() {
       const mode = searchParams.get('mode');
       const recoveryType = searchParams.get('type');
       const hash = typeof window !== 'undefined' ? window.location.hash : '';
-      const hasRecoveryHash =
-        hash.includes('access_token=') ||
-        hash.includes('refresh_token=') ||
-        hash.includes('type=recovery');
+      const hasRecoveryHash = hash.includes('type=recovery');
       const isRecoveryFlow = hasRecoveryHash || recoveryType === 'recovery';
       const next = rawNext || (isRecoveryFlow ? '/reset-password' : '/dashboard');
 
