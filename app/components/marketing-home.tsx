@@ -362,6 +362,190 @@ const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  {
+    title: 'Best Writing Apps for Students in 2026',
+    summary:
+      'The best writing apps in 2026 do more than fix spelling. They help students plan ideas, revise clearly, build vocabulary, and practice consistently without making writing feel intimidating.',
+    audience: 'For students and families',
+    readTime: '6 min read',
+    intro:
+      'Students in 2026 have access to more writing tools than ever, but not every app actually helps them become stronger writers. Some tools are useful for checking grammar. Some are good for note-taking. Some can generate text quickly. The best writing apps for students, however, do something more important: they help a student think clearly, organize ideas, improve a draft, and build writing confidence over time. That means the right app is not always the one with the most features. It is the one that supports the writing process in a way students can understand and actually use.',
+    sections: [
+      {
+        heading: 'What students should look for in a writing app',
+        paragraphs: [
+          'A strong writing app should help students before, during, and after drafting. Before writing, it should make it easier to understand the task and organize ideas. During writing, it should keep the student focused instead of filling the screen with distractions. After writing, it should help the student revise with clear next steps rather than vague corrections. These three stages matter because students rarely struggle with only one part of writing. They often need support with planning, clarity, structure, and confidence at the same time.',
+          'Another important factor is whether the app teaches independence. If a tool simply rewrites everything for the student, it may create short-term convenience but not long-term growth. Students improve when they can see what is weak, understand why it is weak, and practice making it stronger themselves. That is why the best writing apps do not just produce better sentences. They help students learn how to produce better sentences on their own.',
+        ],
+      },
+      {
+        heading: 'Different apps solve different writing problems',
+        paragraphs: [
+          'Some apps are best for brainstorming and collecting ideas. Others are useful for grammar checking, while some focus on classroom drafting, teacher feedback, or vocabulary growth. A student writing a persuasive paragraph may need a different tool from a student preparing a creative story or a reflection journal. Families often make the mistake of choosing one “everything app” and expecting it to solve every writing issue. In reality, the best choice depends on the type of writing support a student needs most right now.',
+          'For example, a student who freezes at the start of a task benefits from prompts, scaffolds, and writing starters. A student whose work lacks detail may need sentence-level coaching and examples. A student who writes often but carelessly may need routines that emphasize revision and reflection. When parents or teachers understand the real bottleneck, they can choose a writing app based on function rather than hype.',
+        ],
+      },
+      {
+        heading: 'Why AI writing support matters in 2026',
+        paragraphs: [
+          'In 2026, AI is increasingly common in education, but its value depends on how it is used. Good AI writing support does not take over the student’s job. It shortens the feedback loop. Instead of waiting days to know whether a paragraph is clear, students can get immediate signals about structure, repetition, sentence strength, or missing detail. That speed matters because revision works best while the original thinking is still fresh in the student’s mind.',
+          'The strongest AI writing apps also keep the student engaged in the process. They might highlight a confusing sentence, suggest where an example is needed, or encourage stronger vocabulary, but the student still has to make the decision and improve the draft. That balance is important. AI should reduce friction, not remove thinking. When it is used well, it helps students build habits that transfer into school assignments, exam writing, and independent work.',
+        ],
+      },
+      {
+        heading: 'What makes Draftora relevant for students',
+        paragraphs: [
+          'Draftora fits this newer category of writing apps because it is built around improvement, not just correction. Instead of acting like a simple grammar checker, it supports a full writing cycle: start a draft, review targeted feedback, revise clearly, and keep practicing. That matters for students who need confidence as much as they need correction. Many students already know that writing is hard for them. What they need is a process that makes progress visible and manageable.',
+          'For families and classrooms, that structure is useful because it creates common language around writing. Students can see what to fix next. Parents can understand the feedback without needing to be writing experts. Teachers can reinforce the same revision habits more consistently. A writing tool becomes far more effective when it supports the student, the home, and the classroom with the same clear signals.',
+        ],
+      },
+      {
+        heading: 'How to choose the best app for your student',
+        paragraphs: [
+          'The best writing app is the one a student will actually use repeatedly. That means it should feel clear, motivating, and age-appropriate. If the interface is confusing or the feedback sounds robotic, students will ignore it. If it feels practical and specific, they are much more likely to build a routine around it. Families should test whether the app makes the student more willing to start writing, revise their work, and try again the next day.',
+          'In the end, the question is not just “Which writing app is most advanced?” It is “Which writing app helps this student improve with consistency?” In 2026, the best writing tools are the ones that make growth visible, revision less stressful, and writing practice easier to sustain. When a student finds that kind of support, better writing becomes something they can build step by step rather than something they have to magically get right the first time.',
+        ],
+      },
+    ],
+  },
+  {
+    title: 'How Students Can Improve Writing Skills',
+    summary:
+      'Students improve writing fastest when they practice regularly, revise in small steps, and focus on clarity before perfection. Strong writing grows through routines, not last-minute effort.',
+    audience: 'For students',
+    readTime: '6 min read',
+    intro:
+      'Many students think good writing comes from talent, but strong writing is usually the result of habits. Students improve when they write often, notice what is weak, and learn how to revise with purpose. That means better writing is not built through one big assignment or one perfect day. It is built through many small sessions where a student drafts, reflects, edits, and tries again. Once students understand that writing is a process rather than a one-shot performance, progress starts to feel much more achievable.',
+    sections: [
+      {
+        heading: 'Write more often than you think you need to',
+        paragraphs: [
+          'The biggest reason students stay stuck is not always lack of ability. It is lack of repetition. Writing is a skill, and skills improve through use. A student who writes three or four short times each week usually improves more than a student who writes only when school demands it. Frequent writing reduces fear because the page stops feeling unfamiliar. Students begin to trust that they can start, continue, and finish a piece even when the topic is not easy.',
+          'These writing sessions do not need to be long. Ten to fifteen focused minutes can be enough to build momentum. What matters is consistency. A short paragraph, a reflection, a response to a prompt, or a quick descriptive scene all help students strengthen fluency. When students practice often, they also make more mistakes, and that is useful. Mistakes create the raw material that revision turns into growth.',
+        ],
+      },
+      {
+        heading: 'Start with clear ideas before chasing better sentences',
+        paragraphs: [
+          'Students often try to sound impressive before they know exactly what they want to say. This usually leads to confusing sentences, weak structure, or ideas that feel unfinished. It is much more effective to begin by clarifying the point. What am I trying to explain? What is my main argument? What should the reader understand by the end? Once those answers are clear, stronger sentences become much easier to write.',
+          'A helpful habit is to plan briefly before drafting. Students can jot down three points, one example, and a possible ending before writing in full sentences. This does not need to be formal. Even a rough plan makes the draft more focused. When students know where they are going, they waste less time circling around the topic and more time building a piece that actually says something clearly.',
+        ],
+      },
+      {
+        heading: 'Use revision as the real place where writing improves',
+        paragraphs: [
+          'A first draft is not supposed to be polished. Its job is to get ideas onto the page. The real improvement usually happens during revision, when a student reads the draft again and asks what needs to change. Is the opening strong enough? Does the paragraph stay on topic? Are there places where more detail, explanation, or better vocabulary would help? These questions move writing forward much more effectively than simply correcting spelling.',
+          'Students improve faster when revision is broken into small targets. Instead of trying to fix everything at once, choose one focus: make the topic sentence clearer, add one stronger example, remove repetition, or improve sentence flow. This keeps revision manageable. Over time, those small adjustments build into a much stronger draft. Students begin to see that writing does not need to be perfect immediately because they now know how to improve it in stages.',
+        ],
+      },
+      {
+        heading: 'Read your writing like a reader, not just a student',
+        paragraphs: [
+          'One of the best ways to improve writing is to step back and read the draft as if you did not write it. Would the meaning be clear to someone else? Would they know what the paragraph is trying to say? Would any part feel boring, repetitive, rushed, or confusing? This shift helps students notice problems that are easy to miss when they are too close to the piece.',
+          'Reading aloud is especially useful. When a sentence sounds awkward out loud, it often needs to be rewritten. Reading aloud also helps students hear where punctuation is missing, where ideas jump too fast, and where the rhythm feels clumsy. It is one of the simplest strategies students can use on their own, and it builds a stronger instinct for clarity, tone, and flow with repeated practice.',
+        ],
+      },
+      {
+        heading: 'Build a system that makes progress visible',
+        paragraphs: [
+          'Students stay motivated when they can actually see improvement. That might mean saving earlier drafts, keeping a writing folder, tracking weekly sessions, or noting one thing that improved after each piece. When students compare an older paragraph with a newer one, they often notice stronger openings, clearer explanations, or more confident sentence structure. That visible progress matters because it turns effort into evidence.',
+          'Improving writing skills is not about becoming brilliant overnight. It is about building a repeatable process: write regularly, plan simply, revise one thing at a time, and reflect on what got better. Students who follow that cycle become more capable and more confident. The students who improve most are usually not the ones waiting for inspiration. They are the ones who keep showing up to the page and learning how to make each draft a little stronger than the last.',
+        ],
+      },
+    ],
+  },
+  {
+    title: 'AI Writing Feedback for Primary School Students',
+    summary:
+      'Good AI writing feedback for primary students should be clear, gentle, and specific. It needs to support confidence while showing one simple next step that a child can use straight away.',
+    audience: 'For parents and primary teachers',
+    readTime: '6 min read',
+    intro:
+      'Primary school students need writing feedback that helps them grow without making writing feel scary. That is why AI feedback for younger writers must be designed differently from feedback for older students. It should be short enough to understand, positive enough to encourage effort, and specific enough to guide revision. When used properly, AI writing feedback can help primary students improve sentence clarity, add more detail, and build stronger habits while still keeping their own voice at the center of the writing process.',
+    sections: [
+      {
+        heading: 'Why younger writers need different feedback',
+        paragraphs: [
+          'Primary students are still building basic writing confidence. Many are learning how to turn spoken ideas into written sentences, organize a paragraph, and stay focused on a prompt. If feedback is too long, too abstract, or too critical, it becomes hard for them to use. Instead of helping, it can make them feel confused or discouraged. Effective support at this stage must meet the child where they are and show one clear step they can take next.',
+          'This is where carefully designed AI can help. Unlike delayed feedback that arrives after the student has emotionally moved on from the task, AI can respond while the child still remembers what they meant to say. If a sentence is unclear or a story needs more detail, the student can act on that guidance immediately. That speed makes feedback feel more useful and less like a judgment after the fact.',
+        ],
+      },
+      {
+        heading: 'The best AI feedback is simple and actionable',
+        paragraphs: [
+          'Primary students do not need a full essay about their paragraph. They need feedback such as: add one describing word here, explain what happened next, make this sentence clearer, or try a stronger opening. These kinds of directions are concrete. A child can actually do something with them. Over time, repeated exposure to this kind of feedback helps students internalize better writing patterns without feeling overloaded.',
+          'It is also important that feedback recognizes what is already working. Younger students become more willing to revise when they hear that they have done something well first. For example, a tool might point out a strong idea, an interesting detail, or a clear sentence before suggesting one improvement. This balance matters. Students should feel that feedback is helping them grow, not simply pointing out errors.',
+        ],
+      },
+      {
+        heading: 'AI should support thinking, not replace it',
+        paragraphs: [
+          'A major concern with AI in education is whether it encourages dependency. That concern is valid if the system writes the answer for the child. Good AI writing feedback for primary students should not take over the task. It should guide the student to think again. If a child writes a weak sentence, the goal is not to swap it with a perfect AI sentence and move on. The goal is to help the child notice what is missing and try a better version themselves.',
+          'That distinction is important for long-term growth. Primary students are still learning foundational habits: adding detail, sequencing ideas, choosing accurate words, and writing for a reader. These habits only develop when children remain active participants in the revision process. AI is most helpful when it acts like a prompt for better thinking rather than a shortcut around thinking.',
+        ],
+      },
+      {
+        heading: 'How parents and teachers can use AI feedback well',
+        paragraphs: [
+          'Adults should treat AI feedback as a conversation starter, not the final verdict. After a student receives a suggestion, a parent or teacher can ask simple questions: What do you think this means? Which sentence would you like to improve? Can you add one more detail here? These questions help children process the feedback rather than just react to it. They also build independence, because the student learns how to interpret writing advice for themselves.',
+          'It is best to keep the revision target small. Younger writers benefit from improving one thing at a time. That could mean strengthening the first sentence, adding a feeling word, fixing a confusing idea, or expanding a short ending. When the target stays narrow, the child experiences success more quickly. That success builds the confidence needed to revise again in the future.',
+        ],
+      },
+      {
+        heading: 'What strong primary writing support should feel like',
+        paragraphs: [
+          'At its best, AI writing feedback for primary students should feel calm, encouraging, and clear. It should reduce the stress of “I do not know what to do next” and replace it with a manageable step. Students should finish a writing session understanding at least one thing they did well and one thing they can make better. That is how a child begins to see writing as something they can improve rather than something they either can or cannot do.',
+          'This is why the design of the tool matters so much. Primary students need support that respects their stage of learning. If the feedback is developmentally appropriate, AI can become a very practical ally for schools and families. It can help children build stronger paragraphs, better sentences, and more positive writing habits without taking away the thinking and effort that real writing growth depends on.',
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Writing Activities for Grade 4–6 Students',
+    summary:
+      'Strong writing activities for Grades 4 to 6 should build confidence, expand ideas, and make revision feel normal. The best tasks are short, purposeful, and easy to repeat each week.',
+    audience: 'For primary classrooms',
+    readTime: '6 min read',
+    intro:
+      'Students in Grades 4 to 6 are at an important stage in writing development. They are moving beyond very simple sentences, but many still need support with organizing ideas, adding detail, and revising clearly. That means writing activities should do more than fill time. They should help students practice specific skills in a way that feels achievable. The most effective activities are not always long assignments. Often, they are short, structured tasks that students can repeat regularly until stronger writing habits begin to form.',
+    sections: [
+      {
+        heading: 'Use quick prompts to lower the pressure of starting',
+        paragraphs: [
+          'One of the biggest writing hurdles for this age group is simply getting started. Many students stare at the page because they are unsure how to begin. Quick prompts solve this by narrowing the task. A prompt might ask students to describe a surprising sound, explain the best part of their morning, or imagine finding a hidden door in the classroom wall. These kinds of openings reduce the fear of the blank page and help students enter the task with momentum.',
+          'Teachers can keep the prompt routine short and consistent. For example, students might complete a ten-minute writing burst three times a week. The goal is not to finish a masterpiece. The goal is to build fluency. As students become more comfortable starting quickly, they gain confidence that they can produce ideas on demand instead of waiting for inspiration or permission to feel ready.',
+        ],
+      },
+      {
+        heading: 'Choose activities that target one writing skill at a time',
+        paragraphs: [
+          'Students improve faster when an activity has a clear skill focus. One day the focus might be strong openings. Another day it could be adding detail, using better verbs, or improving paragraph endings. When too many goals are combined in one task, students often miss the real lesson. A narrow focus helps them understand what good writing looks like in one area before trying to manage everything at once.',
+          'For example, a “detail expansion” activity can start with a plain sentence like “The dog ran outside.” Students then rewrite it by adding description, movement, or feeling. This teaches specificity. A “sentence combining” activity can help them build smoother, more mature sentences from short basic ones. Over time, these small exercises strengthen the tools students bring into longer assignments.',
+        ],
+      },
+      {
+        heading: 'Make revision part of the activity, not an afterthought',
+        paragraphs: [
+          'Many students in Grades 4 to 6 think writing ends when the draft is finished. That is why writing activities should include a visible revision step. After a short draft, students can highlight their best sentence, underline a place that needs more detail, or swap with a partner to get one suggestion. These routines teach that writing is something you shape, not just something you produce once and submit.',
+          'Revision activities work best when they are simple. Ask students to improve only the first sentence, add one specific example, or replace two ordinary words with stronger choices. This keeps revision from feeling like a punishment. Instead, it becomes a normal and manageable part of writing. Students begin to understand that even good writing usually starts as something rough that becomes clearer through changes.',
+        ],
+      },
+      {
+        heading: 'Use sharing and reflection to build motivation',
+        paragraphs: [
+          'Students are often more engaged when they know their writing will be heard or noticed. This does not mean every piece needs a full presentation. Small sharing routines are enough. A teacher might invite students to read one strong sentence aloud, post a favorite line on the wall, or choose an example of strong detail from a partner. These moments help students value the craft of writing because their words begin to feel real and worth improving.',
+          'Reflection is just as important. After an activity, students can answer quick questions such as: What part did I improve today? What was difficult? Which sentence am I proud of? Reflection turns the task into learning rather than simple completion. Over time, students become more aware of their own progress and more able to explain what stronger writing actually involves.',
+        ],
+      },
+      {
+        heading: 'Build a weekly rhythm that students can trust',
+        paragraphs: [
+          'The best writing activities become more powerful when they are part of a predictable routine. For Grades 4 to 6, that might look like one quick prompt day, one skill-practice day, one drafting day, and one revision or sharing day. A regular rhythm helps students know what to expect, which reduces resistance and creates more room for actual improvement. Writing starts to feel like a normal practice rather than a surprise challenge.',
+          'When students experience that rhythm week after week, they begin to accumulate real gains. Their sentences become fuller, their ideas more organized, and their willingness to revise more natural. Writing activities do not need to be flashy to work. They need to be purposeful, repeatable, and connected to the specific skills students are still building. That is what helps Grades 4 to 6 writers grow in a steady and lasting way.',
+        ],
+      },
+    ],
+  },
 ];
 
 const FAQS = [
