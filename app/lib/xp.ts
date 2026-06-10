@@ -3,7 +3,7 @@ import { getLevelFromXP, getTitleForLevel } from '@/app/types/database';
 import { setProfileOverride } from '@/app/lib/profile-overrides';
 
 // How much XP each action earns
-// Balanced for 30-level system (50 base + 25/level increase, 11 600 XP total)
+// Balanced progression: 50 XP for level 2, then +25 XP per level.
 export const XP_REWARDS = {
   // ── Core writing ──────────────────────────
   WRITING_SUBMIT:       25,   // Submit a completed writing piece

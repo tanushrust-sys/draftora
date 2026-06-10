@@ -13,7 +13,7 @@ import { clearWritingExperienceOverride } from '@/app/lib/writing-experience';
 import { clearProfileOverrides } from '@/app/lib/profile-overrides';
 import { generateStudentCode } from '@/app/lib/student-code';
 import { isDevAccount } from '@/app/lib/dev-account';
-import { getLevelFromXP, getTitleForLevel } from '@/app/types/database';
+import { getLevelFromXP, getTitleForLevel, LEVEL_XP, MAX_LEVEL } from '@/app/types/database';
 import {
   Settings, Palette, Target, LogOut, Trash2, CheckCircle, Copy,
   Star, Shield, Trophy,
@@ -1065,7 +1065,7 @@ export default function SettingsPage() {
 
                 {/* Numeric fields */}
                 {[
-                  { label: 'XP',                  value: devXP,       setter: setDevXP,       min: 0,   max: 20000 },
+                  { label: 'XP',                  value: devXP,       setter: setDevXP,       min: 0,   max: LEVEL_XP[MAX_LEVEL - 1] },
                   { label: 'Streak (days)',         value: devStreak,   setter: setDevStreak,   min: 0,   max: 9999  },
                   { label: 'Longest Streak (days)', value: devLongest,  setter: setDevLongest,  min: 0,   max: 9999  },
                   { label: 'Coach Messages Used',   value: devCoach,    setter: setDevCoach,    min: 0,   max: 9999  },
