@@ -921,3 +921,151 @@ drop trigger if exists parent_homework_timetables_updated_at on public.parent_ho
 create trigger parent_homework_timetables_updated_at
 before update on public.parent_homework_timetables
 for each row execute function public.update_updated_at();
+
+-- ============================================
+-- DRAFTORA CHAT
+-- ============================================
+create table if not exists public.friend_requests (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid references auth.users(id) on delete cascade not null,
+  receiver_id uuid references auth.users(id) on delete cascade not null,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (requester_id <> receiver_id)
+);
+
+create unique index if not exists friend_requests_pending_unique_idx
+  on public.friend_requests (requester_id, receiver_id)
+  where status = 'pending';
+create index if not exists friend_requests_requester_id_idx on public.friend_requests (requester_id);
+create index if not exists friend_requests_receiver_id_idx on public.friend_requests (receiver_id);
+
+alter table public.friend_requests enable row level security;
+
+drop policy if exists "Users can read own friend requests" on public.friend_requests;
+create policy "Users can read own friend requests" on public.friend_requests
+  for select using (auth.uid() = requester_id or auth.uid() = receiver_id);
+
+drop policy if exists "Users can insert own friend requests" on public.friend_requests;
+create policy "Users can insert own friend requests" on public.friend_requests
+  for insert with check (
+    auth.uid() = requester_id
+    and requester_id <> receiver_id
+  );
+
+drop policy if exists "Receivers can update friend requests" on public.friend_requests;
+create policy "Receivers can update friend requests" on public.friend_requests
+  for update using (auth.uid() = receiver_id)
+  with check (
+    auth.uid() = receiver_id
+    and requester_id <> receiver_id
+    and status in ('accepted', 'declined')
+  );
+
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  user_1_id uuid references auth.users(id) on delete cascade not null,
+  user_2_id uuid references auth.users(id) on delete cascade not null,
+  created_at timestamptz not null default now(),
+  check (user_1_id <> user_2_id)
+);
+
+create unique index if not exists friendships_unique_pair_idx
+  on public.friendships (least(user_1_id, user_2_id), greatest(user_1_id, user_2_id));
+create index if not exists friendships_user_1_id_idx on public.friendships (user_1_id);
+create index if not exists friendships_user_2_id_idx on public.friendships (user_2_id);
+
+alter table public.friendships enable row level security;
+
+drop policy if exists "Users can read own friendships" on public.friendships;
+create policy "Users can read own friendships" on public.friendships
+  for select using (auth.uid() = user_1_id or auth.uid() = user_2_id);
+
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid references auth.users(id) on delete cascade not null,
+  receiver_id uuid references auth.users(id) on delete cascade not null,
+  message_text text not null,
+  reply_to_message_id uuid references public.chat_messages(id) on delete set null,
+  created_at timestamptz not null default now(),
+  is_deleted boolean not null default false,
+  moderation_status text not null default 'allowed' check (moderation_status in ('allowed', 'blocked', 'reported')),
+  report_count integer not null default 0,
+  read_at timestamptz,
+  check (sender_id <> receiver_id),
+  check (char_length(message_text) <= 500)
+);
+
+create index if not exists chat_messages_sender_id_idx on public.chat_messages (sender_id);
+create index if not exists chat_messages_receiver_id_idx on public.chat_messages (receiver_id);
+create index if not exists chat_messages_created_at_idx on public.chat_messages (created_at desc);
+create index if not exists chat_messages_pair_idx on public.chat_messages (sender_id, receiver_id, created_at desc);
+
+alter table public.chat_messages enable row level security;
+
+drop policy if exists "Users can read own chat messages" on public.chat_messages;
+create policy "Users can read own chat messages" on public.chat_messages
+  for select using (auth.uid() = sender_id or auth.uid() = receiver_id);
+
+drop policy if exists "Users can insert own chat messages to friends" on public.chat_messages;
+create policy "Users can insert own chat messages to friends" on public.chat_messages
+  for insert with check (
+    auth.uid() = sender_id
+    and exists (
+      select 1
+      from public.friendships f
+      where least(f.user_1_id, f.user_2_id) = least(sender_id, receiver_id)
+        and greatest(f.user_1_id, f.user_2_id) = greatest(sender_id, receiver_id)
+    )
+  );
+
+create table if not exists public.message_reports (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid references public.chat_messages(id) on delete cascade not null,
+  reporter_id uuid references auth.users(id) on delete cascade not null,
+  reason text not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists message_reports_unique_idx on public.message_reports (message_id, reporter_id);
+create index if not exists message_reports_message_id_idx on public.message_reports (message_id);
+create index if not exists message_reports_reporter_id_idx on public.message_reports (reporter_id);
+
+alter table public.message_reports enable row level security;
+
+drop policy if exists "Users can report visible messages" on public.message_reports;
+create policy "Users can report visible messages" on public.message_reports
+  for insert with check (
+    auth.uid() = reporter_id
+    and exists (
+      select 1
+      from public.chat_messages cm
+      where cm.id = message_id
+        and (cm.sender_id = auth.uid() or cm.receiver_id = auth.uid())
+    )
+  );
+
+drop policy if exists "Users can read own reports" on public.message_reports;
+create policy "Users can read own reports" on public.message_reports
+  for select using (auth.uid() = reporter_id);
+
+create table if not exists public.moderation_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  content text,
+  reason text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists moderation_events_user_created_idx on public.moderation_events (user_id, created_at desc);
+
+alter table public.moderation_events enable row level security;
+
+drop policy if exists "Users can insert own moderation events" on public.moderation_events;
+create policy "Users can insert own moderation events" on public.moderation_events
+  for insert with check (auth.uid() = user_id);
+
+drop trigger if exists friend_requests_updated_at on public.friend_requests;
+create trigger friend_requests_updated_at before update on public.friend_requests
+  for each row execute procedure public.update_updated_at();

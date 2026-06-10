@@ -794,6 +794,141 @@ export type Database = {
         };
         Relationships: [];
       };
+      friend_requests: {
+        Row: {
+          id: string;
+          requester_id: string;
+          receiver_id: string;
+          status: 'pending' | 'accepted' | 'declined';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          requester_id: string;
+          receiver_id: string;
+          status?: 'pending' | 'accepted' | 'declined';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          requester_id?: string;
+          receiver_id?: string;
+          status?: 'pending' | 'accepted' | 'declined';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      friendships: {
+        Row: {
+          id: string;
+          user_1_id: string;
+          user_2_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_1_id: string;
+          user_2_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_1_id?: string;
+          user_2_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          sender_id: string;
+          receiver_id: string;
+          message_text: string;
+          reply_to_message_id: string | null;
+          created_at: string;
+          is_deleted: boolean;
+          moderation_status: 'allowed' | 'blocked' | 'reported';
+          report_count: number;
+          read_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          receiver_id: string;
+          message_text: string;
+          reply_to_message_id?: string | null;
+          created_at?: string;
+          is_deleted?: boolean;
+          moderation_status?: 'allowed' | 'blocked' | 'reported';
+          report_count?: number;
+          read_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          receiver_id?: string;
+          message_text?: string;
+          reply_to_message_id?: string | null;
+          created_at?: string;
+          is_deleted?: boolean;
+          moderation_status?: 'allowed' | 'blocked' | 'reported';
+          report_count?: number;
+          read_at?: string | null;
+        };
+        Relationships: [];
+      };
+      message_reports: {
+        Row: {
+          id: string;
+          message_id: string;
+          reporter_id: string;
+          reason: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          reporter_id: string;
+          reason: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          message_id?: string;
+          reporter_id?: string;
+          reason?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      moderation_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          content: string | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          content?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          content?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       coach_conversations: {
         Row: {
           id: string;
@@ -840,6 +975,9 @@ export type EquippedCosmetics = Database['public']['Tables']['equipped_cosmetics
 export type UserCurrencyLedgerItem = Database['public']['Tables']['user_currency_ledger']['Row'];
 export type WeeklyShopRotation = Database['public']['Tables']['weekly_shop_rotations']['Row'];
 export type WeeklyShopItem = Database['public']['Tables']['weekly_shop_items']['Row'];
+export type FriendRequestRow = Database['public']['Tables']['friend_requests']['Row'];
+export type FriendshipRow = Database['public']['Tables']['friendships']['Row'];
+export type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row'];
 
 // --- Level / XP helpers ---
 // Max level 999. Starts at 50 XP per level, increases by 25 XP each level.

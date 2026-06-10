@@ -19,6 +19,9 @@ import {
 import { useAuth } from '@/app/context/AuthContext';
 import { useTheme } from '@/app/context/ThemeContext';
 import { StudentHomeworkWidget } from '@/app/components/student-homework-widget';
+import ChatButton from '@/app/components/chat/ChatButton';
+import ChatModal from '@/app/components/chat/ChatModal';
+import ChatNotificationToast from '@/app/components/chat/ChatNotificationToast';
 import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
 import { bootstrapPracticeSession } from '@/app/lib/practice-session-client';
 import { getTitleForLevel, getXPProgress, MAX_LEVEL } from '@/app/types/database';
@@ -28,6 +31,8 @@ import { getLocalDateKey, msUntilNextLocalMidnight } from '@/app/lib/xp';
 import { pageCache } from '@/app/lib/page-cache';
 import XpProgressBar from '@/app/components/rewards/XpProgressBar';
 import EquippedFireIcon from '@/app/components/rewards/EquippedFireIcon';
+import { fetchChatSummary } from '@/app/lib/chat';
+import type { ChatSummaryCounts } from '@/app/lib/chatTypes';
 
 type DashCache = {
   stats: DailyStats | null;
@@ -70,6 +75,7 @@ export default function DashboardPage() {
           : 'student';
   const cacheKey = profile ? `dash-v2-${profile.id}-${ageGroup || 'default'}` : '';
   const cached = cacheKey ? pageCache.get<DashCache>(cacheKey) : null;
+  const authToken = session?.access_token ?? '';
 
   const [todayStats, setTodayStats]             = useState<DailyStats | null>(cached?.stats ?? null);
   const [weekVocabSaved, setWeekVocabSaved]     = useState(cached?.vocabSaved ?? 0);
@@ -77,6 +83,10 @@ export default function DashboardPage() {
   const [vocabTotal, setVocabTotal]             = useState(cached?.vocabTotal ?? 0);
   const [weekStats, setWeekStats]               = useState<DailyStats[]>(cached?.weekStats ?? []);
   const [leaderboardSummary, setLeaderboardSummary] = useState<LeaderboardSummary | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatCounts, setChatCounts] = useState<ChatSummaryCounts>({ unreadMessages: 0, unreadChats: 0, pendingRequests: 0, totalBadge: 0 });
+  const [chatToasts, setChatToasts] = useState<Array<{ id: string; message: string }>>([]);
+  const chatNoticeShownRef = useRef<string>('');
 
   const startPracticeMode = useCallback(async () => {
     if (practiceStarting) return;
@@ -191,6 +201,40 @@ export default function DashboardPage() {
     const timer = setTimeout(() => loadData(), msUntilNextLocalMidnight() + 1000);
     return () => clearTimeout(timer);
   }, [loadData, profile?.id]);
+
+  useEffect(() => {
+    if (!authToken || accountType !== 'student') return;
+    let active = true;
+    fetchChatSummary(authToken)
+      .then((counts) => {
+        if (!active) return;
+        setChatCounts(counts);
+        const nextKey = `${counts.pendingRequests}:${counts.unreadChats}`;
+        if (chatNoticeShownRef.current === nextKey) return;
+        const nextToasts: Array<{ id: string; message: string }> = [];
+        if (counts.pendingRequests > 0) {
+          nextToasts.push({
+            id: `chat-requests-${Date.now()}`,
+            message: 'You have a new friend request. Open Draftora Chat to check it.',
+          });
+        }
+        if (counts.unreadChats > 0) {
+          nextToasts.push({
+            id: `chat-messages-${Date.now() + 1}`,
+            message: 'You have new messages in Draftora Chat.',
+          });
+        }
+        if (nextToasts.length > 0) {
+          setChatToasts(nextToasts);
+          chatNoticeShownRef.current = nextKey;
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [accountType, authToken]);
 
   if (!profile) {
     if (loading) {
@@ -334,7 +378,6 @@ export default function DashboardPage() {
     : accountType === 'parent'
       ? 'Track progress, encourage practice, and stay close to the journey.'
       : greetingLine;
-  const authToken = session?.access_token ?? '';
   const cardSurface = {
     background: 'linear-gradient(165deg, color-mix(in srgb, var(--t-card) 92%, var(--t-acc) 8%) 0%, var(--t-card) 62%)',
     border: '1px solid color-mix(in srgb, var(--t-brd) 72%, var(--t-acc) 28%)',
@@ -640,6 +683,39 @@ export default function DashboardPage() {
         </div>
 
       </div>
+      {accountType === 'student' && authToken ? (
+        <>
+          <div style={{ position: 'fixed', right: 'clamp(1rem, 2vw, 1.5rem)', top: 'max(1rem, env(safe-area-inset-top))', zIndex: 81, display: 'grid', gap: 10 }}>
+            {chatToasts.map((toast) => (
+              <ChatNotificationToast
+                key={toast.id}
+                id={toast.id}
+                message={toast.message}
+                onClose={(id) => setChatToasts((current) => current.filter((entry) => entry.id !== id))}
+                onOpen={() => {
+                  setChatOpen(true);
+                  setChatToasts([]);
+                }}
+              />
+            ))}
+          </div>
+          <ChatButton badgeCount={chatCounts.totalBadge} onClick={() => setChatOpen(true)} />
+          <ChatModal
+            open={chatOpen}
+            token={authToken}
+            currentUser={{
+              id: profile.id,
+              username: profile.username,
+              email: profile.email,
+              title: profile.title,
+              level: profile.level,
+            }}
+            initialCounts={chatCounts}
+            onClose={() => setChatOpen(false)}
+            onCountsChange={setChatCounts}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

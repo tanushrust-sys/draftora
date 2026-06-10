@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { getAuthCallbackUrl } from '@/app/lib/auth-redirect';
 import { supabase } from '@/app/lib/supabase';
 import { AuthShell } from '@/app/components/auth-shell';
 
@@ -78,13 +79,8 @@ export default function ForgotPasswordPage() {
         }
       }
 
-      const appBaseUrl =
-        (process.env.NEXT_PUBLIC_SITE_URL || '').trim().replace(/\/$/, '') ||
-        window.location.origin;
-
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        // Direct reset page is more reliable for recovery token handling.
-        redirectTo: `${appBaseUrl}/reset-password`,
+        redirectTo: getAuthCallbackUrl(),
       });
 
       if (resetError) {

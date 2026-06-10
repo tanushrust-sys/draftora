@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AtSign, Eye, EyeOff, LockKeyhole } from 'lucide-react';
+import { getAuthCallbackUrl } from '@/app/lib/auth-redirect';
 import { clearPendingGoogleSignup } from '@/app/lib/google-auth';
 import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
 import { AuthShell } from '@/app/components/auth-shell';
@@ -131,11 +132,10 @@ export default function LoginPage() {
     clearPendingGoogleSignup();
     clearSupabaseClientSession();
 
-    const redirectTo = `${window.location.origin}/auth/callback?mode=signin`;
     const { error: googleError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo,
+        redirectTo: getAuthCallbackUrl(),
         queryParams: {
           access_type: 'offline',
           prompt: 'select_account',

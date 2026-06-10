@@ -35,7 +35,6 @@ function AuthCallbackContent() {
     const run = async () => {
       const code = searchParams.get('code');
       const rawNext = searchParams.get('next');
-      const mode = searchParams.get('mode');
       const recoveryType = searchParams.get('type');
       const hash = typeof window !== 'undefined' ? window.location.hash : '';
       const hasRecoveryHash = hash.includes('type=recovery');
@@ -74,7 +73,7 @@ function AuthCallbackContent() {
         }
 
         if (!isRecoveryFlow) {
-          const pendingGoogleSignup = mode === 'signup' ? readPendingGoogleSignup() : null;
+          const pendingGoogleSignup = readPendingGoogleSignup();
           const bootstrapResponse = await fetch('/api/auth-google', {
             method: 'POST',
             headers: {
