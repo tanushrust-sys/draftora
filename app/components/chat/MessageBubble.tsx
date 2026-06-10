@@ -22,7 +22,7 @@ export default function MessageBubble({ message, isOwn, onReply, onReport }: Mes
             padding: '0.78rem 0.9rem',
             background: isOwn
               ? 'linear-gradient(145deg, color-mix(in srgb, var(--t-acc) 84%, #ffffff 16%) 0%, color-mix(in srgb, var(--t-acc) 72%, var(--t-card2) 28%) 100%)'
-              : 'linear-gradient(145deg, color-mix(in srgb, var(--t-card2) 88%, white 12%) 0%, color-mix(in srgb, var(--t-card) 94%, transparent) 100%)',
+              : 'var(--t-card2)',
             color: isOwn ? '#fff' : 'var(--t-tx)',
             border: isOwn ? 'none' : '1px solid var(--t-brd)',
             boxShadow: '0 12px 26px color-mix(in srgb, var(--t-shadow) 14%, transparent)',

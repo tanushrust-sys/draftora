@@ -293,7 +293,7 @@ export default function ChatModal({
         position: 'fixed',
         inset: 0,
         zIndex: 90,
-        background: 'color-mix(in srgb, var(--t-overlay) 82%, transparent)',
+        background: 'color-mix(in srgb, var(--t-overlay) 96%, black 4%)',
         display: 'flex',
         alignItems: 'stretch',
         justifyContent: 'center',
@@ -311,13 +311,13 @@ export default function ChatModal({
           borderRadius: 0,
           overflow: 'hidden',
           border: 'none',
-          background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 96%, white 4%) 0%, color-mix(in srgb, var(--t-card2) 88%, transparent) 100%)',
+          background: 'var(--t-card)',
           boxShadow: 'none',
           display: 'flex',
           flexDirection: 'column',
         }}
       >
-        <div style={{ padding: '0.95rem 1rem', borderBottom: '1px solid var(--t-brd)', background: 'linear-gradient(145deg, color-mix(in srgb, var(--t-card) 78%, var(--t-acc) 22%) 0%, color-mix(in srgb, var(--t-card2) 76%, white 24%) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ padding: '0.95rem 1rem', borderBottom: '1px solid var(--t-brd)', background: 'var(--t-card2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 40, height: 40, borderRadius: 14, background: 'var(--t-acc-a)', display: 'grid', placeItems: 'center', color: 'var(--t-acc)' }}>
               <MessageCircle style={{ width: 18, height: 18 }} />

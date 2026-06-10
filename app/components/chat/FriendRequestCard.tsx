@@ -26,7 +26,7 @@ export default function FriendRequestCard({
       style={{
         borderRadius: 18,
         border: '1px solid var(--t-brd)',
-        background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 92%, white 8%) 0%, color-mix(in srgb, var(--t-card2) 82%, transparent) 100%)',
+        background: 'var(--t-card)',
         padding: '0.8rem',
         display: 'flex',
         alignItems: 'center',
@@ -74,7 +74,7 @@ function pillButtonStyle(kind: 'success' | 'neutral') {
     border: '1px solid transparent',
     background: kind === 'success'
       ? 'linear-gradient(135deg, color-mix(in srgb, var(--t-success) 82%, #ffffff 18%) 0%, color-mix(in srgb, var(--t-success) 72%, var(--t-card2) 28%) 100%)'
-      : 'linear-gradient(135deg, color-mix(in srgb, var(--t-card2) 88%, white 12%) 0%, color-mix(in srgb, var(--t-card3) 76%, transparent) 100%)',
+      : 'var(--t-card2)',
     color: kind === 'success' ? '#fff' : 'var(--t-tx2)',
     display: 'grid',
     placeItems: 'center',

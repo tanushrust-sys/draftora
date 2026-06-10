@@ -24,7 +24,7 @@ export default function MessageInput({
   const nearLimit = draft.length > 420;
 
   return (
-    <div style={{ borderTop: '1px solid var(--t-brd)', padding: '0.85rem 1rem 1rem', background: 'color-mix(in srgb, var(--t-card) 92%, white 8%)' }}>
+    <div style={{ borderTop: '1px solid var(--t-brd)', padding: '0.85rem 1rem 1rem', background: 'var(--t-card2)' }}>
       {replyTo ? (
         <div style={{ marginBottom: 10, borderRadius: 14, border: '1px solid color-mix(in srgb, var(--t-acc) 18%, var(--t-brd))', background: 'var(--t-acc-a)', padding: '0.55rem 0.7rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
           <div>
@@ -58,7 +58,7 @@ export default function MessageInput({
             resize: 'vertical',
             borderRadius: 16,
             border: '1px solid var(--t-brd)',
-            background: 'color-mix(in srgb, var(--t-card2) 84%, white 16%)',
+            background: 'var(--t-card)',
             color: 'var(--t-tx)',
             padding: '0.82rem 0.95rem',
             fontSize: 13,

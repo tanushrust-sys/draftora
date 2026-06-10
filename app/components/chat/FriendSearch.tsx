@@ -49,7 +49,7 @@ export default function FriendSearch({
               height: 46,
               borderRadius: 14,
               border: '1px solid var(--t-brd)',
-              background: 'color-mix(in srgb, var(--t-card) 88%, white 12%)',
+              background: 'var(--t-card)',
               color: 'var(--t-tx)',
               padding: '0 0.9rem 0 2.3rem',
               fontSize: 13,
@@ -66,7 +66,7 @@ export default function FriendSearch({
                 zIndex: 4,
                 borderRadius: 16,
                 border: '1px solid var(--t-brd)',
-                background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 96%, white 4%) 0%, color-mix(in srgb, var(--t-card2) 90%, transparent) 100%)',
+                background: 'var(--t-card)',
                 boxShadow: '0 18px 36px color-mix(in srgb, var(--t-shadow) 18%, transparent)',
                 overflow: 'hidden',
               }}
@@ -111,7 +111,7 @@ export default function FriendSearch({
       {statusMessage ? <p style={{ margin: 0, color: 'var(--t-tx3)', fontSize: 12 }}>{statusMessage}</p> : null}
 
       {result ? (
-        <div style={{ borderRadius: 18, border: '1px solid var(--t-brd)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 92%, white 8%) 0%, color-mix(in srgb, var(--t-card2) 82%, transparent) 100%)', padding: '0.85rem', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ borderRadius: 18, border: '1px solid var(--t-brd)', background: 'var(--t-card)', padding: '0.85rem', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--t-acc-a)', display: 'grid', placeItems: 'center', color: 'var(--t-acc)', fontWeight: 900, fontSize: 13 }}>
             {getAvatarInitials(result.profile.username, result.profile.email)}
           </div>

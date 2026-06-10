@@ -108,7 +108,7 @@ export default function FriendsPanel({
 const panelStyle = {
   borderRadius: 22,
   border: '1px solid var(--t-brd)',
-  background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 86%, transparent) 100%)',
+  background: 'var(--t-card2)',
   padding: '1rem',
   display: 'grid',
   gap: '0.8rem',

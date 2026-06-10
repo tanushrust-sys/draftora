@@ -78,7 +78,7 @@ export default function ChatThread({
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1rem', display: 'grid', gap: 12, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card) 96%, white 4%) 0%, color-mix(in srgb, var(--t-card2) 90%, transparent) 100%)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1rem', display: 'grid', gap: 12, background: 'var(--t-card)' }}>
         {loading ? <p style={{ margin: 0, color: 'var(--t-tx3)', fontSize: 12.5 }}>Loading messages…</p> : null}
         {!loading && messages.length === 0 ? (
           <p style={{ margin: 0, color: 'var(--t-tx3)', fontSize: 12.5 }}>No messages yet. Say hi and share a writing idea.</p>
