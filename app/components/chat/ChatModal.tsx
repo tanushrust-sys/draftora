@@ -91,19 +91,19 @@ export default function ChatModal({
       onCountsChange(payload.counts);
       setError('');
 
-      const nextFriendId = preferredFriendId
-        ?? selectedFriendId
+      setSelectedFriendId((currentFriendId) =>
+        preferredFriendId
+        ?? currentFriendId
         ?? payload.conversations[0]?.friend.id
         ?? payload.friends[0]?.id
-        ?? null;
-
-      setSelectedFriendId(nextFriendId);
+        ?? null,
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not load Draftora Chat.');
     } finally {
       setLoadingDashboard(false);
     }
-  }, [onCountsChange, open, selectedFriendId, token]);
+  }, [onCountsChange, open, token]);
 
   const loadMessages = useCallback(async (friendId: string, markRead = true) => {
     setLoadingMessages(true);
@@ -112,8 +112,9 @@ export default function ChatModal({
       setMessagesByFriend((current) => ({ ...current, [friendId]: payload.messages }));
       setError('');
       if (markRead) {
-        await markConversationRead(token, friendId);
-        await refreshDashboard(friendId);
+        void markConversationRead(token, friendId)
+          .then(() => refreshDashboard(friendId))
+          .catch(() => {});
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not load messages.');
@@ -126,7 +127,7 @@ export default function ChatModal({
     if (!open) return;
     setCounts(initialCounts);
     void refreshDashboard();
-  }, [initialCounts, open, refreshDashboard]);
+  }, [open, refreshDashboard]);
 
   useEffect(() => {
     if (!open || !selectedFriendId) return;
@@ -185,6 +186,7 @@ export default function ChatModal({
         filter: `sender_id=eq.${currentUser.id}`,
       }, () => {
         void refreshDashboard(selectedFriendId);
+        if (selectedFriendId) void loadMessages(selectedFriendId, false);
       })
       .on('postgres_changes', {
         event: '*',
@@ -430,7 +432,7 @@ export default function ChatModal({
               currentUserId={currentUser.id}
               friend={selectedFriend}
               messages={currentMessages}
-              loading={loadingDashboard || loadingMessages}
+              loading={loadingMessages && currentMessages.length === 0}
               sending={sending}
               draft={draft}
               replyTo={replyTo}
