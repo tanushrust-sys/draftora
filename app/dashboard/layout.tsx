@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { hardSignOut } from '@/app/lib/supabase';
-import { getXPProgress } from '@/app/types/database';
+import { getXPProgress, MAX_LEVEL } from '@/app/types/database';
 import OnboardingModal from '@/app/components/OnboardingModal';
 import LevelUpPopup from '@/app/components/LevelUpPopup';
 import RewardToast from '@/app/components/rewards/RewardToast';
@@ -639,6 +639,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const xp          = profile ? getXPProgress(profile.xp) : null;
+  const effectiveLevel = xp?.level ?? profile?.level ?? 1;
+  const levelProgressLabel = effectiveLevel >= MAX_LEVEL ? 'Level 999 · MAX' : `Level ${effectiveLevel} → ${effectiveLevel + 1}`;
   const initial     = profile?.username?.[0]?.toUpperCase() ?? '?';
   const displayName = profile?.username
     ? profile.username[0].toUpperCase() + profile.username.slice(1)
@@ -945,7 +947,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         boxShadow: '0 4px 10px color-mix(in srgb, var(--t-acc) 14%, transparent)',
                       }}>
                         <Star style={{ width: 9, height: 9, color: 'var(--t-acc)' }} />
-                        <span style={{ fontSize: 10.5, fontWeight: 820, color: 'var(--t-acc)' }}>Lv {profile.level}</span>
+                        <span style={{ fontSize: 10.5, fontWeight: 820, color: 'var(--t-acc)' }}>Lv {effectiveLevel}</span>
                       </div>
                     </div>
                   </div>
@@ -1012,7 +1014,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {xp && (
                   <div style={{ marginTop: 10, position: 'relative', zIndex: 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ fontSize: 10, color: 'var(--t-tx3)', fontWeight: 500 }}>Level {profile.level} → {profile.level + 1}</span>
+                      <span style={{ fontSize: 10, color: 'var(--t-tx3)', fontWeight: 500 }}>{levelProgressLabel}</span>
                       <span style={{ fontSize: 10, color: 'var(--t-acc)', fontWeight: 700 }}>{Math.round(xp.percent)}%</span>
                     </div>
                     <div style={equippedXpVisual ? { filter: 'drop-shadow(0 0 10px color-mix(in srgb, var(--t-acc) 30%, transparent))' } : undefined}>
@@ -1228,7 +1230,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <div className="dashboard-topbar__actions">
                     <div className="dashboard-topbar__badge">
                       <Star className="h-4 w-4" />
-                      Level {profile.level}
+                      Level {effectiveLevel}
                     </div>
                     {equippedBadge ? (
                       <div

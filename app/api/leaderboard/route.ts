@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRouteAuth } from '@/app/lib/server-auth';
+import { getLevelFromXP } from '@/app/types/database';
 
 type LeaderboardFilter = 'weekly' | 'all_time' | 'suburb';
 
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest) {
       rank: 0,
       xp: weeklyTotals.get(profile.id) ?? 0,
       streak: profile.streak ?? 0,
-      level: profile.level ?? 1,
+      level: getLevelFromXP(profile.xp ?? 0),
       isCurrentUser: profile.id === auth.userId,
     }));
   } else {
@@ -197,7 +198,7 @@ export async function GET(request: NextRequest) {
       rank: 0,
       xp: allTimeTotals.get(profile.id) ?? 0,
       streak: profile.streak ?? 0,
-      level: profile.level ?? 1,
+      level: getLevelFromXP(profile.xp ?? 0),
       isCurrentUser: profile.id === auth.userId,
     }));
   }

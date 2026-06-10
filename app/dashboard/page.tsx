@@ -21,7 +21,7 @@ import { useTheme } from '@/app/context/ThemeContext';
 import { StudentHomeworkWidget } from '@/app/components/student-homework-widget';
 import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
 import { bootstrapPracticeSession } from '@/app/lib/practice-session-client';
-import { getTitleForLevel, getXPProgress } from '@/app/types/database';
+import { getTitleForLevel, getXPProgress, MAX_LEVEL } from '@/app/types/database';
 import type { DailyStats } from '@/app/types/database';
 import { getWeekWords } from '@/app/lib/vocab-utils';
 import { getLocalDateKey, msUntilNextLocalMidnight } from '@/app/lib/xp';
@@ -289,8 +289,10 @@ export default function DashboardPage() {
     );
   }
 
-  const title       = profile.title?.trim() ? profile.title : getTitleForLevel(profile.level);
   const xp          = getXPProgress(profile.xp);
+  const effectiveLevel = xp.level;
+  const levelProgressLabel = effectiveLevel >= MAX_LEVEL ? 'Level 999 · MAX' : `Level ${effectiveLevel} → ${effectiveLevel + 1}`;
+  const title       = profile.title?.trim() ? profile.title : getTitleForLevel(effectiveLevel);
   const words       = todayStats?.words_written ?? 0;
   const wordGoal    = profile.daily_word_goal ?? 300;
   const weekGoalTotal = getWeekWords(ageGroup).length;
@@ -368,7 +370,7 @@ export default function DashboardPage() {
                 )}
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-acc) 24%, white) 0%, color-mix(in srgb, var(--t-acc) 14%, var(--t-card2)) 100%)', border: '1px solid color-mix(in srgb, var(--t-acc) 34%, transparent)', borderRadius: 99, padding: '6px 14px' }}>
                   <Award style={{ width: 12, height: 12, color: 'var(--t-acc)' }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-acc)' }}>Level {profile.level} · {title}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--t-acc)' }}>Level {effectiveLevel} · {title}</span>
                 </div>
               </div>
 
@@ -381,7 +383,7 @@ export default function DashboardPage() {
             {xp && (
               <div style={{ flex: '0 1 420px', width: 'min(100%, 420px)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--t-card2) 94%, white 6%) 0%, color-mix(in srgb, var(--t-card2) 86%, black 14%) 100%)', border: '1px solid color-mix(in srgb, var(--t-brd) 72%, transparent)', borderRadius: 16, padding: '0.65rem 0.8rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                  <span style={{ color: 'var(--t-tx3)', fontSize: 12, fontWeight: 600 }}>Level {profile.level} → {profile.level + 1}</span>
+                  <span style={{ color: 'var(--t-tx3)', fontSize: 12, fontWeight: 600 }}>{levelProgressLabel}</span>
                   <span style={{ color: 'var(--t-acc)', fontSize: 12, fontWeight: 700 }}>{xp.current} / {xp.needed} XP</span>
                 </div>
                 <XpProgressBar percent={xp.percent} height={10} />
@@ -394,7 +396,7 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.55rem' }}>
           {([
             { tone: streakTone, Icon: null,     label: 'Streak',    value: profile.streak ?? 0,  sub: 'days' },
-            { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${profile.level}` },
+            { tone: xpTone,     Icon: Star,     label: 'Total XP',  value: profile.xp ?? 0,      sub: `Level ${effectiveLevel}` },
             { tone: wordsTone,  Icon: FileText, label: 'Today',     value: words,                sub: `of ${wordGoal} words` },
             { tone: vocabTone,  Icon: BookOpen, label: 'Word Bank', value: vocabTotal,           sub: `${vocabMastered} mastered` },
           ] as const).map(({ tone, Icon, label, value, sub }) => (

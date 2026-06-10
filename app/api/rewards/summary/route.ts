@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       profileSnapshot: {
         id: profile.id,
         username: profile.username,
-        level: profile.level,
+        level: xpProgress.level,
         title: profile.title,
       },
       xpProgress,

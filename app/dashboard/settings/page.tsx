@@ -204,6 +204,7 @@ export default function SettingsPage() {
   const cosmetics = useEquippedCosmetics();
   const equippedFrame = cosmetics?.equippedItemsByCategory?.profile_frames ?? null;
   const hasPrismFrame = isPrismAccessory(equippedFrame);
+  const effectiveLevel = profile ? getLevelFromXP(profile.xp) : 1;
 
   const [editingGoals, setEditingGoals] = useState(false);
   const [wordGoal,    setWordGoal]    = useState(profile?.daily_word_goal   ?? 300);
@@ -571,7 +572,7 @@ export default function SettingsPage() {
                   <span style={{
                     fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8,
                     background: 'var(--t-acc-a)', color: 'var(--t-acc)', border: '1px solid var(--t-brd-a)',
-                  }}>Level {profile.level}</span>
+                  }}>Level {effectiveLevel}</span>
                   <span style={{ fontSize: 12, color: 'var(--t-tx2)', fontWeight: 600 }}>{profile.title}</span>
                 </div>
               </div>

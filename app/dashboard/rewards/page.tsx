@@ -573,7 +573,8 @@ export default function RewardsPage() {
   );
 
   const xp          = getXPProgress(p.xp);
-  const isMaxLevel  = p.level >= MAX_LEVEL;
+  const effectiveLevel = xp.level;
+  const isMaxLevel  = effectiveLevel >= MAX_LEVEL;
   const nextStreak  = STREAK_MILESTONES.find(m => p.streak < m.days);
   const daysToNext  = nextStreak ? nextStreak.days - p.streak : 0;
   const inventoryOwnedCount = inventoryData?.ownedItems.length ?? 0;
@@ -1032,7 +1033,7 @@ export default function RewardsPage() {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 8px 32px var(--t-acc-a)',
 	              }}>
-	                <span style={{ fontSize: 44, fontWeight: 900, color: 'var(--t-acc)', lineHeight: 1 }}>{p.level}</span>
+	                <span style={{ fontSize: 44, fontWeight: 900, color: 'var(--t-acc)', lineHeight: 1 }}>{effectiveLevel}</span>
 	                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--t-acc)', opacity: 0.7 }}>LEVEL</span>
 	              </div>
 	              <p style={{ fontSize: 11, color: 'var(--t-tx3)', marginTop: 2 }}>
@@ -1052,14 +1053,14 @@ export default function RewardsPage() {
                 <span style={{ fontSize: 26, fontWeight: 900, color: 'var(--t-acc)' }}>{Math.round(xp.percent)}%</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--t-tx3)', marginBottom: 12 }}>
-                {isMaxLevel ? 'Maximum level — incredible!' : `${xp.current} / ${xp.needed} XP to Level ${p.level + 1}`}
+                {isMaxLevel ? 'Maximum level — incredible!' : `${xp.current} / ${xp.needed} XP to Level ${effectiveLevel + 1}`}
               </p>
               <div style={{ marginBottom: 8 }}>
                 <XpProgressBar percent={xp.percent} height={12} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t-tx3)' }}>
-                <span>Level {p.level}</span>
-                <span>{isMaxLevel ? 'MAX' : `Level ${p.level + 1}`}</span>
+                <span>Level {effectiveLevel}</span>
+                <span>{isMaxLevel ? 'MAX' : `Level ${effectiveLevel + 1}`}</span>
               </div>
             </div>
           </div>
