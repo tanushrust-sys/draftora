@@ -279,13 +279,41 @@ export async function getMessagesBetweenFriends(userId: string, friendId: string
   return rows.map((row) => mapChatMessageRow(row, profileMap, replyMap));
 }
 
+export async function getMessageById(messageId: string, userId: string, friendId: string) {
+  const { data, error } = await adminSupabase
+    .from('chat_messages')
+    .select('id, sender_id, receiver_id, message_text, reply_to_message_id, created_at, is_deleted, moderation_status, report_count, read_at')
+    .eq('id', messageId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || 'Could not load message.');
+  if (!data) return null;
+
+  const row = data as ChatMessageRow;
+  const profileMap = await getProfilesByIds([userId, friendId]);
+  const replyRows = row.reply_to_message_id
+    ? await adminSupabase
+        .from('chat_messages')
+        .select('id, sender_id, receiver_id, message_text, reply_to_message_id, created_at, is_deleted, moderation_status, report_count, read_at')
+        .eq('id', row.reply_to_message_id)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (replyRows.error) throw new Error(replyRows.error.message || 'Could not load reply preview.');
+
+  const replyMap = new Map<string, ChatMessageRow>();
+  if (replyRows.data) {
+    replyMap.set(replyRows.data.id, replyRows.data as ChatMessageRow);
+  }
+
+  return mapChatMessageRow(row, profileMap, replyMap);
+}
+
 export async function areUsersFriends(userId: string, otherUserId: string) {
-  const pair = normalizeFriendshipPair(userId, otherUserId);
   const { data, error } = await adminSupabase
     .from('friendships')
     .select('id')
-    .eq('user_1_id', pair.user1)
-    .eq('user_2_id', pair.user2)
+    .or(`and(user_1_id.eq.${userId},user_2_id.eq.${otherUserId}),and(user_1_id.eq.${otherUserId},user_2_id.eq.${userId})`)
     .maybeSingle();
 
   if (error) throw new Error(error.message || 'Could not verify friendship.');

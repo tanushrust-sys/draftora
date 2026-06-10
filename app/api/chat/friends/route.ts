@@ -56,6 +56,9 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
+    if (error.code === '23505' || error.message?.includes('friend_requests_pending_unique_idx')) {
+      return NextResponse.json({ ok: true });
+    }
     return NextResponse.json({ error: error.message || 'Could not send friend request.' }, { status: 500 });
   }
 

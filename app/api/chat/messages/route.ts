@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { areUsersFriends, getMessagesBetweenFriends } from '@/app/lib/chat-server';
+import { areUsersFriends, getMessageById, getMessagesBetweenFriends } from '@/app/lib/chat-server';
 import { moderateChatMessage, normalizeChatMessage } from '@/app/lib/chatModeration';
 import { adminSupabase, requireRouteAuth } from '@/app/lib/server-auth';
 
@@ -127,10 +127,46 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const message = await getMessageById(data.id, auth.auth.userId, receiverId);
+    if (message) {
+      return NextResponse.json({ message });
+    }
+
     const messages = await getMessagesBetweenFriends(auth.auth.userId, receiverId);
-    const message = messages.find((entry) => entry.id === data.id);
-    if (!message) throw new Error('Message not found after send.');
-    return NextResponse.json({ message });
+    const fallback = messages.find((entry) => entry.id === data.id);
+    if (!fallback) {
+      return NextResponse.json({
+        message: {
+          id: data.id,
+          senderId: auth.auth.userId,
+          receiverId,
+          messageText: cleanMessage,
+          replyToMessageId,
+          createdAt: new Date().toISOString(),
+          isDeleted: false,
+          moderationStatus: 'allowed',
+          reportCount: 0,
+          readAt: null,
+          sender: {
+            id: auth.auth.profile.id,
+            username: auth.auth.profile.username,
+            email: auth.auth.profile.email,
+            title: auth.auth.profile.title,
+            level: auth.auth.profile.level,
+          },
+          receiver: {
+            id: receiverId,
+            username: 'Friend',
+            email: '',
+            title: null,
+            level: null,
+          },
+          replyTo: null,
+        },
+      });
+    }
+
+    return NextResponse.json({ message: fallback });
   } catch (sendError) {
     return NextResponse.json({ error: sendError instanceof Error ? sendError.message : 'Message sent but could not be loaded.' }, { status: 500 });
   }

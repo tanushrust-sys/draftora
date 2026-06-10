@@ -1,6 +1,7 @@
 'use client';
 
-import { Check, Clock3, UserPlus2, X } from 'lucide-react';
+import { Check, Clock3, MessageCircle, UserPlus2, X } from 'lucide-react';
+import { chatTheme } from '@/app/components/chat/chatTheme';
 import { getAvatarInitials } from '@/app/lib/chat';
 import type { ChatProfileSnippet, FriendRequestItem } from '@/app/lib/chatTypes';
 
@@ -11,6 +12,7 @@ type FriendRequestCardProps = {
   request?: FriendRequestItem;
   onAccept?: (requestId: string) => void;
   onDecline?: (requestId: string) => void;
+  onOpenChat?: (userId: string) => void;
 };
 
 export default function FriendRequestCard({
@@ -20,25 +22,26 @@ export default function FriendRequestCard({
   request,
   onAccept,
   onDecline,
+  onOpenChat,
 }: FriendRequestCardProps) {
   return (
     <div
       style={{
         borderRadius: 18,
-        border: '1px solid var(--t-brd)',
-        background: 'var(--t-card)',
+        border: `1px solid ${chatTheme.border}`,
+        background: chatTheme.surface,
         padding: '0.8rem',
         display: 'flex',
         alignItems: 'center',
         gap: 12,
       }}
     >
-      <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--t-acc-a)', color: 'var(--t-acc)', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 900, flexShrink: 0 }}>
+      <div style={{ width: 42, height: 42, borderRadius: '50%', background: chatTheme.accentSoft, color: chatTheme.accent, display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 900, flexShrink: 0 }}>
         {getAvatarInitials(profile.username, profile.email)}
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ margin: 0, color: 'var(--t-tx)', fontSize: 13.5, fontWeight: 800 }}>{profile.username}</p>
-        <p style={{ margin: '0.15rem 0 0', color: 'var(--t-tx3)', fontSize: 12 }}>{subtitle}</p>
+        <p style={{ margin: 0, color: chatTheme.text, fontSize: 13.5, fontWeight: 800 }}>{profile.username}</p>
+        <p style={{ margin: '0.15rem 0 0', color: chatTheme.textMuted, fontSize: 12 }}>{subtitle}</p>
       </div>
       {variant === 'incoming' && request ? (
         <div style={{ display: 'flex', gap: 8 }}>
@@ -57,10 +60,16 @@ export default function FriendRequestCard({
         </span>
       ) : null}
       {variant === 'friend' ? (
-        <span style={statusChipStyle()}>
-          <UserPlus2 style={{ width: 12, height: 12 }} />
-          Friend
-        </span>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <span style={statusChipStyle()}>
+            <UserPlus2 style={{ width: 12, height: 12 }} />
+            Friend
+          </span>
+          <button type="button" onClick={() => onOpenChat?.(profile.id)} style={chatButtonStyle}>
+            <MessageCircle style={{ width: 12, height: 12 }} />
+            Chat
+          </button>
+        </div>
       ) : null}
     </div>
   );
@@ -74,8 +83,8 @@ function pillButtonStyle(kind: 'success' | 'neutral') {
     border: '1px solid transparent',
     background: kind === 'success'
       ? 'linear-gradient(135deg, color-mix(in srgb, var(--t-success) 82%, #ffffff 18%) 0%, color-mix(in srgb, var(--t-success) 72%, var(--t-card2) 28%) 100%)'
-      : 'var(--t-card2)',
-    color: kind === 'success' ? '#fff' : 'var(--t-tx2)',
+      : chatTheme.surfaceMuted,
+    color: kind === 'success' ? '#fff' : chatTheme.textMuted,
     display: 'grid',
     placeItems: 'center',
     cursor: 'pointer',
@@ -88,12 +97,26 @@ function statusChipStyle() {
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    border: '1px solid color-mix(in srgb, var(--t-acc) 24%, var(--t-brd))',
-    background: 'var(--t-acc-a)',
-    color: 'var(--t-acc)',
+    border: `1px solid ${chatTheme.borderStrong}`,
+    background: chatTheme.accentSoft,
+    color: chatTheme.accent,
     fontSize: 11.5,
     fontWeight: 800,
     padding: '0.38rem 0.62rem',
     flexShrink: 0,
   } as const;
 }
+
+const chatButtonStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  borderRadius: 999,
+  border: `1px solid ${chatTheme.borderStrong}`,
+  background: 'linear-gradient(135deg, #3cbcff 0%, #59d6ff 100%)',
+  color: '#fff',
+  fontSize: 11.5,
+  fontWeight: 800,
+  padding: '0.38rem 0.7rem',
+  cursor: 'pointer',
+} as const;

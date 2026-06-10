@@ -1,6 +1,7 @@
 'use client';
 
 import { Search, UserPlus2 } from 'lucide-react';
+import { chatTheme } from '@/app/components/chat/chatTheme';
 import { getAvatarInitials } from '@/app/lib/chat';
 import type { FriendSearchResult, FriendSearchSuggestion } from '@/app/lib/chatTypes';
 
@@ -33,7 +34,7 @@ export default function FriendSearch({
     <div style={{ display: 'grid', gap: 10 }}>
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ position: 'relative', flex: 1 }}>
-          <Search style={{ width: 15, height: 15, position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--t-tx3)' }} />
+          <Search style={{ width: 15, height: 15, position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: chatTheme.textMuted }} />
           <input
             value={email}
             onChange={(event) => onEmailChange(event.target.value)}
@@ -48,9 +49,9 @@ export default function FriendSearch({
               width: '100%',
               height: 46,
               borderRadius: 14,
-              border: '1px solid var(--t-brd)',
-              background: 'var(--t-card)',
-              color: 'var(--t-tx)',
+              border: `1px solid ${chatTheme.border}`,
+              background: chatTheme.shell,
+              color: chatTheme.text,
               padding: '0 0.9rem 0 2.3rem',
               fontSize: 13,
               outline: 'none',
@@ -65,8 +66,8 @@ export default function FriendSearch({
                 top: 'calc(100% + 0.45rem)',
                 zIndex: 4,
                 borderRadius: 16,
-                border: '1px solid var(--t-brd)',
-                background: 'var(--t-card)',
+                border: `1px solid ${chatTheme.border}`,
+                background: chatTheme.surface,
                 boxShadow: '0 18px 36px color-mix(in srgb, var(--t-shadow) 18%, transparent)',
                 overflow: 'hidden',
               }}
@@ -84,18 +85,18 @@ export default function FriendSearch({
                     alignItems: 'center',
                     padding: '0.72rem 0.8rem',
                     border: 'none',
-                    borderTop: index === 0 ? 'none' : '1px solid color-mix(in srgb, var(--t-brd) 70%, transparent)',
+                    borderTop: index === 0 ? 'none' : `1px solid ${chatTheme.border}`,
                     background: 'transparent',
                     textAlign: 'left',
                     cursor: 'pointer',
                   }}
                 >
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--t-acc-a)', display: 'grid', placeItems: 'center', color: 'var(--t-acc)', fontWeight: 900, fontSize: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: chatTheme.accentSoft, display: 'grid', placeItems: 'center', color: chatTheme.accent, fontWeight: 900, fontSize: 12 }}>
                     {getAvatarInitials(suggestion.profile.username, suggestion.profile.email)}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, color: 'var(--t-tx)', fontSize: 12.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suggestion.profile.username}</p>
-                    <p style={{ margin: '0.16rem 0 0', color: 'var(--t-tx3)', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suggestion.profile.email}</p>
+                    <p style={{ margin: 0, color: chatTheme.text, fontSize: 12.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suggestion.profile.username}</p>
+                    <p style={{ margin: '0.16rem 0 0', color: chatTheme.textMuted, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suggestion.profile.email}</p>
                   </div>
                   <span style={resultChipStyle}>{labelForStatus(suggestion.status)}</span>
                 </button>
@@ -108,16 +109,16 @@ export default function FriendSearch({
         </button>
       </div>
 
-      {statusMessage ? <p style={{ margin: 0, color: 'var(--t-tx3)', fontSize: 12 }}>{statusMessage}</p> : null}
+      {statusMessage ? <p style={{ margin: 0, color: chatTheme.textMuted, fontSize: 12 }}>{statusMessage}</p> : null}
 
       {result ? (
-        <div style={{ borderRadius: 18, border: '1px solid var(--t-brd)', background: 'var(--t-card)', padding: '0.85rem', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--t-acc-a)', display: 'grid', placeItems: 'center', color: 'var(--t-acc)', fontWeight: 900, fontSize: 13 }}>
+        <div style={{ borderRadius: 18, border: `1px solid ${chatTheme.border}`, background: chatTheme.surface, padding: '0.85rem', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: chatTheme.accentSoft, display: 'grid', placeItems: 'center', color: chatTheme.accent, fontWeight: 900, fontSize: 13 }}>
             {getAvatarInitials(result.profile.username, result.profile.email)}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ margin: 0, color: 'var(--t-tx)', fontSize: 13.5, fontWeight: 800 }}>{result.profile.username}</p>
-            <p style={{ margin: '0.16rem 0 0', color: 'var(--t-tx3)', fontSize: 12 }}>{result.profile.email}</p>
+            <p style={{ margin: 0, color: chatTheme.text, fontSize: 13.5, fontWeight: 800 }}>{result.profile.username}</p>
+            <p style={{ margin: '0.16rem 0 0', color: chatTheme.textMuted, fontSize: 12 }}>{result.profile.email}</p>
           </div>
           {canAdd ? (
             <button type="button" onClick={() => onAdd(result.profile.id)} style={addButtonStyle}>
@@ -136,8 +137,8 @@ export default function FriendSearch({
 const searchButtonStyle = {
   height: 46,
   borderRadius: 14,
-  border: '1px solid color-mix(in srgb, var(--t-acc) 24%, transparent)',
-  background: 'linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 78%, #fff 22%) 0%, color-mix(in srgb, var(--t-acc) 66%, var(--t-card2) 34%) 100%)',
+  border: `1px solid ${chatTheme.borderStrong}`,
+  background: 'linear-gradient(135deg, #3cbcff 0%, #59d6ff 100%)',
   color: '#fff',
   padding: '0 1rem',
   fontSize: 12.5,
@@ -151,8 +152,8 @@ const addButtonStyle = {
   gap: 6,
   height: 38,
   borderRadius: 12,
-  border: '1px solid color-mix(in srgb, var(--t-acc) 24%, transparent)',
-  background: 'var(--t-acc)',
+  border: `1px solid ${chatTheme.borderStrong}`,
+  background: chatTheme.accentStrong,
   color: '#fff',
   padding: '0 0.9rem',
   fontSize: 12,
@@ -162,8 +163,8 @@ const addButtonStyle = {
 
 const resultChipStyle = {
   borderRadius: 999,
-  background: 'var(--t-card2)',
-  color: 'var(--t-tx2)',
+  background: chatTheme.surfaceMuted,
+  color: chatTheme.textMuted,
   padding: '0.45rem 0.7rem',
   fontSize: 11.5,
   fontWeight: 800,

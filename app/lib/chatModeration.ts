@@ -374,11 +374,15 @@ function getNormalizationVariants(message: string) {
 }
 
 function messageLooksLikeBypassedBlockedWord(variant: ReturnType<typeof getNormalizationVariants>) {
-  const compactTerms = BLOCKED_SINGLE_TERMS
-    .filter((term) => !term.includes(' '))
-    .map((term) => term.replace(/[^a-z0-9]+/g, ''));
+  const compactTokens = variant.compact.match(/[a-z]+/gi) ?? [];
+  const compactTerms = new Set(
+    BLOCKED_SINGLE_TERMS
+      .filter((term) => !term.includes(' '))
+      .map((term) => term.replace(/[^a-z0-9]+/g, ''))
+      .filter((term) => term.length >= 4),
+  );
 
-  return compactTerms.some((term) => variant.compact.includes(term));
+  return compactTokens.some((token) => compactTerms.has(token));
 }
 
 function hasPrivateInfoSignal(variant: ReturnType<typeof getNormalizationVariants>) {

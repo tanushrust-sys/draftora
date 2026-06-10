@@ -20,7 +20,6 @@ import { useAuth } from '@/app/context/AuthContext';
 import { useTheme } from '@/app/context/ThemeContext';
 import { StudentHomeworkWidget } from '@/app/components/student-homework-widget';
 import ChatButton from '@/app/components/chat/ChatButton';
-import ChatModal from '@/app/components/chat/ChatModal';
 import ChatNotificationToast from '@/app/components/chat/ChatNotificationToast';
 import { clearSupabaseClientSession, supabase } from '@/app/lib/supabase';
 import { bootstrapPracticeSession } from '@/app/lib/practice-session-client';
@@ -83,7 +82,6 @@ export default function DashboardPage() {
   const [vocabTotal, setVocabTotal]             = useState(cached?.vocabTotal ?? 0);
   const [weekStats, setWeekStats]               = useState<DailyStats[]>(cached?.weekStats ?? []);
   const [leaderboardSummary, setLeaderboardSummary] = useState<LeaderboardSummary | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
   const [chatCounts, setChatCounts] = useState<ChatSummaryCounts>({ unreadMessages: 0, unreadChats: 0, pendingRequests: 0, totalBadge: 0 });
   const [chatToasts, setChatToasts] = useState<Array<{ id: string; message: string }>>([]);
   const chatNoticeShownRef = useRef<string>('');
@@ -693,27 +691,13 @@ export default function DashboardPage() {
                 message={toast.message}
                 onClose={(id) => setChatToasts((current) => current.filter((entry) => entry.id !== id))}
                 onOpen={() => {
-                  setChatOpen(true);
+                  router.push('/dashboard/chat');
                   setChatToasts([]);
                 }}
               />
             ))}
           </div>
-          <ChatButton badgeCount={chatCounts.totalBadge} onClick={() => setChatOpen(true)} />
-          <ChatModal
-            open={chatOpen}
-            token={authToken}
-            currentUser={{
-              id: profile.id,
-              username: profile.username,
-              email: profile.email,
-              title: profile.title,
-              level: profile.level,
-            }}
-            initialCounts={chatCounts}
-            onClose={() => setChatOpen(false)}
-            onCountsChange={setChatCounts}
-          />
+          <ChatButton badgeCount={chatCounts.totalBadge} onClick={() => router.push('/dashboard/chat')} />
         </>
       ) : null}
     </div>

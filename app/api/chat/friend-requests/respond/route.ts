@@ -56,6 +56,9 @@ export async function POST(request: NextRequest) {
       });
 
       if (insertError) {
+        if (insertError.code === '23505' || insertError.message?.includes('friendships_unique_pair_idx')) {
+          return NextResponse.json({ ok: true });
+        }
         return NextResponse.json({ error: insertError.message || 'Could not create friendship.' }, { status: 500 });
       }
     }

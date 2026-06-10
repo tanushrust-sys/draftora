@@ -1,0 +1,15 @@
+export const chatTheme = {
+  overlay: '#07111f',
+  shell: '#0c1830',
+  shellAlt: '#122341',
+  surface: '#132748',
+  surfaceAlt: '#193154',
+  surfaceMuted: '#223d66',
+  border: 'rgba(106, 167, 255, 0.24)',
+  borderStrong: 'rgba(106, 167, 255, 0.38)',
+  text: '#eef6ff',
+  textMuted: '#9db5d4',
+  accent: '#57c7ff',
+  accentSoft: '#163a5e',
+  accentStrong: '#39b8ff',
+} as const;
