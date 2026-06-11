@@ -13,7 +13,17 @@ export default function DashboardChatPage() {
   if (!profile || !session?.access_token) return null;
 
   return (
-    <div style={{ minHeight: 'calc(100vh - 1.5rem)', padding: '0.75rem', display: 'grid', gap: 12 }}>
+    <div
+      style={{
+        height: 'calc(100vh - 1.5rem)',
+        minHeight: 0,
+        padding: '0.75rem',
+        display: 'grid',
+        gridTemplateRows: 'auto minmax(0, 1fr)',
+        gap: 12,
+        overflow: 'hidden',
+      }}
+    >
       <section
         style={{
           borderRadius: 24,

@@ -414,6 +414,7 @@ export default function ChatModal({
         overflow: 'hidden',
         width: '100%',
         height: '100%',
+        minHeight: 0,
       }}
     >
       <div
@@ -423,7 +424,8 @@ export default function ChatModal({
         style={{
           width: '100%',
           height: '100%',
-          minHeight: isPageMode ? 'calc(100vh - 1.5rem)' : '100dvh',
+          minHeight: 0,
+          maxHeight: isPageMode ? '100%' : '100dvh',
           borderRadius: isPageMode ? 18 : 0,
           overflow: 'hidden',
           border: isPageMode ? `1px solid ${chatTheme.border}` : 'none',
@@ -456,7 +458,7 @@ export default function ChatModal({
           </div>
         ) : null}
 
-        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
           {showSidebar ? (
             <ChatSidebar
               activeTab={activeTab}
