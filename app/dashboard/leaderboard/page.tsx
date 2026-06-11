@@ -46,15 +46,6 @@ function avatarFromName(name: string) {
   return (name || 'U').slice(0, 1).toUpperCase();
 }
 
-function LeaderboardName({ username, badgeLabel }: { username: string; badgeLabel: string | null }) {
-  return (
-    <span className="lb-name-stack">
-      <span className="lb-name-text">{username}</span>
-      {badgeLabel ? <span className="lb-role-badge">{badgeLabel}</span> : null}
-    </span>
-  );
-}
-
 export default function LeaderboardPage() {
   const { session, profile } = useAuth();
   const suburbLabel = (profile as { suburb?: string | null } | null)?.suburb?.trim() || 'Your Area';
@@ -163,7 +154,10 @@ export default function LeaderboardPage() {
                       <span>#{row.rank}</span>
                     </div>
                     <div className="lb-podium-avatar">{avatarFromName(row.username)}</div>
-                    <h3><LeaderboardName username={row.username} badgeLabel={row.badgeLabel} /></h3>
+                    <div className="lb-podium-name-wrap">
+                      <h3>{row.username}</h3>
+                      {row.badgeLabel ? <span className="lb-role-badge">{row.badgeLabel}</span> : null}
+                    </div>
                     {showWeeklyMentions && row.xp > WEEKLY_SPECIAL_MENTION_XP ? (
                       <span className="lb-special-mention">Special Mention</span>
                     ) : null}
@@ -189,7 +183,8 @@ export default function LeaderboardPage() {
                   <div className="lb-row-user">
                     <span className="lb-row-avatar">{avatarFromName(row.username)}</span>
                     <span className="lb-row-name-wrap">
-                      <span className="lb-row-name"><LeaderboardName username={row.username} badgeLabel={row.badgeLabel} /></span>
+                      <span className="lb-row-name">{row.username}</span>
+                      {row.badgeLabel ? <span className="lb-role-badge lb-role-badge--row">{row.badgeLabel}</span> : null}
                       {showWeeklyMentions && row.xp > WEEKLY_SPECIAL_MENTION_XP ? (
                         <span className="lb-special-mention lb-special-mention--mini">Special Mention</span>
                       ) : null}
@@ -209,7 +204,8 @@ export default function LeaderboardPage() {
                     <div className="lb-row-user">
                       <span className="lb-row-avatar">{avatarFromName(data.currentUser.username)}</span>
                       <span className="lb-row-name-wrap">
-                        <span className="lb-row-name"><LeaderboardName username={data.currentUser.username} badgeLabel={data.currentUser.badgeLabel} /></span>
+                        <span className="lb-row-name">{data.currentUser.username}</span>
+                        {data.currentUser.badgeLabel ? <span className="lb-role-badge lb-role-badge--row">{data.currentUser.badgeLabel}</span> : null}
                         {showWeeklyMentions && data.currentUser.xp > WEEKLY_SPECIAL_MENTION_XP ? (
                           <span className="lb-special-mention lb-special-mention--mini">Special Mention</span>
                         ) : null}
@@ -254,10 +250,9 @@ export default function LeaderboardPage() {
         .lb-podium { position: relative; overflow: hidden; border-radius: 18px; border: 1px solid var(--lb-rank-border); background: var(--lb-rank-bg); box-shadow: 0 12px 28px var(--lb-rank-glow); padding: 0.8rem; display: grid; justify-items: center; text-align: center; gap: 0.38rem; }
         .lb-podium-rank { display: inline-flex; align-items: center; gap: 6px; padding: 0.2rem 0.56rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.34); background: rgba(10, 12, 18, 0.35); color: #fff; font-size: 11px; font-weight: 900; }
         .lb-podium-avatar { width: 56px; height: 56px; border-radius: 15px; display: grid; place-items: center; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.34); font-size: 1.2rem; color: #fff; font-weight: 900; }
-        .lb-podium h3 { margin: 0.2rem 0 0; color: #fff; font-size: 1rem; font-weight: 900; letter-spacing: -0.01em; }
+        .lb-podium-name-wrap { display: grid; justify-items: center; gap: 6px; margin-top: 0.2rem; }
+        .lb-podium h3 { margin: 0; color: #fff; font-size: 1rem; font-weight: 900; letter-spacing: -0.01em; }
         .lb-podium p { margin: 0; color: rgba(255,255,255,0.9); font-size: 0.85rem; font-weight: 800; }
-        .lb-name-stack { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
-        .lb-name-text { display: inline-block; }
         .lb-role-badge {
           display: inline-flex;
           align-items: center;
@@ -273,6 +268,14 @@ export default function LeaderboardPage() {
           letter-spacing: 0.04em;
           text-transform: uppercase;
           white-space: nowrap;
+        }
+        .lb-role-badge--row {
+          min-height: 18px;
+          padding: 0 7px;
+          border-color: color-mix(in srgb, var(--t-acc) 34%, transparent);
+          background: color-mix(in srgb, var(--t-acc) 14%, var(--t-card2));
+          color: var(--t-acc);
+          font-size: 0.56rem;
         }
         .lb-special-mention {
           display: inline-flex;
@@ -308,9 +311,9 @@ export default function LeaderboardPage() {
         .lb-row:hover { border-color: color-mix(in srgb, var(--t-acc) 55%, var(--t-brd)); box-shadow: 0 12px 22px color-mix(in srgb, var(--t-acc) 16%, transparent); transform: translateY(-1px); transition: .2s ease; }
         .lb-row-rank { color: var(--t-tx2); font-size: 0.84rem; font-weight: 900; }
         .lb-row-user { display: flex; align-items: center; gap: 8px; min-width: 0; }
-        .lb-row-name-wrap { min-width: 0; display: flex; align-items: center; gap: 6px; }
+        .lb-row-name-wrap { min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .lb-row-avatar { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, color-mix(in srgb, var(--t-acc) 30%, transparent) 0%, color-mix(in srgb, var(--t-mod-rewards) 22%, transparent) 100%); border: 1px solid color-mix(in srgb, var(--t-acc) 30%, var(--t-brd)); color: var(--t-tx); display: grid; place-items: center; font-size: 0.82rem; font-weight: 900; flex-shrink: 0; }
-        .lb-row-name { color: var(--t-tx); font-size: 0.86rem; font-weight: 820; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lb-row-name { color: var(--t-tx); font-size: 0.86rem; font-weight: 820; }
         .lb-row-stat { color: var(--t-tx2); font-size: 0.77rem; font-weight: 760; display: inline-flex; align-items: center; gap: 5px; justify-self: start; }
         .lb-row--you { border-color: color-mix(in srgb, var(--t-acc) 64%, transparent); background: linear-gradient(145deg, color-mix(in srgb, var(--t-acc) 18%, var(--t-card2)) 0%, color-mix(in srgb, var(--t-mod-rewards) 14%, var(--t-card2)) 100%); }
         .lb-you-wrap { margin-top: 0.22rem; padding-top: 0.52rem; border-top: 1px dashed color-mix(in srgb, var(--t-brd) 70%, var(--t-acc) 30%); display: grid; gap: 0.4rem; }
