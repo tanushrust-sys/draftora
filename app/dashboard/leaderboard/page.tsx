@@ -9,6 +9,7 @@ type LeaderboardFilter = 'weekly' | 'all_time' | 'suburb';
 type LeaderboardRow = {
   userId: string;
   username: string;
+  badgeLabel: string | null;
   rank: number;
   xp: number;
   streak: number;
@@ -43,6 +44,15 @@ function rankTone(rank: number) {
 
 function avatarFromName(name: string) {
   return (name || 'U').slice(0, 1).toUpperCase();
+}
+
+function LeaderboardName({ username, badgeLabel }: { username: string; badgeLabel: string | null }) {
+  return (
+    <span className="lb-name-stack">
+      <span className="lb-name-text">{username}</span>
+      {badgeLabel ? <span className="lb-role-badge">{badgeLabel}</span> : null}
+    </span>
+  );
 }
 
 export default function LeaderboardPage() {
@@ -153,7 +163,7 @@ export default function LeaderboardPage() {
                       <span>#{row.rank}</span>
                     </div>
                     <div className="lb-podium-avatar">{avatarFromName(row.username)}</div>
-                    <h3>{row.username}</h3>
+                    <h3><LeaderboardName username={row.username} badgeLabel={row.badgeLabel} /></h3>
                     {showWeeklyMentions && row.xp > WEEKLY_SPECIAL_MENTION_XP ? (
                       <span className="lb-special-mention">Special Mention</span>
                     ) : null}
@@ -179,7 +189,7 @@ export default function LeaderboardPage() {
                   <div className="lb-row-user">
                     <span className="lb-row-avatar">{avatarFromName(row.username)}</span>
                     <span className="lb-row-name-wrap">
-                      <span className="lb-row-name">{row.username}</span>
+                      <span className="lb-row-name"><LeaderboardName username={row.username} badgeLabel={row.badgeLabel} /></span>
                       {showWeeklyMentions && row.xp > WEEKLY_SPECIAL_MENTION_XP ? (
                         <span className="lb-special-mention lb-special-mention--mini">Special Mention</span>
                       ) : null}
@@ -199,7 +209,7 @@ export default function LeaderboardPage() {
                     <div className="lb-row-user">
                       <span className="lb-row-avatar">{avatarFromName(data.currentUser.username)}</span>
                       <span className="lb-row-name-wrap">
-                        <span className="lb-row-name">{data.currentUser.username}</span>
+                        <span className="lb-row-name"><LeaderboardName username={data.currentUser.username} badgeLabel={data.currentUser.badgeLabel} /></span>
                         {showWeeklyMentions && data.currentUser.xp > WEEKLY_SPECIAL_MENTION_XP ? (
                           <span className="lb-special-mention lb-special-mention--mini">Special Mention</span>
                         ) : null}
@@ -246,6 +256,24 @@ export default function LeaderboardPage() {
         .lb-podium-avatar { width: 56px; height: 56px; border-radius: 15px; display: grid; place-items: center; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.34); font-size: 1.2rem; color: #fff; font-weight: 900; }
         .lb-podium h3 { margin: 0.2rem 0 0; color: #fff; font-size: 1rem; font-weight: 900; letter-spacing: -0.01em; }
         .lb-podium p { margin: 0; color: rgba(255,255,255,0.9); font-size: 0.85rem; font-weight: 800; }
+        .lb-name-stack { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .lb-name-text { display: inline-block; }
+        .lb-role-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 20px;
+          padding: 0 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.26);
+          background: rgba(17, 24, 39, 0.28);
+          color: #e7f7ff;
+          font-size: 0.62rem;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
         .lb-special-mention {
           display: inline-flex;
           align-items: center;

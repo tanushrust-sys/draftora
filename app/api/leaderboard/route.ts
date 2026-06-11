@@ -7,6 +7,7 @@ type LeaderboardFilter = 'weekly' | 'all_time' | 'suburb';
 type LeaderboardRow = {
   userId: string;
   username: string;
+  badgeLabel: string | null;
   rank: number;
   xp: number;
   streak: number;
@@ -31,8 +32,8 @@ type ProfileLite = {
 };
 
 const HIDDEN_LEADERBOARD_USERNAMES = new Set(['tanush']);
-const LEADERBOARD_NAME_OVERRIDES = new Map([
-  ['res', 'RES dev/tester'],
+const LEADERBOARD_PRESENTATION_OVERRIDES = new Map([
+  ['res', { username: 'RES', badgeLabel: 'Dev/Tester' }],
 ]);
 
 function asProfileLiteArray(value: unknown): ProfileLite[] {
@@ -91,9 +92,13 @@ function isHiddenFromLeaderboard(profile: Pick<ProfileLite, 'username'>) {
   return HIDDEN_LEADERBOARD_USERNAMES.has(normalizeUsername(profile.username));
 }
 
-function formatLeaderboardUsername(value: string | null | undefined) {
+function getLeaderboardPresentation(value: string | null | undefined) {
   const trimmed = value?.trim() || 'Anonymous Writer';
-  return LEADERBOARD_NAME_OVERRIDES.get(trimmed.toLowerCase()) ?? trimmed;
+  const override = LEADERBOARD_PRESENTATION_OVERRIDES.get(trimmed.toLowerCase());
+  return {
+    username: override?.username ?? trimmed,
+    badgeLabel: override?.badgeLabel ?? null,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -184,15 +189,18 @@ export async function GET(request: NextRequest) {
     const weeklyTotals = scoreWeeklyXP((weeklyLogRaw ?? []) as Array<{ user_id: string; amount: number }>, scopedIds);
     currentUserWeeklyXp = weeklyTotals.get(auth.userId) ?? 0;
 
-    rows = scopedProfiles.map((profile) => ({
+    rows = scopedProfiles.map((profile) => {
+      const presentation = getLeaderboardPresentation(profile.username);
+      return ({
       userId: profile.id,
-      username: formatLeaderboardUsername(profile.username),
+      username: presentation.username,
+      badgeLabel: presentation.badgeLabel,
       rank: 0,
       xp: weeklyTotals.get(profile.id) ?? 0,
       streak: profile.streak ?? 0,
       level: getLevelFromXP(profile.xp ?? 0),
       isCurrentUser: profile.id === auth.userId,
-    }));
+    })});
   } else {
     const { data: myWeeklyRaw } = await adminSupabase
       .from('xp_log')
@@ -211,15 +219,18 @@ export async function GET(request: NextRequest) {
     }
     const allTimeTotals = scoreWeeklyXP((allTimeRaw ?? []) as Array<{ user_id: string; amount: number }>, scopedIds);
 
-    rows = scopedProfiles.map((profile) => ({
+    rows = scopedProfiles.map((profile) => {
+      const presentation = getLeaderboardPresentation(profile.username);
+      return ({
       userId: profile.id,
-      username: formatLeaderboardUsername(profile.username),
+      username: presentation.username,
+      badgeLabel: presentation.badgeLabel,
       rank: 0,
       xp: allTimeTotals.get(profile.id) ?? 0,
       streak: profile.streak ?? 0,
       level: getLevelFromXP(profile.xp ?? 0),
       isCurrentUser: profile.id === auth.userId,
-    }));
+    })});
   }
 
   rows.sort((a, b) => {
