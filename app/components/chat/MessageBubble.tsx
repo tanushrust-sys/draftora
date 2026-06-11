@@ -15,30 +15,30 @@ type MessageBubbleProps = {
 export default function MessageBubble({ message, isOwn, onReply, onReport }: MessageBubbleProps) {
   return (
     <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start' }}>
-      <div style={{ maxWidth: 'min(78%, 560px)', display: 'grid', gap: 6 }}>
+      <div style={{ maxWidth: 'min(78%, 560px)', display: 'grid', gap: 4 }}>
         <div
           style={{
             position: 'relative',
-            borderRadius: isOwn ? '18px 18px 6px 18px' : '18px 18px 18px 6px',
-            padding: '0.78rem 0.9rem',
-            background: isOwn
-              ? 'linear-gradient(145deg, color-mix(in srgb, var(--t-acc) 84%, #ffffff 16%) 0%, color-mix(in srgb, var(--t-acc) 72%, var(--t-card2) 28%) 100%)'
-              : chatTheme.surfaceAlt,
+            borderRadius: 8,
+            padding: '0.42rem 0.55rem 0.32rem',
+            background: isOwn ? '#d9fdd3' : '#ffffff',
             color: isOwn ? '#fff' : chatTheme.text,
-            border: isOwn ? 'none' : `1px solid ${chatTheme.border}`,
-            boxShadow: '0 12px 26px color-mix(in srgb, var(--t-shadow) 14%, transparent)',
+            border: `1px solid ${chatTheme.border}`,
+            boxShadow: '0 1px 0 rgba(17, 27, 33, 0.06)',
           }}
         >
           {message.replyTo ? (
-            <div style={{ marginBottom: 8, borderRadius: 12, background: isOwn ? 'rgba(255,255,255,0.16)' : chatTheme.accentSoft, padding: '0.48rem 0.6rem' }}>
-              <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800, opacity: 0.88 }}>{message.replyTo.senderName}</p>
-              <p style={{ margin: '0.15rem 0 0', fontSize: 11.5, lineHeight: 1.35, opacity: 0.92 }}>{message.replyTo.messageText.slice(0, 90)}</p>
+            <div style={{ marginBottom: 8, borderRadius: 7, background: isOwn ? 'rgba(255,255,255,0.55)' : '#f0f2f5', padding: '0.42rem 0.5rem', borderLeft: '3px solid #00a884' }}>
+              <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800, color: '#00a884' }}>{message.replyTo.senderName}</p>
+              <p style={{ margin: '0.15rem 0 0', fontSize: 11.5, lineHeight: 1.35, color: chatTheme.text }}>{message.replyTo.messageText.slice(0, 90)}</p>
             </div>
           ) : null}
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{message.messageText}</p>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', color: chatTheme.text, paddingRight: 44 }}>{message.messageText}</p>
+          <span style={{ position: 'absolute', right: 10, bottom: 6, color: chatTheme.textMuted, fontSize: 11 }}>
+            {formatChatTimestamp(message.createdAt)}
+          </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: isOwn ? 'flex-end' : 'flex-start' }}>
-          <span style={{ color: chatTheme.textMuted, fontSize: 11 }}>{formatChatTimestamp(message.createdAt)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: isOwn ? 'flex-end' : 'flex-start' }}>
           <button type="button" onClick={() => onReply(message)} style={iconButtonStyle}>
             <Reply style={{ width: 12, height: 12 }} />
           </button>
@@ -59,7 +59,7 @@ export default function MessageBubble({ message, isOwn, onReply, onReport }: Mes
 const iconButtonStyle = {
   width: 24,
   height: 24,
-  borderRadius: 8,
+  borderRadius: 999,
   border: 'none',
   background: 'transparent',
   color: chatTheme.textMuted,

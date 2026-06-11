@@ -77,6 +77,8 @@ export type ChatDashboardPayload = {
   friends: FriendSummary[];
   incomingRequests: FriendRequestItem[];
   outgoingRequests: FriendRequestItem[];
+  initialFriendId: string | null;
+  initialMessages: ChatMessage[];
 };
 
 export type ChatSendMessagePayload = {

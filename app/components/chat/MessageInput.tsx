@@ -25,9 +25,9 @@ export default function MessageInput({
   const nearLimit = draft.length > 420;
 
   return (
-    <div style={{ borderTop: `1px solid ${chatTheme.border}`, padding: '0.85rem 1rem 1rem', background: chatTheme.shellAlt }}>
+    <div style={{ borderTop: `1px solid ${chatTheme.border}`, padding: '0.65rem 0.8rem 0.8rem', background: '#f0f2f5' }}>
       {replyTo ? (
-        <div style={{ marginBottom: 10, borderRadius: 14, border: `1px solid ${chatTheme.borderStrong}`, background: chatTheme.accentSoft, padding: '0.55rem 0.7rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ marginBottom: 10, borderRadius: 10, border: `1px solid ${chatTheme.borderStrong}`, background: '#fff', padding: '0.55rem 0.7rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
           <div>
             <p style={{ margin: 0, color: chatTheme.accent, fontSize: 11, fontWeight: 800 }}>Replying to {replyTo.sender.username}</p>
             <p style={{ margin: '0.15rem 0 0', color: chatTheme.text, fontSize: 12, lineHeight: 1.4 }}>{replyTo.messageText.slice(0, 100)}</p>
@@ -38,7 +38,7 @@ export default function MessageInput({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
         <textarea
           value={draft}
           onChange={(event) => {
@@ -54,14 +54,14 @@ export default function MessageInput({
           placeholder="Share a writing idea..."
           style={{
             flex: 1,
-            minHeight: 48,
+            minHeight: 44,
             maxHeight: 140,
-            resize: 'vertical',
-            borderRadius: 16,
+            resize: 'none',
+            borderRadius: 22,
             border: `1px solid ${chatTheme.border}`,
-            background: chatTheme.shell,
+            background: '#fff',
             color: chatTheme.text,
-            padding: '0.82rem 0.95rem',
+            padding: '0.72rem 0.95rem',
             fontSize: 13,
             outline: 'none',
           }}
@@ -70,7 +70,7 @@ export default function MessageInput({
           <Send style={{ width: 15, height: 15 }} />
         </button>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
         <span style={{ color: chatTheme.textMuted, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <CornerDownLeft style={{ width: 12, height: 12 }} />
           Enter to send · Shift+Enter for new line
@@ -84,11 +84,11 @@ export default function MessageInput({
 }
 
 const sendButtonStyle = {
-  width: 48,
-  height: 48,
-  borderRadius: 16,
-  border: `1px solid ${chatTheme.borderStrong}`,
-  background: 'linear-gradient(135deg, #3cbcff 0%, #59d6ff 100%)',
+  width: 44,
+  height: 44,
+  borderRadius: '50%',
+  border: 'none',
+  background: '#00a884',
   color: '#fff',
   display: 'grid',
   placeItems: 'center',

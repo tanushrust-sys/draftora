@@ -1,37 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageCircle, Sparkles, Users } from 'lucide-react';
 import ChatModal from '@/app/components/chat/ChatModal';
 import { useAuth } from '@/app/context/AuthContext';
-import { fetchChatSummary } from '@/app/lib/chat';
 import { chatTheme } from '@/app/components/chat/chatTheme';
-import type { ChatSummaryCounts } from '@/app/lib/chatTypes';
 
 export default function DashboardChatPage() {
   const router = useRouter();
   const { profile, session } = useAuth();
-  const [counts, setCounts] = useState<ChatSummaryCounts>({
-    unreadMessages: 0,
-    unreadChats: 0,
-    pendingRequests: 0,
-    totalBadge: 0,
-  });
-
-  useEffect(() => {
-    if (!session?.access_token) return;
-    let active = true;
-    fetchChatSummary(session.access_token)
-      .then((nextCounts) => {
-        if (!active) return;
-        setCounts(nextCounts);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [session?.access_token]);
 
   if (!profile || !session?.access_token) return null;
 
@@ -64,8 +41,8 @@ export default function DashboardChatPage() {
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {[
-            { icon: <Users style={{ width: 14, height: 14 }} />, label: `${counts.pendingRequests} pending requests` },
-            { icon: <Sparkles style={{ width: 14, height: 14 }} />, label: `${counts.unreadChats} unread chats` },
+            { icon: <Users style={{ width: 14, height: 14 }} />, label: 'Friend inbox' },
+            { icon: <Sparkles style={{ width: 14, height: 14 }} />, label: 'Fast chat view' },
           ].map((chip) => (
             <span key={chip.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, borderRadius: 999, background: 'rgba(255,255,255,0.08)', border: `1px solid ${chatTheme.border}`, padding: '0.5rem 0.8rem', fontSize: 12.5, fontWeight: 800 }}>
               {chip.icon}
@@ -85,9 +62,14 @@ export default function DashboardChatPage() {
           title: profile.title,
           level: profile.level,
         }}
-        initialCounts={counts}
+        initialCounts={{
+          unreadMessages: 0,
+          unreadChats: 0,
+          pendingRequests: 0,
+          totalBadge: 0,
+        }}
         onClose={() => router.push('/dashboard')}
-        onCountsChange={setCounts}
+        onCountsChange={() => {}}
       />
     </div>
   );

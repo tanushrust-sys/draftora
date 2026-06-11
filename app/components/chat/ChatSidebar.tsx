@@ -23,17 +23,17 @@ export default function ChatSidebar({
   onSelectFriend,
 }: ChatSidebarProps) {
   return (
-    <div style={{ width: 320, minWidth: 0, borderRight: `1px solid ${chatTheme.border}`, background: chatTheme.shellAlt, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '0.85rem', display: 'flex', gap: 8, borderBottom: `1px solid ${chatTheme.border}` }}>
+    <div style={{ width: 360, minWidth: 0, borderRight: `1px solid ${chatTheme.border}`, background: chatTheme.shellAlt, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '0.75rem', display: 'flex', gap: 8, borderBottom: `1px solid ${chatTheme.border}`, background: '#f0f2f5' }}>
         <TabButton label="Chats" icon={<MessageCircle style={{ width: 14, height: 14 }} />} active={activeTab === 'chats'} badge={counts.unreadChats} onClick={() => onTabChange('chats')} />
         <TabButton label="Friends" icon={<Users style={{ width: 14, height: 14 }} />} active={activeTab === 'friends'} badge={counts.pendingRequests} onClick={() => onTabChange('friends')} />
       </div>
 
       {activeTab === 'chats' ? (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.6rem' }}>
-          <div style={{ padding: '0.45rem 0.45rem 0.7rem' }}>
-            <p style={{ margin: 0, color: chatTheme.text, fontSize: 14, fontWeight: 800 }}>Your chats</p>
-            <p style={{ margin: '0.18rem 0 0', color: chatTheme.textMuted, fontSize: 11.5 }}>Pick a friend and keep the conversation going.</p>
+        <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
+          <div style={{ padding: '0.8rem 1rem 0.7rem' }}>
+            <p style={{ margin: 0, color: chatTheme.text, fontSize: 16, fontWeight: 800 }}>Chats</p>
+            <p style={{ margin: '0.18rem 0 0', color: chatTheme.textMuted, fontSize: 12 }}>Recent conversations</p>
           </div>
           {conversations.length === 0 ? (
             <div style={{ padding: '1rem', color: chatTheme.textMuted, fontSize: 12.5, lineHeight: 1.5 }}>
@@ -49,17 +49,18 @@ export default function ChatSidebar({
                 style={{
                   width: '100%',
                   textAlign: 'left',
-                  padding: '0.8rem',
-                  borderRadius: 18,
-                  border: selected ? `1px solid ${chatTheme.borderStrong}` : '1px solid transparent',
-                  background: selected ? chatTheme.accentSoft : 'transparent',
+                  padding: '0.8rem 1rem',
+                  borderRadius: 0,
+                  border: 'none',
+                  borderBottom: `1px solid ${chatTheme.border}`,
+                  background: selected ? '#f0f2f5' : '#fff',
                   display: 'grid',
                   gridTemplateColumns: '44px minmax(0, 1fr) auto',
                   gap: 10,
                   cursor: 'pointer',
                 }}
               >
-                <div style={{ width: 44, height: 44, borderRadius: '50%', background: chatTheme.surfaceMuted, display: 'grid', placeItems: 'center', color: chatTheme.accent, fontWeight: 900, fontSize: 13 }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#dfe5e7', display: 'grid', placeItems: 'center', color: chatTheme.textMuted, fontWeight: 900, fontSize: 13 }}>
                   {getAvatarInitials(conversation.friend.username, conversation.friend.email)}
                 </div>
                 <div style={{ minWidth: 0 }}>
@@ -107,10 +108,10 @@ function TabButton({
       style={{
         flex: 1,
         height: 42,
-        borderRadius: 14,
-        border: active ? `1px solid ${chatTheme.borderStrong}` : '1px solid transparent',
-        background: active ? chatTheme.accentSoft : 'transparent',
-        color: active ? chatTheme.accent : chatTheme.textMuted,
+        borderRadius: 999,
+        border: 'none',
+        background: active ? '#d9fdd3' : 'transparent',
+        color: active ? chatTheme.text : chatTheme.textMuted,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -122,7 +123,7 @@ function TabButton({
     >
       {icon}
       {label}
-      {badge > 0 ? <span style={{ minWidth: 18, height: 18, borderRadius: 999, background: active ? chatTheme.accentStrong : chatTheme.surfaceMuted, color: active ? '#fff' : chatTheme.textMuted, fontSize: 10.5, display: 'grid', placeItems: 'center', padding: '0 5px' }}>{badge}</span> : null}
+      {badge > 0 ? <span style={{ minWidth: 18, height: 18, borderRadius: 999, background: active ? chatTheme.accentStrong : '#dfe5e7', color: active ? '#fff' : chatTheme.textMuted, fontSize: 10.5, display: 'grid', placeItems: 'center', padding: '0 5px' }}>{badge}</span> : null}
     </button>
   );
 }

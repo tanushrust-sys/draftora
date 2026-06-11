@@ -44,7 +44,7 @@ export default function ChatThread({
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
   }, [messages.length]);
 
   if (!friend) {
@@ -64,25 +64,25 @@ export default function ChatThread({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-      <div style={{ padding: '0.95rem 1rem', borderBottom: `1px solid ${chatTheme.border}`, background: chatTheme.shellAlt, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${chatTheme.border}`, background: '#f0f2f5', display: 'flex', alignItems: 'center', gap: 10 }}>
         {isMobile ? (
-          <button type="button" onClick={onBack} style={{ width: 34, height: 34, borderRadius: 12, border: `1px solid ${chatTheme.border}`, background: chatTheme.surface, color: chatTheme.textMuted, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+          <button type="button" onClick={onBack} style={{ width: 34, height: 34, borderRadius: 999, border: 'none', background: 'transparent', color: chatTheme.textMuted, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
             <ArrowLeft style={{ width: 15, height: 15 }} />
           </button>
         ) : null}
-        <div style={{ width: 42, height: 42, borderRadius: '50%', background: chatTheme.accentSoft, color: chatTheme.accent, display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 900 }}>
+        <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#dfe5e7', color: chatTheme.textMuted, display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 900 }}>
           {getAvatarInitials(friend.username, friend.email)}
         </div>
         <div style={{ minWidth: 0 }}>
           <p style={{ margin: 0, color: chatTheme.text, fontSize: 14, fontWeight: 800 }}>{friend.username}</p>
-          <p style={{ margin: '0.12rem 0 0', color: chatTheme.textMuted, fontSize: 11.5 }}>Draftora friend</p>
+          <p style={{ margin: '0.12rem 0 0', color: chatTheme.textMuted, fontSize: 11.5 }}>online in Draftora</p>
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1rem', display: 'grid', gap: 12, background: chatTheme.shell }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1rem', display: 'grid', gap: 12, background: chatTheme.shell, backgroundImage: 'radial-gradient(rgba(0,0,0,0.03) 0.8px, transparent 0.8px)', backgroundSize: '14px 14px' }}>
         {loading ? <p style={{ margin: 0, color: chatTheme.textMuted, fontSize: 12.5 }}>Loading messages…</p> : null}
         {!loading && messages.length === 0 ? (
-          <div style={{ borderRadius: 20, border: `1px solid ${chatTheme.border}`, background: chatTheme.surface, padding: '1rem', display: 'grid', gap: 10, maxWidth: 520 }}>
+          <div style={{ borderRadius: 12, border: `1px solid ${chatTheme.border}`, background: '#fff9d8', padding: '0.9rem 1rem', display: 'grid', gap: 10, maxWidth: 520, justifySelf: 'center' }}>
             <p style={{ margin: 0, color: chatTheme.text, fontSize: 14, fontWeight: 800 }}>Start your first chat with {friend.username}</p>
             <p style={{ margin: 0, color: chatTheme.textMuted, fontSize: 12.5, lineHeight: 1.55 }}>
               Try something simple: share a story idea, ask for feedback on a title, or send a kind hello.

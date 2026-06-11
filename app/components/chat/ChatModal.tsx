@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import ChatSidebar from '@/app/components/chat/ChatSidebar';
 import ChatThread from '@/app/components/chat/ChatThread';
@@ -67,6 +67,7 @@ export default function ChatModal({
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const selectedConversation = useMemo(
     () => dashboard?.conversations.find((entry) => entry.friend.id === selectedFriendId) ?? null,
@@ -81,6 +82,28 @@ export default function ChatModal({
   const currentMessages = selectedFriendId ? (messagesByFriend[selectedFriendId] ?? []) : [];
   const selectedFriendName = selectedFriend?.username ?? 'Friend';
 
+  const applyConversationReadState = useCallback((friendId: string, unreadCount: number) => {
+    if (unreadCount <= 0) return;
+
+    setDashboard((current) => current ? {
+      ...current,
+      conversations: current.conversations.map((entry) => entry.friend.id === friendId ? { ...entry, unreadCount: 0 } : entry),
+      counts: {
+        ...current.counts,
+        unreadChats: Math.max(0, current.counts.unreadChats - 1),
+        unreadMessages: Math.max(0, current.counts.unreadMessages - unreadCount),
+        totalBadge: Math.max(0, current.counts.totalBadge - 1),
+      },
+    } : current);
+
+    setCounts((current) => ({
+      ...current,
+      unreadChats: Math.max(0, current.unreadChats - 1),
+      unreadMessages: Math.max(0, current.unreadMessages - unreadCount),
+      totalBadge: Math.max(0, current.totalBadge - 1),
+    }));
+  }, []);
+
   const refreshDashboard = useCallback(async (preferredFriendId?: string | null) => {
     if (!open) return;
     setLoadingDashboard(true);
@@ -90,12 +113,17 @@ export default function ChatModal({
       setCounts(payload.counts);
       onCountsChange(payload.counts);
       setError('');
+      if (payload.initialFriendId && payload.initialMessages.length > 0) {
+        setMessagesByFriend((current) => ({
+          ...current,
+          [payload.initialFriendId as string]: current[payload.initialFriendId as string] ?? payload.initialMessages,
+        }));
+      }
 
       setSelectedFriendId((currentFriendId) =>
         preferredFriendId
         ?? currentFriendId
-        ?? payload.conversations[0]?.friend.id
-        ?? payload.friends[0]?.id
+        ?? payload.initialFriendId
         ?? null,
       );
     } catch (caught) {
@@ -105,6 +133,14 @@ export default function ChatModal({
     }
   }, [onCountsChange, open, token]);
 
+  const scheduleDashboardRefresh = useCallback((friendId?: string | null) => {
+    if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = window.setTimeout(() => {
+      void refreshDashboard(friendId);
+      refreshTimerRef.current = null;
+    }, 120);
+  }, [refreshDashboard]);
+
   const loadMessages = useCallback(async (friendId: string, markRead = true) => {
     setLoadingMessages(true);
     try {
@@ -112,16 +148,17 @@ export default function ChatModal({
       setMessagesByFriend((current) => ({ ...current, [friendId]: payload.messages }));
       setError('');
       if (markRead) {
+        const unreadCount = dashboard?.conversations.find((entry) => entry.friend.id === friendId)?.unreadCount ?? 0;
+        applyConversationReadState(friendId, unreadCount);
         void markConversationRead(token, friendId)
-          .then(() => refreshDashboard(friendId))
-          .catch(() => {});
+          .catch(() => scheduleDashboardRefresh(friendId));
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not load messages.');
     } finally {
       setLoadingMessages(false);
     }
-  }, [refreshDashboard, token]);
+  }, [applyConversationReadState, dashboard?.conversations, scheduleDashboardRefresh, token]);
 
   useEffect(() => {
     if (!open) return;
@@ -175,18 +212,22 @@ export default function ChatModal({
         schema: 'public',
         table: 'chat_messages',
         filter: `receiver_id=eq.${currentUser.id}`,
-      }, () => {
-        void refreshDashboard(selectedFriendId);
-        if (selectedFriendId) void loadMessages(selectedFriendId, false);
+      }, (payload) => {
+        const row = 'new' in payload ? payload.new as { sender_id?: string } : {};
+        const friendId = row.sender_id ?? selectedFriendId;
+        scheduleDashboardRefresh(friendId);
+        if (friendId && friendId === selectedFriendId) void loadMessages(friendId, false);
       })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'chat_messages',
         filter: `sender_id=eq.${currentUser.id}`,
-      }, () => {
-        void refreshDashboard(selectedFriendId);
-        if (selectedFriendId) void loadMessages(selectedFriendId, false);
+      }, (payload) => {
+        const row = 'new' in payload ? payload.new as { receiver_id?: string } : {};
+        const friendId = row.receiver_id ?? selectedFriendId;
+        scheduleDashboardRefresh(friendId);
+        if (friendId && friendId === selectedFriendId) void loadMessages(friendId, false);
       })
       .on('postgres_changes', {
         event: '*',
@@ -194,22 +235,31 @@ export default function ChatModal({
         table: 'friend_requests',
         filter: `receiver_id=eq.${currentUser.id}`,
       }, () => {
-        void refreshDashboard(selectedFriendId);
+        scheduleDashboardRefresh(selectedFriendId);
       })
       .subscribe();
 
     return () => {
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
       void supabase.removeChannel(channel);
     };
-  }, [currentUser.id, loadMessages, open, refreshDashboard, selectedFriendId]);
+  }, [currentUser.id, loadMessages, open, scheduleDashboardRefresh, selectedFriendId]);
 
   const handleSelectFriend = useCallback((friendId: string) => {
     setActiveTab('chats');
     setSelectedFriendId(friendId);
     setMobileThreadOpen(true);
     setError('');
-    void loadMessages(friendId);
-  }, [loadMessages]);
+    if (!messagesByFriend[friendId]) {
+      void loadMessages(friendId);
+    } else {
+      const conversation = dashboard?.conversations.find((entry) => entry.friend.id === friendId);
+      if (conversation?.unreadCount) {
+        applyConversationReadState(friendId, conversation.unreadCount);
+        void markConversationRead(token, friendId).catch(() => {});
+      }
+    }
+  }, [applyConversationReadState, dashboard?.conversations, loadMessages, messagesByFriend, token]);
 
   const handleSearch = useCallback(async () => {
     if (!searchEmail.trim()) return;
@@ -302,7 +352,24 @@ export default function ChatModal({
       }));
       setDraft('');
       setReplyTo(null);
-      await refreshDashboard(selectedFriendId);
+      setDashboard((current) => {
+        if (!current) return current;
+        const fallbackFriend = selectedFriend ?? current.friends.find((entry) => entry.id === selectedFriendId);
+        if (!fallbackFriend) return current;
+        return {
+          ...current,
+          conversations: [
+            {
+              friend: fallbackFriend,
+              lastMessage: response.message,
+              unreadCount: 0,
+              updatedAt: response.message.createdAt,
+            },
+            ...current.conversations.filter((entry) => entry.friend.id !== selectedFriendId),
+          ],
+        };
+      });
+      scheduleDashboardRefresh(selectedFriendId);
     } catch (caught) {
       setMessagesByFriend((current) => ({
         ...current,
@@ -312,7 +379,7 @@ export default function ChatModal({
     } finally {
       setSending(false);
     }
-  }, [currentUser, draft, refreshDashboard, replyTo, selectedFriend, selectedFriendId, selectedFriendName, sending, token]);
+  }, [currentUser, draft, replyTo, scheduleDashboardRefresh, selectedFriend, selectedFriendId, selectedFriendName, sending, token]);
 
   const handleReport = useCallback(async (message: ChatMessage) => {
     const reason = window.prompt('Why are you reporting this message?', 'Unkind or unsafe');
@@ -357,28 +424,28 @@ export default function ChatModal({
           width: '100%',
           height: '100%',
           minHeight: isPageMode ? 'calc(100vh - 1.5rem)' : '100dvh',
-          borderRadius: isPageMode ? 24 : 0,
+          borderRadius: isPageMode ? 18 : 0,
           overflow: 'hidden',
           border: isPageMode ? `1px solid ${chatTheme.border}` : 'none',
           background: chatTheme.shell,
-          boxShadow: isPageMode ? '0 24px 60px rgba(0,0,0,0.18)' : 'none',
+          boxShadow: isPageMode ? '0 6px 24px rgba(17, 27, 33, 0.12)' : 'none',
           display: 'flex',
           flexDirection: 'column',
         }}
       >
-        <div style={{ padding: '0.95rem 1rem', borderBottom: `1px solid ${chatTheme.border}`, background: chatTheme.shellAlt, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ padding: '0.8rem 1rem', borderBottom: `1px solid ${chatTheme.border}`, background: '#008069', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 14, background: chatTheme.accentSoft, display: 'grid', placeItems: 'center', color: chatTheme.accent }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.16)', display: 'grid', placeItems: 'center', color: '#fff' }}>
               <MessageCircle style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <p style={{ margin: 0, color: chatTheme.text, fontSize: 15, fontWeight: 900 }}>Draftora Chat</p>
-              <p style={{ margin: '0.14rem 0 0', color: chatTheme.textMuted, fontSize: 11.5 }}>
+              <p style={{ margin: 0, color: '#fff', fontSize: 15, fontWeight: 900 }}>Draftora Chat</p>
+              <p style={{ margin: '0.14rem 0 0', color: 'rgba(255,255,255,0.78)', fontSize: 11.5 }}>
                 {counts.totalBadge > 0 ? `${counts.totalBadge} new updates` : 'Safe chat for sharing writing ideas'}
               </p>
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ width: 38, height: 38, borderRadius: 14, border: `1px solid ${chatTheme.border}`, background: chatTheme.surface, color: chatTheme.textMuted, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+          <button type="button" onClick={onClose} style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
             <X style={{ width: 16, height: 16 }} />
           </button>
         </div>

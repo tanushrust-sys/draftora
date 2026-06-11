@@ -232,6 +232,11 @@ export async function getDashboardPayload(userId: string): Promise<ChatDashboard
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
+  const initialFriendId = conversations[0]?.friend.id ?? friends[0]?.id ?? null;
+  const initialMessages = initialFriendId
+    ? await getMessagesBetweenFriends(userId, initialFriendId)
+    : [];
+
   const incomingRequests: FriendRequestItem[] = [];
   const outgoingRequests: FriendRequestItem[] = [];
 
@@ -261,6 +266,8 @@ export async function getDashboardPayload(userId: string): Promise<ChatDashboard
     friends,
     incomingRequests,
     outgoingRequests,
+    initialFriendId,
+    initialMessages,
   };
 }
 
