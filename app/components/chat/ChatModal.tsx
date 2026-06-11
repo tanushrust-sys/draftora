@@ -5,6 +5,7 @@ import { MessageCircle, X } from 'lucide-react';
 import ChatSidebar from '@/app/components/chat/ChatSidebar';
 import ChatThread from '@/app/components/chat/ChatThread';
 import FriendsPanel from '@/app/components/chat/FriendsPanel';
+import ChatNotificationToast from '@/app/components/chat/ChatNotificationToast';
 import { chatTheme } from '@/app/components/chat/chatTheme';
 import {
   fetchChatDashboard,
@@ -67,6 +68,7 @@ export default function ChatModal({
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{ id: string; message: string }>>([]);
   const refreshTimerRef = useRef<number | null>(null);
 
   const selectedConversation = useMemo(
@@ -141,12 +143,12 @@ export default function ChatModal({
     }, 120);
   }, [refreshDashboard]);
 
-  const loadMessages = useCallback(async (friendId: string, markRead = true) => {
-    setLoadingMessages(true);
+  const loadMessages = useCallback(async (friendId: string, markRead = true, silent = false) => {
+    if (!silent) setLoadingMessages(true);
     try {
       const payload = await fetchConversationMessages(token, friendId);
       setMessagesByFriend((current) => ({ ...current, [friendId]: payload.messages }));
-      setError('');
+      if (!silent) setError('');
       if (markRead) {
         const unreadCount = dashboard?.conversations.find((entry) => entry.friend.id === friendId)?.unreadCount ?? 0;
         applyConversationReadState(friendId, unreadCount);
@@ -154,9 +156,11 @@ export default function ChatModal({
           .catch(() => scheduleDashboardRefresh(friendId));
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load messages.');
+      if (!silent) {
+        setError(caught instanceof Error ? caught.message : 'Could not load messages.');
+      }
     } finally {
-      setLoadingMessages(false);
+      if (!silent) setLoadingMessages(false);
     }
   }, [applyConversationReadState, dashboard?.conversations, scheduleDashboardRefresh, token]);
 
@@ -171,6 +175,16 @@ export default function ChatModal({
     if (messagesByFriend[selectedFriendId]) return;
     void loadMessages(selectedFriendId);
   }, [loadMessages, messagesByFriend, open, selectedFriendId]);
+
+  useEffect(() => {
+    if (!open || activeTab !== 'chats' || !selectedFriendId) return;
+
+    const interval = window.setInterval(() => {
+      void loadMessages(selectedFriendId, false, true);
+    }, 2000);
+
+    return () => window.clearInterval(interval);
+  }, [activeTab, loadMessages, open, selectedFriendId]);
 
   useEffect(() => {
     if (!open) return;
@@ -216,7 +230,7 @@ export default function ChatModal({
         const row = 'new' in payload ? payload.new as { sender_id?: string } : {};
         const friendId = row.sender_id ?? selectedFriendId;
         scheduleDashboardRefresh(friendId);
-        if (friendId && friendId === selectedFriendId) void loadMessages(friendId, false);
+        if (friendId && friendId === selectedFriendId) void loadMessages(friendId, false, true);
       })
       .on('postgres_changes', {
         event: '*',
@@ -227,7 +241,7 @@ export default function ChatModal({
         const row = 'new' in payload ? payload.new as { receiver_id?: string } : {};
         const friendId = row.receiver_id ?? selectedFriendId;
         scheduleDashboardRefresh(friendId);
-        if (friendId && friendId === selectedFriendId) void loadMessages(friendId, false);
+        if (friendId && friendId === selectedFriendId) void loadMessages(friendId, false, true);
       })
       .on('postgres_changes', {
         event: '*',
@@ -369,6 +383,13 @@ export default function ChatModal({
           ],
         };
       });
+      setNotifications((current) => [
+        ...current,
+        {
+          id: `toast-${Date.now()}`,
+          message: `Placeholder: ${selectedFriendName} wrote something.`,
+        },
+      ]);
       scheduleDashboardRefresh(selectedFriendId);
     } catch (caught) {
       setMessagesByFriend((current) => ({
@@ -388,7 +409,7 @@ export default function ChatModal({
       await reportChatMessage(token, message.id, reason.trim());
       setError('Thanks. The message was reported for review.');
       await refreshDashboard(selectedFriendId);
-      if (selectedFriendId) await loadMessages(selectedFriendId, false);
+      if (selectedFriendId) await loadMessages(selectedFriendId, false, true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not report message.');
     }
@@ -514,6 +535,29 @@ export default function ChatModal({
               onReport={(message) => void handleReport(message)}
             />
           ) : null}
+        </div>
+
+        <div
+          style={{
+            position: 'absolute',
+            right: 16,
+            bottom: 84,
+            display: 'grid',
+            gap: 10,
+            justifyItems: 'end',
+            pointerEvents: 'none',
+          }}
+        >
+          {notifications.map((notification) => (
+            <div key={notification.id} style={{ pointerEvents: 'auto' }}>
+              <ChatNotificationToast
+                id={notification.id}
+                message={notification.message}
+                onClose={(id) => setNotifications((current) => current.filter((entry) => entry.id !== id))}
+                onOpen={() => {}}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </div>
