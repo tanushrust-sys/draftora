@@ -426,7 +426,7 @@ export default function ChatModal({
           height: '100%',
           minHeight: 0,
           maxHeight: isPageMode ? '100%' : '100dvh',
-          borderRadius: isPageMode ? 18 : 0,
+          borderRadius: isPageMode ? 20 : 0,
           overflow: 'hidden',
           border: isPageMode ? `1px solid ${chatTheme.border}` : 'none',
           background: chatTheme.shell,

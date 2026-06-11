@@ -23,7 +23,7 @@ export default function ChatSidebar({
   onSelectFriend,
 }: ChatSidebarProps) {
   return (
-    <div style={{ width: 360, minWidth: 0, borderRight: `1px solid ${chatTheme.border}`, background: chatTheme.shellAlt, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: 300, minWidth: 0, borderRight: `1px solid ${chatTheme.border}`, background: chatTheme.shellAlt, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '0.75rem', display: 'flex', gap: 8, borderBottom: `1px solid ${chatTheme.border}`, background: '#f0f2f5' }}>
         <TabButton label="Chats" icon={<MessageCircle style={{ width: 14, height: 14 }} />} active={activeTab === 'chats'} badge={counts.unreadChats} onClick={() => onTabChange('chats')} />
         <TabButton label="Friends" icon={<Users style={{ width: 14, height: 14 }} />} active={activeTab === 'friends'} badge={counts.pendingRequests} onClick={() => onTabChange('friends')} />
