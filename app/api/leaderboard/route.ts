@@ -30,6 +30,11 @@ type ProfileLite = {
   lng?: number | null;
 };
 
+const HIDDEN_LEADERBOARD_USERNAMES = new Set(['tanush']);
+const LEADERBOARD_NAME_OVERRIDES = new Map([
+  ['res', 'RES dev/tester'],
+]);
+
 function asProfileLiteArray(value: unknown): ProfileLite[] {
   if (!Array.isArray(value)) return [];
   return value as ProfileLite[];
@@ -78,6 +83,19 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
   return R * c;
 }
 
+function normalizeUsername(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isHiddenFromLeaderboard(profile: Pick<ProfileLite, 'username'>) {
+  return HIDDEN_LEADERBOARD_USERNAMES.has(normalizeUsername(profile.username));
+}
+
+function formatLeaderboardUsername(value: string | null | undefined) {
+  const trimmed = value?.trim() || 'Anonymous Writer';
+  return LEADERBOARD_NAME_OVERRIDES.get(trimmed.toLowerCase()) ?? trimmed;
+}
+
 export async function GET(request: NextRequest) {
   const authResult = await requireRouteAuth(request);
   if ('error' in authResult) {
@@ -124,6 +142,7 @@ export async function GET(request: NextRequest) {
     if (!profile || !profile.id) return false;
     if (profile.deleted_at) return false;
     if (profile.account_type === 'teacher' || profile.account_type === 'parent') return false;
+    if (isHiddenFromLeaderboard(profile)) return false;
     return true;
   });
 
@@ -167,7 +186,7 @@ export async function GET(request: NextRequest) {
 
     rows = scopedProfiles.map((profile) => ({
       userId: profile.id,
-      username: profile.username?.trim() || 'Anonymous Writer',
+      username: formatLeaderboardUsername(profile.username),
       rank: 0,
       xp: weeklyTotals.get(profile.id) ?? 0,
       streak: profile.streak ?? 0,
@@ -194,7 +213,7 @@ export async function GET(request: NextRequest) {
 
     rows = scopedProfiles.map((profile) => ({
       userId: profile.id,
-      username: profile.username?.trim() || 'Anonymous Writer',
+      username: formatLeaderboardUsername(profile.username),
       rank: 0,
       xp: allTimeTotals.get(profile.id) ?? 0,
       streak: profile.streak ?? 0,

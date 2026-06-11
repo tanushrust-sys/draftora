@@ -3,6 +3,7 @@ import { requireRouteAuth } from '@/app/lib/server-auth';
 
 type ProfileLite = {
   id: string;
+  username?: string | null;
   account_type?: string | null;
   deleted_at?: string | null;
   suburb?: string | null;
@@ -12,6 +13,8 @@ type ProfileLite = {
   lat?: number | null;
   lng?: number | null;
 };
+
+const HIDDEN_LEADERBOARD_USERNAMES = new Set(['tanush']);
 
 function asProfileLiteArray(value: unknown): ProfileLite[] {
   if (!Array.isArray(value)) return [];
@@ -51,6 +54,14 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
   return R * c;
 }
 
+function normalizeUsername(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isHiddenFromLeaderboard(profile: Pick<ProfileLite, 'username'>) {
+  return HIDDEN_LEADERBOARD_USERNAMES.has(normalizeUsername(profile.username));
+}
+
 export async function GET(request: NextRequest) {
   const authResult = await requireRouteAuth(request);
   if ('error' in authResult) {
@@ -68,13 +79,13 @@ export async function GET(request: NextRequest) {
   {
     const firstAttempt = await adminSupabase
       .from('profiles')
-      .select('id, account_type, deleted_at, suburb, country, latitude, longitude, lat, lng');
+      .select('id, username, account_type, deleted_at, suburb, country, latitude, longitude, lat, lng');
 
     if (firstAttempt.error && firstAttempt.error.message?.toLowerCase().includes('column')) {
       supportsAreaColumns = false;
       const retry = await adminSupabase
         .from('profiles')
-        .select('id, account_type, deleted_at');
+        .select('id, username, account_type, deleted_at');
       profileRows = asProfileLiteArray(retry.data);
       profileError = retry.error as { message?: string } | null;
     } else {
@@ -90,6 +101,7 @@ export async function GET(request: NextRequest) {
   const profiles = asProfileLiteArray(profileRows).filter((profile) => {
     if (profile.deleted_at) return false;
     if (profile.account_type === 'teacher' || profile.account_type === 'parent') return false;
+    if (isHiddenFromLeaderboard(profile)) return false;
     return true;
   });
   const meProfile = profiles.find((profile) => profile.id === auth.userId) ?? me;
@@ -149,15 +161,16 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.xp - a.xp);
   const weeklyRank = weeklySorted.findIndex((entry) => entry.id === auth.userId) + 1;
   const weeklyXpEarned = weeklyTotals.get(auth.userId) ?? 0;
+  const meHidden = isHiddenFromLeaderboard(me);
 
   return NextResponse.json({
     weekStartISO,
     suburbLabel: 'Your Area (5km)',
     countryLabel: null,
-    weeklyRank: weeklyRank > 0 ? weeklyRank : null,
-    allTimeRank: allTimeRank > 0 ? allTimeRank : null,
+    weeklyRank: !meHidden && weeklyRank > 0 ? weeklyRank : null,
+    allTimeRank: !meHidden && allTimeRank > 0 ? allTimeRank : null,
     countryRank: null,
-    suburbRank: suburbRank > 0 ? suburbRank : null,
+    suburbRank: !meHidden && suburbRank > 0 ? suburbRank : null,
     weeklyXpEarned,
   });
 }
